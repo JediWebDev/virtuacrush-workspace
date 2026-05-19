@@ -79,7 +79,7 @@ export default function HomePage({ onSelect }: HomePageProps) {
                 className="flex items-center gap-2 rounded-2xl bg-accent px-8 py-4 font-semibold text-white shadow-lg shadow-accent/25 transition-all hover:bg-accent-deep active:scale-95"
               >
                 <Sparkles size={18} />
-                Join Beta Waitlist
+                Join Now
               </button>
               <Link
                 to="/how-it-works"
@@ -132,7 +132,7 @@ export default function HomePage({ onSelect }: HomePageProps) {
           <div className="mb-10 text-center">
             <h2 className="font-serif text-3xl font-bold text-stone-900 dark:text-stone-50 md:text-4xl">Pricing</h2>
             <p className="mx-auto mt-3 max-w-xl text-stone-600 dark:text-stone-400">
-              Start free, then unlock deeper connection and exclusive content as your relationship grows.
+              Start free, then unlock deeper connection and exclusive content with a paid subscription.
             </p>
           </div>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
