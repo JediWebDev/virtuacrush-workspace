@@ -93,7 +93,7 @@ export default function Nav({ onLogoClick }: NavProps) {
             <Sparkles className="text-white" size={20} />
           </div>
           <span className="font-serif text-2xl font-bold tracking-tight text-stone-900 dark:text-white">
-            VirtuaCrush
+            Virtua Crush
           </span>
         </Link>
 
