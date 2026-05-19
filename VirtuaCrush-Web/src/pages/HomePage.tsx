@@ -60,7 +60,7 @@ export default function HomePage({ onSelect }: HomePageProps) {
               animate={{ opacity: 1, y: 0 }}
               className="font-hero text-5xl font-medium leading-[1.12] tracking-tight text-stone-900 dark:text-stone-50 md:text-7xl lg:text-8xl"
             >
-              The more you talk,.{" "}
+              The more you chat,{" "}
               <span className="text-gradient italic font-normal">the deeper it gets.</span>
             </motion.h1>
 

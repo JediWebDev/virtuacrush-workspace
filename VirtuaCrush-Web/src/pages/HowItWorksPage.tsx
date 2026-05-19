@@ -19,7 +19,7 @@ const TIERS = [
     price: "$0",
     period: "forever",
     highlight: false,
-    features: ["Capped daily text chatting", "Standard feed viewing", "Limited character memory", "No affinity progression"],
+    features: ["Capped daily chats", "Limited character selection", "Basic feed access", "Affinity progression up to 25%"],
   },
   {
     name: "PRO",
@@ -27,11 +27,12 @@ const TIERS = [
     period: "/ month",
     highlight: true,
     features: [
-      "Unlimited text chatting",
+      "Unlimited chats",
       "Full feed access including private drops",
-      "Affinity progression system",
+      "Complete affinity progression",
       "Deep character memory context",
       "Personalized email messages from characters",
+      "All characters unlocked",
       "Late night private media drops",
     ],
   },
