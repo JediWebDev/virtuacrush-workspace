@@ -5,8 +5,6 @@ import {
   Heart,
   MessageCircle,
   Play,
-  Coins,
-  ArrowRightLeft,
   Check,
   Sparkles,
 } from "lucide-react";
@@ -267,37 +265,7 @@ export default function HowItWorksPage() {
             </div>
           </SectionShell>
 
-          <SectionShell title="Optional Web3 Integration">
-            <GlassPanel>
-              <p className="mb-8 max-w-3xl leading-relaxed text-stone-600 dark:text-stone-300">
-                Crypto is optional—cards and standard checkout work out of the box. VirtuaCrush uses two tokens:
-                $VCRUSH for open-market speculation and $VLINK for stable, closed-loop spending inside the app.
-              </p>
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.02] p-5">
-                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15 text-accent">
-                    <Coins size={22} />
-                  </div>
-                  <h3 className="font-semibold text-stone-800 dark:text-stone-100">$VCRUSH (Tradeable Utility)</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
-                    The speculative utility token listed on open exchanges. Earn through engagement, trade on the
-                    market, or hold for ecosystem perks—separate from day-to-day companion purchases.
-                  </p>
-                </div>
-                <div className="rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.02] p-5">
-                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">
-                    <ArrowRightLeft size={22} />
-                  </div>
-                  <h3 className="font-semibold text-stone-800 dark:text-stone-100">$VLINK (Closed-Loop Stable)</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
-                    Used exclusively for in-app purchases and subscriptions. Pegged for stable pricing so gifts,
-                    plans, and upgrades never swing with crypto volatility. Swap $VCRUSH into $VLINK when you want
-                    to lock value before spending.
-                  </p>
-                </div>
-              </div>
-            </GlassPanel>
-          </SectionShell>
+
         </div>
       </div>
     </main>

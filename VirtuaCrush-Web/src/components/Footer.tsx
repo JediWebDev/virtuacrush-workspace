@@ -53,9 +53,9 @@ export default function Footer() {
                   </Link>
                 </li>
                 <li>
-                  <a href="/#whitepaper" className="transition-colors hover:text-accent">
-                    Whitepaper
-                  </a>
+                  <Link to="/how-it-works" className="transition-colors hover:text-accent">
+                    How It Works
+                  </Link>
                 </li>
               </ul>
             </div>

@@ -1,13 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Wallet, Sparkles, User, Mail, Menu, X, Sun, Moon } from "lucide-react";
+import { Sparkles, User, Mail, Menu, X, Sun, Moon } from "lucide-react";
 
 interface NavProps {
-  isWalletConnected: boolean;
-  walletAddress: string;
-  vCrushTokens: number;
-  vLinkTokens: number;
-  onConnectWallet: () => void;
   onLogoClick: () => void;
 }
 
@@ -19,14 +14,7 @@ const navLinkClass = (active: boolean) =>
 const iconButtonClass =
   "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-black/[0.04] text-stone-600 transition-all duration-200 hover:scale-105 hover:border-accent/30 hover:bg-black/[0.08] hover:text-stone-900 active:scale-95 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-300 dark:hover:bg-white/[0.08] dark:hover:text-stone-50";
 
-export default function Nav({
-  isWalletConnected,
-  walletAddress,
-  vCrushTokens,
-  vLinkTokens,
-  onConnectWallet,
-  onLogoClick,
-}: NavProps) {
+export default function Nav({ onLogoClick }: NavProps) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -118,34 +106,6 @@ export default function Nav({
               How It Works
             </Link>
           </nav>
-
-          <button
-            type="button"
-            onClick={isWalletConnected ? undefined : onConnectWallet}
-            className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 hover:scale-105 active:scale-95 md:px-5 ${
-              isWalletConnected
-                ? "border border-accent/25 bg-accent/10 text-rose-100"
-                : "bg-stone-100 text-surface hover:bg-accent hover:text-white"
-            }`}
-            aria-label={isWalletConnected ? "Wallet connected" : "Connect wallet"}
-          >
-            <Wallet size={18} className="shrink-0" />
-            {isWalletConnected ? (
-              <>
-                <span className="hidden max-w-[88px] truncate text-xs md:inline lg:max-w-none">
-                  {walletAddress
-                    ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
-                    : "Connected"}
-                </span>
-                <span className="hidden md:inline">
-                  <span className="opacity-40">|</span>{" "}
-                  {vLinkTokens} $VLINK <span className="opacity-40">|</span> {vCrushTokens} $VCRUSH
-                </span>
-              </>
-            ) : (
-              <span className="hidden sm:inline">Connect Wallet</span>
-            )}
-          </button>
 
           <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
             <div ref={notificationsRef} className="relative">
