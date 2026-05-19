@@ -60,8 +60,8 @@ export default function HomePage({ onSelect }: HomePageProps) {
               animate={{ opacity: 1, y: 0 }}
               className="font-hero text-5xl font-medium leading-[1.12] tracking-tight text-stone-900 dark:text-stone-50 md:text-7xl lg:text-8xl"
             >
-              Real connections.{" "}
-              <span className="text-gradient italic font-normal">Virtual sparks.</span>
+              The more you talk,.{" "}
+              <span className="text-gradient italic font-normal">the deeper it gets.</span>
             </motion.h1>
 
             <motion.p
@@ -70,7 +70,7 @@ export default function HomePage({ onSelect }: HomePageProps) {
               transition={{ delay: 0.1 }}
               className="mx-auto max-w-xl text-lg leading-relaxed text-stone-600 dark:text-stone-400 lg:mx-0"
             >
-              Experience true companionship with lifelike avatars who remember you, share their daily moments, and send personalized messages.
+              Every AI has their own story, their own circle, their own personalities. The closer you get, the more they reveal.
             </motion.p>
 
             <div className="flex flex-wrap justify-center gap-4 lg:justify-start">
