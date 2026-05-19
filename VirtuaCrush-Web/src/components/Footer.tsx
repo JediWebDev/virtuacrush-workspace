@@ -95,7 +95,7 @@ export default function Footer() {
         </div>
 
         <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-white/5 pt-8 text-xs text-stone-900 dark:text-stone-500 md:flex-row">
-          <p>© {year} VirtuaCrush. All rights reserved.</p>
+          <p>© {year} Virtua Crush. All rights reserved.</p>
           <span>Status: Online</span>
         </div>
       </div>
