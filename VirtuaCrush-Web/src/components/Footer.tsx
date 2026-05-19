@@ -36,7 +36,7 @@ export default function Footer() {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent">
                 <Sparkles size={16} className="text-white" />
               </div>
-              <span className="font-serif text-lg font-bold">VirtuaCrush</span>
+              <span className="font-serif text-lg font-bold">Virtua Crush</span>
             </div>
             <p className="max-w-xs text-sm leading-relaxed text-stone-900 dark:text-stone-500">
               Premium AI companions with social profiles, personalized messages, and meaningful connection.
