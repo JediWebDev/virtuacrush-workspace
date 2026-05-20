@@ -2,11 +2,13 @@ import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { Sparkles, Shield, Check } from "lucide-react";
 import { CHARACTERS, Character } from "../types/character";
+import { matchesCharacterName, SPOTLIGHT_CHARS, type UserTier } from "../types/subscription";
 import CompanionCard from "../components/CompanionCard";
 import { InteractionDemo } from "../components/InteractionDemo";
 
 interface HomePageProps {
   onSelect: (c: Character) => void;
+  userTier: UserTier;
 }
 
 const PRICING_TIERS = [
@@ -49,7 +51,7 @@ const PRICING_TIERS = [
   },
 ];
 
-export default function HomePage({ onSelect }: HomePageProps) {
+export default function HomePage({ onSelect, userTier }: HomePageProps) {
   return (
     <main className="relative px-6 py-12 md:px-12 md:py-24">
       <div className="mx-auto max-w-7xl">
@@ -118,11 +120,12 @@ export default function HomePage({ onSelect }: HomePageProps) {
             </Link>
           </div>
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:gap-12">
-            {CHARACTERS.map((char) => (
+            {CHARACTERS.filter((char) => matchesCharacterName(char.name, SPOTLIGHT_CHARS)).map((char) => (
               <CompanionCard
                 key={char.id}
                 character={char}
                 onSelect={onSelect}
+                userTier={userTier}
               />
             ))}
           </div>

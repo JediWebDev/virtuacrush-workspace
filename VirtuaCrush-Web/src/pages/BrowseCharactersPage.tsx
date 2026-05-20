@@ -1,13 +1,15 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { CHARACTERS, Character } from "../types/character";
+import type { UserTier } from "../types/subscription";
 import CompanionCard from "../components/CompanionCard";
 
 interface BrowseCharactersPageProps {
   onSelect: (c: Character) => void;
+  userTier: UserTier;
 }
 
-export default function BrowseCharactersPage({ onSelect }: BrowseCharactersPageProps) {
+export default function BrowseCharactersPage({ onSelect, userTier }: BrowseCharactersPageProps) {
   return (
     <main className="relative px-6 pb-24 pt-4 md:px-12">
       <div className="mx-auto max-w-7xl">
@@ -25,6 +27,7 @@ export default function BrowseCharactersPage({ onSelect }: BrowseCharactersPageP
               key={char.id}
               character={char}
               onSelect={onSelect}
+              userTier={userTier}
             />
           ))}
         </div>

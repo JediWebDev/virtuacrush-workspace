@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { motion } from "motion/react";
 import { Heart, MessageCircle, Lock } from "lucide-react";
 import { Character, SocialPost, SocialComment } from "../types/character";
+import type { UserTier } from "../types/subscription";
 
 function displayName(fullName: string): string {
   const quoted = fullName.match(/"([^"]+)"/);
@@ -104,13 +105,16 @@ interface SocialFeedProps {
   character: Character;
   className?: string;
   isActive?: boolean;
+  userTier: UserTier;
 }
 
-export default function SocialFeed({ character, className = "", isActive = true }: SocialFeedProps) {
+export default function SocialFeed({ character, className = "", isActive = true, userTier }: SocialFeedProps) {
   const name = displayName(character.name);
   const feedPosts = character.feedPosts.slice(0, 4);
   const teaser = feedPosts[0];
-  const locked = feedPosts.slice(1);
+  const showPaywall = userTier === "guest" || userTier === "free";
+  const locked = showPaywall ? feedPosts.slice(1) : [];
+  const unlockedPosts = showPaywall ? [] : feedPosts.slice(1);
 
   return (
     <aside className={`flex h-full flex-col border-black/[0.06] dark:border-white/[0.06] bg-stone-100 dark:bg-stone-950/30 ${className}`}>
@@ -129,6 +133,11 @@ export default function SocialFeed({ character, className = "", isActive = true 
         ) : (
           <PostCard post={teaser} character={character} isLive={isActive} />
         )}
+        {unlockedPosts.map((post) => (
+          <div key={post.id} className="mt-4">
+            <PostCard post={post} character={character} isLive={isActive} />
+          </div>
+        ))}
         {locked.length > 0 && (
           <div className="relative mt-4 overflow-hidden">
             <div className="space-y-4 opacity-40 blur-md select-none pointer-events-none" aria-hidden>

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, Play, Lock, History, Search, Info } from "lucide-react";
 import { Character, buildRivalrySystemContext } from "../types/character";
+import { hasPremiumAccess, type UserTier } from "../types/subscription";
 import SocialFeed from "./SocialFeed";
 
 const AFFINITY_PER_MESSAGE = 4;
@@ -65,60 +66,72 @@ interface Props {
   onBack: () => void;
   onAffinityChange?: (characterId: string, affinity: number) => void;
   autoOpenMessageId?: string;
+  userTier: UserTier;
 }
 
-function PrivateMessagesInbox({ onPlayAudio }: { onPlayAudio: () => void }) {
+function PrivateMessagesInbox({
+  onPlayAudio,
+  userTier,
+}: {
+  onPlayAudio: () => void;
+  userTier: UserTier;
+}) {
+  const premiumUnlocked = hasPremiumAccess(userTier);
+
   return (
     <div className="mb-6 w-full rounded-2xl border border-black/[0.06] dark:border-white/[0.06] bg-black/[0.03] dark:bg-white/[0.03] p-4 text-left">
       <h4 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500">
         Private Messages
       </h4>
       <ul className="space-y-2">
-        {PRIVATE_MESSAGES.map((item) => (
+        {PRIVATE_MESSAGES.map((item) => {
+          const isLocked = premiumUnlocked ? false : item.locked;
+          return (
           <li key={item.id}>
             <button
               type="button"
-              disabled={item.locked}
-              title={item.locked ? "Subscription Required" : undefined}
+              disabled={isLocked}
+              title={isLocked ? "Subscription Required" : undefined}
               onClick={() => {
-                if (!item.locked) {
+                if (!isLocked) {
                   onPlayAudio();
                 }
               }}
               className={`relative flex w-full items-center gap-3 rounded-xl border border-black/[0.06] dark:border-white/[0.06] px-3 py-2.5 text-left transition-colors ${
-                item.locked
+                isLocked
                   ? "cursor-not-allowed"
                   : "hover:border-accent/25 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
               }`}
             >
-              {item.locked ? (
+              {isLocked ? (
                 <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl backdrop-blur-sm">
                   <Lock size={16} className="text-stone-600 dark:text-stone-400" />
                 </div>
               ) : null}
               <span
                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                  item.locked ? "bg-stone-200 dark:bg-stone-800/60" : "bg-accent/15 text-accent"
+                  isLocked ? "bg-stone-200 dark:bg-stone-800/60" : "bg-accent/15 text-accent"
                 }`}
               >
-                {item.locked ? (
+                {isLocked ? (
                   <Lock size={14} className="text-stone-900 dark:text-stone-500" />
                 ) : (
                   <Play size={14} fill="currentColor" />
                 )}
               </span>
-              <span className={`text-sm font-medium ${item.locked ? "text-stone-900 dark:text-stone-500" : "text-stone-700 dark:text-stone-200"}`}>
+              <span className={`text-sm font-medium ${isLocked ? "text-stone-900 dark:text-stone-500" : "text-stone-700 dark:text-stone-200"}`}>
                 {item.title}
               </span>
             </button>
           </li>
-        ))}
+          );
+        })}
       </ul>
     </div>
   );
 }
 
-export default function ChatInterface({ character, onBack, onAffinityChange, autoOpenMessageId }: Props) {
+export default function ChatInterface({ character, onBack, onAffinityChange, autoOpenMessageId, userTier }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -138,10 +151,11 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
   useEffect(() => {
     if (!autoOpenMessageId) return;
     const item = PRIVATE_MESSAGES.find((m) => m.id === autoOpenMessageId);
-    if (item && !item.locked) {
+    const isLocked = item?.locked && !hasPremiumAccess(userTier);
+    if (item && !isLocked) {
       setActiveMessage(DEMO_AUDIO_MESSAGE);
     }
-  }, [autoOpenMessageId]);
+  }, [autoOpenMessageId, userTier]);
 
   useEffect(() => {
     setAffinity(character.currentAffinity);
@@ -315,7 +329,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
             </div>
           </div>
 
-          <PrivateMessagesInbox onPlayAudio={openAudioMessage} />
+          <PrivateMessagesInbox onPlayAudio={openAudioMessage} userTier={userTier} />
         </div>
 
         <div className="mt-auto border-t border-black/[0.06] dark:border-white/[0.06] pt-6">
@@ -536,7 +550,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
       </motion.div>
       {/* Desktop social feed */}
       <div className="hidden min-h-0 flex-col border-l border-black/[0.06] dark:border-white/[0.06] lg:flex">
-        <SocialFeed character={characterWithAffinity} className="h-full w-full" isActive />
+        <SocialFeed character={characterWithAffinity} className="h-full w-full" isActive userTier={userTier} />
       </div>
 
       <AnimatePresence>
@@ -568,7 +582,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
                   <X size={20} />
                 </button>
               </div>
-              <SocialFeed character={characterWithAffinity} className="min-h-0 flex-1" isActive={feedOpen} />
+              <SocialFeed character={characterWithAffinity} className="min-h-0 flex-1" isActive={feedOpen} userTier={userTier} />
             </motion.div>
           </>
         )}
@@ -627,6 +641,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
                     </div>
                   </div>
                   <PrivateMessagesInbox
+                    userTier={userTier}
                     onPlayAudio={() => {
                       setProfileOpen(false);
                       openAudioMessage();

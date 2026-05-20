@@ -1,15 +1,20 @@
 import React from "react";
 import { motion } from "motion/react";
-import { MessageSquare } from "lucide-react";
+import { Lock, MessageSquare } from "lucide-react";
 import { Character } from "../types/character";
+import { isFreeCharacter, type UserTier } from "../types/subscription";
 
 interface Props {
   character: Character;
   onSelect: (c: Character) => void;
+  userTier: UserTier;
   key?: React.Key;
 }
 
-export default function CompanionCard({ character, onSelect }: Props) {
+export default function CompanionCard({ character, onSelect, userTier }: Props) {
+  const isLocked =
+    (userTier === "guest" || userTier === "free") && !isFreeCharacter(character.name);
+
   return (
     <motion.div
       layoutId={character.id}
@@ -20,12 +25,20 @@ export default function CompanionCard({ character, onSelect }: Props) {
     >
       <div className="overflow-hidden rounded-[1.75rem] border border-black/[0.08] dark:border-white/[0.08] bg-stone-100 dark:bg-stone-900/40 shadow-xl shadow-black/25 backdrop-blur-xl transition-all duration-300 hover:border-accent/25 hover:shadow-[0_20px_50px_rgba(201,113,125,0.12)]">
         <div className="relative aspect-[4/5] w-full overflow-hidden">
-          <motion.img
+          <img
             src={character.image}
             alt={character.name}
-            className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
+            className={`h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03] ${
+              isLocked ? "opacity-75 grayscale-[0.35]" : ""
+            }`}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/30 to-transparent" />
+
+          {isLocked ? (
+            <div className="absolute right-4 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-stone-300 ring-1 ring-white/20 backdrop-blur-md">
+              <Lock size={16} />
+            </div>
+          ) : null}
 
           <div className="absolute inset-x-0 bottom-0 p-5">
             <div className="rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-stone-100 dark:bg-stone-950/60 p-4 shadow-lg backdrop-blur-xl">
