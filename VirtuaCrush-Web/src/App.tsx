@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from "react";
 import { Routes, Route, useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { X } from "lucide-react";
+import { X, Lock } from "lucide-react";
 import { Character, CHARACTERS } from "./types/character";
 import { FREE_CHARS, isFreeCharacter, type UserTier } from "./types/subscription";
 import ChatInterface from "./components/ChatInterface";
@@ -40,6 +40,10 @@ export default function App() {
   const location = useLocation();
   const [userTier, setUserTier] = useState<UserTier>("guest");
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [authError, setAuthError] = useState("");
   const [activeChat, setActiveChat] = useState<Character | null>(null);
   const [autoOpenMessageId, setAutoOpenMessageId] = useState<string | undefined>();
   const [affinityByCharacter, setAffinityByCharacter] = useState<Record<string, number>>(() =>
@@ -53,7 +57,7 @@ export default function App() {
     }
 
     if (userTier === "free" && !isFreeCharacter(char.name)) {
-      alert("Upgrade to PRO to chat with this character!");
+      setShowUpgradeModal(true);
       return;
     }
 
@@ -78,7 +82,7 @@ export default function App() {
         if (userTier === "guest") {
           setShowAuthModal(true);
         } else if (userTier === "free" && !isFreeCharacter(char.name)) {
-          alert("Upgrade to PRO to chat with this character!");
+          setShowUpgradeModal(true);
         } else {
           setActiveChat({
             ...char,
@@ -98,6 +102,28 @@ export default function App() {
       setAutoOpenMessageId(undefined);
     }
   }, [location.pathname, location.state, affinityByCharacter, userTier]);
+
+  const handleSignUp = () => {
+    setAuthError("");
+
+    if (password !== confirmPassword) {
+      setAuthError("Passwords do not match.");
+      return;
+    }
+
+    const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+])[A-Za-z\d!@#$%^&*()_+]{8,}$/;
+    if (!passwordRegex.test(password)) {
+      setAuthError(
+        "Password must be at least 8 characters and include 1 uppercase letter, 1 number, and 1 special character."
+      );
+      return;
+    }
+
+    setUserTier("free");
+    setShowAuthModal(false);
+    setPassword("");
+    setConfirmPassword("");
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-stone-50 dark:bg-surface">
@@ -170,19 +196,87 @@ export default function App() {
                       <input
                         type="password"
                         placeholder="Password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
                         className="w-full rounded-xl border border-black/10 bg-black/[0.04] px-4 py-3 text-stone-800 outline-none transition-colors placeholder:text-stone-500 focus:border-accent/40 focus:ring-2 focus:ring-accent/15 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-100"
                       />
+                      <input
+                        type="password"
+                        placeholder="Confirm Password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full rounded-xl border border-black/10 bg-black/[0.04] px-4 py-3 text-stone-800 outline-none transition-colors placeholder:text-stone-500 focus:border-accent/40 focus:ring-2 focus:ring-accent/15 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-100"
+                      />
+                      {authError ? (
+                        <p className="mt-3 text-center text-xs text-red-400">{authError}</p>
+                      ) : null}
                       <button
                         type="button"
-                        onClick={() => {
-                          setUserTier("free");
-                          setShowAuthModal(false);
-                        }}
+                        onClick={handleSignUp}
                         className="w-full rounded-xl bg-accent py-3.5 text-sm font-semibold text-white shadow-md shadow-accent/25 transition-all hover:bg-accent-deep active:scale-[0.98]"
                       >
                         Join VirtuaCrush
                       </button>
                     </div>
+                  </motion.div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {showUpgradeModal ? (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+                  onClick={() => setShowUpgradeModal(false)}
+                >
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.96, y: 12 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                    className="relative w-full max-w-md rounded-3xl border border-white/10 bg-surface p-8 text-center shadow-2xl"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setShowUpgradeModal(false)}
+                      className="absolute right-4 top-4 rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-white/[0.06] hover:text-stone-100"
+                      aria-label="Close"
+                    >
+                      <X size={20} />
+                    </button>
+
+                    <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-accent/15 text-accent">
+                      <Lock size={28} />
+                    </div>
+
+                    <h2 className="mb-3 font-serif text-2xl text-stone-50">
+                      Unlock Premium Companions
+                    </h2>
+                    <p className="mb-8 text-sm text-stone-400">
+                      Upgrade to PRO or VIP to chat with the entire roster, unlock private media, and
+                      access late-night voice notes.
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowUpgradeModal(false);
+                        navigate("/how-it-works");
+                      }}
+                      className="w-full rounded-xl bg-accent py-3.5 text-sm font-semibold text-white shadow-md shadow-accent/25 transition-all hover:bg-accent-deep active:scale-[0.98]"
+                    >
+                      View Plans
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowUpgradeModal(false)}
+                      className="mt-4 text-sm text-stone-400 transition-colors hover:text-stone-200"
+                    >
+                      Maybe Later
+                    </button>
                   </motion.div>
                 </motion.div>
               ) : null}
