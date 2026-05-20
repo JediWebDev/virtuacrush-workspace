@@ -42,7 +42,7 @@ export const RIVALRY_AFFINITY_THRESHOLD = 50;
 export const CHARACTERS: Character[] = [
   {
     id: "mina",
-    name: 'Tiffany "Mina" Greer',
+    name: "Mina",
     role: "Gamer and Cosplayer",
     bio: "Streams late-night runs, builds cosplay from scratch, and loves roasting you gently when you lose. Always down for co-op and chaotic energy.",
     tags: ["Playful", "Sassy", "Creative", "Night Owl"],
@@ -132,7 +132,7 @@ export const CHARACTERS: Character[] = [
     persona:
       "You are Lexi, an elite cosplayer with a massive following. You are slightly arrogant, highly competitive, and passive-aggressive towards people who make their own costumes (like Mina). You speak with refined, slightly condescending internet slang.",
     currentAffinity: 15,
-    rivalName: "mina_k",
+    rivalName: "mina",
     rivalAvatar: "/Mina_Character.png",
     rivalSnarkComment: "DIY is cute for hobby hour, babe. Some of us commission. 💅",
     feedPosts: [
@@ -198,15 +198,15 @@ export const CHARACTERS: Character[] = [
   },
   {
     id: "callie",
-    name: "Callie Spencer",
-    role: "College Sorority Student",
+    name: "Callie",
+    role: "Sorority Philanthropy Chair",
     bio: "Campus social butterfly with big ambitions and a quick wit. Fun, adventurous, and always planning the next unforgettable moment.",
     tags: ["Fun", "Adventurous", "Ambitious", "Witty"],
     image: "/Callie_Character.jpg",
     premiumVideo: "https://assets.mixkit.co/videos/preview/mixkit-girl-in-neon-sign-1232-large.mp4",
     persona: "Fun, adventurous, ambitious sorority student. Witty, upbeat, loves social life and pushing you toward your goals.",
     currentAffinity: 0,
-    rivalName: "Piper_Sorority",
+    rivalName: "Madison",
     rivalAvatar: "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?auto=format&fit=crop&q=80&w=200",
     rivalSnarkComment: "omg sooo special 🙄 must be nice.",
     feedPosts: [
@@ -274,7 +274,7 @@ export const CHARACTERS: Character[] = [
   {
     id: "madison-01",
     name: "Madison",
-    role: "Fitness Coach",
+    role: "Sorority Social Chair",
     bio: "Former college athlete turned online coach who lives for sunrise workouts and accountability texts. Tough love with a genuinely warm streak underneath.",
     tags: ["Motivating", "Athletic", "Direct", "Early Riser"],
     image: "/Madison_Character.png",
@@ -282,8 +282,8 @@ export const CHARACTERS: Character[] = [
     persona:
       "You are Madison, an energetic fitness coach. Speak with confident, upbeat encouragement—firm when you need to be, but never cruel. Celebrate small wins and push the user toward discipline without sounding like a drill sergeant.",
     currentAffinity: 0,
-    rivalName: "olivia_well",
-    rivalAvatar: "/Olivia_Character.jpg",
+    rivalName: "callie",
+    rivalAvatar: "/Callie_Character.jpg",
     rivalSnarkComment: "rest days are not a personality, bestie 🧘‍♀️",
     feedPosts: [
       {
