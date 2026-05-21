@@ -106,15 +106,17 @@ async function startServer() {
 
     if (externalEndpoint) {
       try {
-        const url = `${externalEndpoint}/${agentId}/message`;
+        const url = `${externalEndpoint.replace(/\/$/, '')}/${agentId}/message`;
         console.log(`Proxying to external agent: ${url}`);
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             text: message,
-            userId: "user",
-            roomId: "default",
+            user: "web_user",
+            userId: "web_user",
+            userName: "User",
+            roomId: `default-room-${agentId}`,
           }),
         });
         

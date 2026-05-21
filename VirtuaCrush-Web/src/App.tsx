@@ -92,6 +92,7 @@ export default function App() {
       return;
     }
 
+    navigate(`/chat/${char.id}`);
     setActiveChat({
       ...char,
       currentAffinity: affinityByCharacter[char.id] ?? char.currentAffinity,

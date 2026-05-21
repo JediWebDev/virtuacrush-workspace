@@ -1,9 +1,10 @@
-import { type Character } from '@elizaos/core';
+import { type Character, ModelProviderName } from '@elizaos/core';
 
 const env = (globalThis as any).process?.env ?? {};
 
 export const character: Character = {
   name: 'Mina',
+  modelProvider: ModelProviderName.OPENROUTER,
 
   plugins: [
     // Core plugins first
