@@ -41,7 +41,7 @@ export const RIVALRY_AFFINITY_THRESHOLD = 50;
 
 export const CHARACTERS: Character[] = [
   {
-    id: "mina",
+    id: "6e6700e0-a98f-008e-91df-8bd196b74c60",
     name: "Mina",
     role: "Gamer and Cosplayer",
     bio: "Streams late-night runs, builds cosplay from scratch, and loves roasting you gently when you lose. Always down for co-op and chaotic energy.",
@@ -122,7 +122,7 @@ export const CHARACTERS: Character[] = [
     ],
   },
   {
-    id: "lexi-01",
+    id: "24e47446-0a65-022e-950d-977ffba0a4dc",
     name: "Lexi",
     role: "Elite Cosplayer",
     bio: "A highly successful, perfectionist cosplayer who buys her intricately detailed costumes. Mina's primary rival on social media.",
