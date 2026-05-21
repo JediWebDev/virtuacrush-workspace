@@ -106,7 +106,7 @@ async function startServer() {
 
     if (externalEndpoint) {
       try {
-        const url = `${externalEndpoint.replace(/\/$/, '')}/${agentId}/message`;
+        const url = `${externalEndpoint.replace(/\/$/, '')}/agents/${agentId}/message`;
         console.log(`Proxying to external agent: ${url}`);
         const response = await fetch(url, {
           method: 'POST',
