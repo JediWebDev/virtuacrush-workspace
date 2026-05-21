@@ -66,6 +66,8 @@ async function startServer() {
   });
 
   app.post("/api/auth/login", async (req, res) => {
+    console.log("DEBUG: server.ts is running. Incoming chat request...");
+    const { message, agentId } = req.body;
     const { email, password } = req.body as { email?: string; password?: string };
 
     if (!email?.trim() || !password) {
