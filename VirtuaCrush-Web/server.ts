@@ -14,28 +14,28 @@ async function startServer() {
 
   // AI Route - Handles logic for external agents or Gemini fallback
   app.post("/api/chat", async (req, res) => {
-    const { message, characterPersona, rivalryContext } = req.body;
+    const { agentId, message, characterPersona, rivalryContext } = req.body;
     const externalEndpoint = process.env.AI_AGENT_ENDPOINT;
 
     if (externalEndpoint) {
       try {
-        console.log(`Proxying to external agent: ${externalEndpoint}`);
-        const response = await fetch(externalEndpoint, {
+        const url = `${externalEndpoint}/${agentId}/message`;
+        console.log(`Proxying to external agent: ${url}`);
+        const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            prompt: message, 
-            persona: characterPersona,
-            rivalryContext: rivalryContext ?? "",
-            user: "web_client" 
-          })
+          body: JSON.stringify({
+            text: message,
+            userId: "user",
+            roomId: "default",
+          }),
         });
         
         if (!response.ok) throw new Error(`External agent error: ${response.status}`);
         
         const data = await response.json();
-        return res.json({ 
-          text: data.text || data.response || data.message || "Agent acknowledged command." 
+        return res.json({
+          text: data[0]?.text || "No response received.",
         });
       } catch (error) {
         console.error("External Agent Proxy Error:", error);

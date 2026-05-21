@@ -209,6 +209,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          agentId: character.id,
           message: textToSend,
           characterPersona: character.persona,
           rivalryContext,
