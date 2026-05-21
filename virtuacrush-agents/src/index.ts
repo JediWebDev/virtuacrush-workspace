@@ -1,6 +1,8 @@
 import { logger, type IAgentRuntime, type Project, type ProjectAgent } from '@elizaos/core';
 import { character as minaCharacter } from './mina.ts';
 import { character as lexiCharacter } from './lexi.ts';
+import { character as madisonCharacter } from './madison.ts';
+import { character as zanderCharacter } from './zander.ts';
 import affinityPlugin from './plugins/affinity/index.ts';
 
 const initCharacter = ({ runtime, name }: { runtime: IAgentRuntime, name: string }) => {
@@ -19,8 +21,20 @@ export const lexiAgent: ProjectAgent = {
   plugins: [affinityPlugin],
 };
 
+export const madisonAgent: ProjectAgent = {
+  character: madisonCharacter,
+  init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, name: madisonCharacter.name }),
+  plugins: [affinityPlugin],
+};
+
+export const zanderAgent: ProjectAgent = {
+  character: zanderCharacter,
+  init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, name: zanderCharacter.name }),
+  plugins: [affinityPlugin],
+};
+
 const project: Project = {
-  agents: [minaAgent, lexiAgent],
+  agents: [minaAgent, lexiAgent, madisonAgent, zanderAgent],
 };
 
 export default project;
