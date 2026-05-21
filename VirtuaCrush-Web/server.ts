@@ -106,55 +106,42 @@ async function startServer() {
     const { message, agentId } = req.body;
     const externalEndpoint = process.env.AI_AGENT_ENDPOINT;
 
-    if (externalEndpoint) {
-      try {
-        const url = `${externalEndpoint.replace(/\/$/, '')}/agents/${agentId}/message`;
-        console.log(`Proxying to external agent: ${url}`);
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            text: message,
-            user: "web_user",
-            userId: "web_user",
-            userName: "User",
-            roomId: `default-room-${agentId}`,
-          }),
-        });
-        
-        if (!response.ok) throw new Error(`External agent error: ${response.status}`);
-        
-        const data = await response.json();
-        return res.json({
-          text: data[0]?.text || "No response received.",
-        });
-      } catch (error) {
-        console.error("External Agent Proxy Error:", error);
-        return res.status(500).json({ error: "Neural link to external agent failed. Falling back to local core..." });
-      }
+    if (!externalEndpoint) {
+      return res.status(500).json({ error: "Configuration error: AI_AGENT_ENDPOINT missing." });
     }
 
-    // Default Fallback to Gemini if no external endpoint is configured
     try {
-      const ai = new GoogleGenAI({
-        apiKey: process.env.GEMINI_API_KEY,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          }
-        }
+      const url = `${externalEndpoint.replace(/\/$/, '')}/agents/${agentId}/message`;
+      console.log(`[DEBUG] Proxying to: ${url}`);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: message,
+          user: "web_user",
+          userId: "web_user",
+          userName: "User",
+          roomId: `default-room-${agentId}`,
+        }),
       });
 
-      const prompt = `Respond to the user's message appropriately.\n\nUser: ${message}`;
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt,
-      });
-      
-      res.json({ text: response.text });
+      // Grab raw text so we can see if it's an error page
+      const rawText = await response.text();
+
+      if (!response.ok) {
+        console.error(`[DEBUG] Backend rejected request (${response.status}):`, rawText);
+        return res.status(response.status).json({ error: `Backend error: ${rawText}` });
+      }
+
+      const data = JSON.parse(rawText);
+      // Handle both array and object responses
+      const responseText = Array.isArray(data) ? data[0]?.text : data?.text;
+
+      return res.json({ text: responseText || "Empty response from agent." });
     } catch (error) {
-      console.error("Gemini Fallback Error:", error);
-      res.status(500).json({ error: "AI core synchronization failed." });
+      console.error("[DEBUG] Proxy Exception:", error);
+      return res.status(500).json({ error: `Proxy failed: ${error instanceof Error ? error.message : 'Unknown'}` });
     }
   });
 
