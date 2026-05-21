@@ -22,6 +22,34 @@ type AppLocationState = {
   openMessage?: string;
 };
 
+type AuthMode = "signin" | "signup";
+
+const AUTH_TOKEN_KEY = "authToken";
+
+const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+])[A-Za-z\d!@#$%^&*()_+]{8,}$/;
+
+function tierFromToken(token: string): UserTier | null {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1] ?? "")) as { tier?: string };
+    if (payload.tier === "free" || payload.tier === "pro" || payload.tier === "vip") {
+      return payload.tier;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1] ?? "")) as { exp?: number };
+    if (!payload.exp) return false;
+    return Date.now() >= payload.exp * 1000;
+  } catch {
+    return true;
+  }
+}
+
 function ChatDeepLink({ onSelect }: { onSelect: (char: Character) => void }) {
   const { characterId } = useParams();
   const navigate = useNavigate();
@@ -41,9 +69,12 @@ export default function App() {
   const [userTier, setUserTier] = useState<UserTier>("guest");
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>("signup");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [authError, setAuthError] = useState("");
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [activeChat, setActiveChat] = useState<Character | null>(null);
   const [autoOpenMessageId, setAutoOpenMessageId] = useState<string | undefined>();
   const [affinityByCharacter, setAffinityByCharacter] = useState<Record<string, number>>(() =>
@@ -75,6 +106,21 @@ export default function App() {
   };
 
   useEffect(() => {
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!token) return;
+
+    if (isTokenExpired(token)) {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      return;
+    }
+
+    const tier = tierFromToken(token);
+    if (tier) {
+      setUserTier(tier);
+    }
+  }, []);
+
+  useEffect(() => {
     const state = location.state as AppLocationState | null;
     if (state?.openChat) {
       const char = CHARACTERS.find((c) => c.id === state.openChat);
@@ -103,26 +149,76 @@ export default function App() {
     }
   }, [location.pathname, location.state, affinityByCharacter, userTier]);
 
-  const handleSignUp = () => {
-    setAuthError("");
-
-    if (password !== confirmPassword) {
-      setAuthError("Passwords do not match.");
-      return;
-    }
-
-    const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+])[A-Za-z\d!@#$%^&*()_+]{8,}$/;
-    if (!passwordRegex.test(password)) {
-      setAuthError(
-        "Password must be at least 8 characters and include 1 uppercase letter, 1 number, and 1 special character."
-      );
-      return;
-    }
-
-    setUserTier("free");
-    setShowAuthModal(false);
+  const resetAuthForm = () => {
+    setEmail("");
     setPassword("");
     setConfirmPassword("");
+    setAuthError("");
+    setIsAuthLoading(false);
+  };
+
+  const closeAuthModal = () => {
+    setShowAuthModal(false);
+    resetAuthForm();
+  };
+
+  const handleAuth = async () => {
+    setAuthError("");
+
+    if (!email.trim()) {
+      setAuthError("Email is required.");
+      return;
+    }
+
+    if (authMode === "signup") {
+      if (password !== confirmPassword) {
+        setAuthError("Passwords do not match.");
+        return;
+      }
+
+      if (!PASSWORD_REGEX.test(password)) {
+        setAuthError(
+          "Password must be at least 8 characters and include 1 uppercase letter, 1 number, and 1 special character."
+        );
+        return;
+      }
+    }
+
+    if (!password) {
+      setAuthError("Password is required.");
+      return;
+    }
+
+    setIsAuthLoading(true);
+
+    try {
+      const endpoint = authMode === "signup" ? "/api/auth/signup" : "/api/auth/login";
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+
+      const data = (await response.json()) as { token?: string; tier?: UserTier; error?: string };
+
+      if (!response.ok) {
+        setAuthError(data.error || "Authentication failed.");
+        return;
+      }
+
+      if (!data.token || !data.tier) {
+        setAuthError("Authentication failed.");
+        return;
+      }
+
+      localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+      setUserTier(data.tier);
+      closeAuthModal();
+    } catch {
+      setAuthError("Something went wrong. Please try again.");
+    } finally {
+      setIsAuthLoading(false);
+    }
   };
 
   return (
@@ -162,7 +258,7 @@ export default function App() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-                  onClick={() => setShowAuthModal(false)}
+                  onClick={closeAuthModal}
                 >
                   <motion.div
                     initial={{ opacity: 0, scale: 0.96, y: 12 }}
@@ -173,49 +269,98 @@ export default function App() {
                   >
                     <button
                       type="button"
-                      onClick={() => setShowAuthModal(false)}
+                      onClick={closeAuthModal}
                       className="absolute right-4 top-4 rounded-lg p-1.5 text-stone-600 transition-colors hover:bg-black/[0.06] hover:text-stone-900 dark:text-stone-400 dark:hover:bg-white/[0.06] dark:hover:text-stone-100"
                       aria-label="Close"
                     >
                       <X size={20} />
                     </button>
 
+                    <div className="mb-6 flex rounded-xl border border-black/10 bg-black/[0.04] p-1 dark:border-white/10 dark:bg-white/[0.04]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthMode("signin");
+                          setAuthError("");
+                        }}
+                        className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${
+                          authMode === "signin"
+                            ? "bg-accent text-white shadow-sm"
+                            : "text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
+                        }`}
+                      >
+                        Sign In
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthMode("signup");
+                          setAuthError("");
+                        }}
+                        className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${
+                          authMode === "signup"
+                            ? "bg-accent text-white shadow-sm"
+                            : "text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
+                        }`}
+                      >
+                        Sign Up
+                      </button>
+                    </div>
+
                     <h2 className="mb-2 pr-8 font-serif text-2xl font-bold text-stone-900 dark:text-stone-50">
-                      Create your free account
+                      {authMode === "signup" ? "Create your free account" : "Welcome back"}
                     </h2>
                     <p className="mb-6 text-sm text-stone-600 dark:text-stone-400">
-                      Chat with {FREE_CHARS.slice(0, 3).join(", ")} and more on the free plan.
+                      {authMode === "signup"
+                        ? `Chat with ${FREE_CHARS.slice(0, 3).join(", ")} and more on the free plan.`
+                        : "Sign in to continue chatting with your companions."}
                     </p>
 
                     <div className="space-y-4">
                       <input
                         type="email"
                         placeholder="Email address"
-                        className="w-full rounded-xl border border-black/10 bg-black/[0.04] px-4 py-3 text-stone-800 outline-none transition-colors placeholder:text-stone-500 focus:border-accent/40 focus:ring-2 focus:ring-accent/15 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-100"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        disabled={isAuthLoading}
+                        className="w-full rounded-xl border border-black/10 bg-black/[0.04] px-4 py-3 text-stone-800 outline-none transition-colors placeholder:text-stone-500 focus:border-accent/40 focus:ring-2 focus:ring-accent/15 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-100"
                       />
                       <input
                         type="password"
                         placeholder="Password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="w-full rounded-xl border border-black/10 bg-black/[0.04] px-4 py-3 text-stone-800 outline-none transition-colors placeholder:text-stone-500 focus:border-accent/40 focus:ring-2 focus:ring-accent/15 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-100"
+                        disabled={isAuthLoading}
+                        onKeyDown={(e) => e.key === "Enter" && handleAuth()}
+                        className="w-full rounded-xl border border-black/10 bg-black/[0.04] px-4 py-3 text-stone-800 outline-none transition-colors placeholder:text-stone-500 focus:border-accent/40 focus:ring-2 focus:ring-accent/15 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-100"
                       />
-                      <input
-                        type="password"
-                        placeholder="Confirm Password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="w-full rounded-xl border border-black/10 bg-black/[0.04] px-4 py-3 text-stone-800 outline-none transition-colors placeholder:text-stone-500 focus:border-accent/40 focus:ring-2 focus:ring-accent/15 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-100"
-                      />
+                      {authMode === "signup" ? (
+                        <input
+                          type="password"
+                          placeholder="Confirm Password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          disabled={isAuthLoading}
+                          onKeyDown={(e) => e.key === "Enter" && handleAuth()}
+                          className="w-full rounded-xl border border-black/10 bg-black/[0.04] px-4 py-3 text-stone-800 outline-none transition-colors placeholder:text-stone-500 focus:border-accent/40 focus:ring-2 focus:ring-accent/15 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-100"
+                        />
+                      ) : null}
                       {authError ? (
-                        <p className="mt-3 text-center text-xs text-red-400">{authError}</p>
+                        <p className="text-center text-xs text-red-400">{authError}</p>
                       ) : null}
                       <button
                         type="button"
-                        onClick={handleSignUp}
-                        className="w-full rounded-xl bg-accent py-3.5 text-sm font-semibold text-white shadow-md shadow-accent/25 transition-all hover:bg-accent-deep active:scale-[0.98]"
+                        onClick={handleAuth}
+                        disabled={isAuthLoading}
+                        className="w-full rounded-xl bg-accent py-3.5 text-sm font-semibold text-white shadow-md shadow-accent/25 transition-all hover:bg-accent-deep active:scale-[0.98] disabled:opacity-60"
                       >
-                        Join VirtuaCrush
+                        {isAuthLoading
+                          ? authMode === "signup"
+                            ? "Creating account…"
+                            : "Signing in…"
+                          : authMode === "signup"
+                            ? "Join VirtuaCrush"
+                            : "Sign In"}
                       </button>
                     </div>
                   </motion.div>
