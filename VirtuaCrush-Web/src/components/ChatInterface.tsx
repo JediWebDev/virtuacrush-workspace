@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, Play, Lock, History, Search, Info } from "lucide-react";
-import { Character, buildRivalrySystemContext } from "../types/character";
+import { Character } from "../types/character";
 import { hasPremiumAccess, type UserTier } from "../types/subscription";
 import SocialFeed from "./SocialFeed";
 
@@ -199,21 +199,14 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
     setAffinity(nextAffinity);
     onAffinityChange?.(character.id, nextAffinity);
 
-    const rivalryContext = buildRivalrySystemContext({
-      ...character,
-      currentAffinity: nextAffinity,
-    });
-
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          agentId: character.id,
           message: textToSend,
-          characterPersona: character.persona,
-          rivalryContext,
-        })
+          agentId: character.id,
+        }),
       });
 
       if (!response.ok) {

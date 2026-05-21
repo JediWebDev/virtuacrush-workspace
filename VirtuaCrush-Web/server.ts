@@ -101,7 +101,7 @@ async function startServer() {
 
   // AI Route - Handles logic for external agents or Gemini fallback
   app.post("/api/chat", async (req, res) => {
-    const { agentId, message, characterPersona, rivalryContext } = req.body;
+    const { message, agentId } = req.body;
     const externalEndpoint = process.env.AI_AGENT_ENDPOINT;
 
     if (externalEndpoint) {
@@ -140,11 +140,8 @@ async function startServer() {
           }
         }
       });
-      
-      const rivalryBlock = rivalryContext
-        ? `\n\n${rivalryContext}`
-        : "";
-      const prompt = `System: You are the character described below. Stay in character. Respond to the user's message appropriately.\n\nPersona: ${characterPersona}${rivalryBlock}\n\nUser: ${message}`;
+
+      const prompt = `Respond to the user's message appropriately.\n\nUser: ${message}`;
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: prompt,

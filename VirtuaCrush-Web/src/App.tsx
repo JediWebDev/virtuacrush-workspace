@@ -147,7 +147,7 @@ export default function App() {
       setActiveChat(null);
       setAutoOpenMessageId(undefined);
     }
-  }, [location.pathname, location.state, affinityByCharacter, userTier]);
+  }, [location.pathname, location.state, userTier]);
 
   const resetAuthForm = () => {
     setEmail("");
