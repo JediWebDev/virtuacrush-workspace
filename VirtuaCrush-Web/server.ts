@@ -161,7 +161,7 @@ async function startServer() {
           return res.status(502).json({ error: "Agent returned invalid JSON for DM channel." });
         }
 
-        channelId = dmData?.data?.channel?.id as string | undefined;
+        channelId = (dmData?.data?.channel?.id ?? dmData?.data?.id) as string | undefined;
 
         if (!channelId) {
           console.error("[DEBUG] No channel ID in DM response:", dmData);
