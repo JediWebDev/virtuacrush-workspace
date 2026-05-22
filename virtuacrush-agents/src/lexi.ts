@@ -1,9 +1,10 @@
-import { type Character } from '@elizaos/core';
+import { type Character, Clients } from '@elizaos/core';
 
 const env = (globalThis as any).process?.env ?? {};
 
 export const character: Character = {
   name: 'Lexi',
+  clients: [Clients.DIRECT],
 
   plugins: [
     // Core plugins first
