@@ -102,7 +102,7 @@ async function startServer() {
   //
   // ElizaOS v2 (1.x.x) removed the old /:agentId/message endpoint entirely.
   // The correct flow is:
-  //   1. GET  /api/messaging/dm-channel?userId1=<webUser>&userId2=<agentId>
+  //   1. GET  /api/messaging/dm-channel?currentUserId=<webUser>&targetUserId=<agentId>
   //        → gets or creates a dedicated DM channel for this user↔agent pair
   //   2. POST /api/messaging/channels/:channelId/messages  (mode: "sync")
   //        → sends the message and waits for the agent reply in the same request
@@ -142,7 +142,7 @@ async function startServer() {
       let channelId = dmChannelCache.get(agentId);
 
       if (!channelId) {
-        const dmUrl = `${base}/api/messaging/dm-channel?userId1=${WEB_USER_ID}&userId2=${agentId}`;
+        const dmUrl = `${base}/api/messaging/dm-channel?currentUserId=${WEB_USER_ID}&targetUserId=${agentId}`;
         console.log(`[DEBUG] Fetching DM channel: ${dmUrl}`);
 
         const dmRes = await fetch(dmUrl);
