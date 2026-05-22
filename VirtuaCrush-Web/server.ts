@@ -176,7 +176,7 @@ async function startServer() {
       // We capture the current message IDs in the channel so we can detect
       // genuinely NEW messages after our send — avoiding clock-skew issues
       // between the two Railway containers.
-      const pollUrl = `${base}/api/messaging/channels/${channelId}/messages`;
+      const pollUrl = `${base}/api/messaging/channels/${channelId}/messages?limit=100`;
 
       const snapshotRes = await fetch(pollUrl).catch(() => null);
       const knownIds = new Set<string>();
