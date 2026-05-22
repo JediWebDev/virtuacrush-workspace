@@ -172,12 +172,28 @@ async function startServer() {
         console.log(`[DEBUG] Cached DM channel for agent ${agentId}: ${channelId}`);
       }
 
-      // ── Step 2: send the message, then poll for the agent's reply ─────────
+      // ── Step 2: snapshot existing messages before we send ─────────────────
+      // We capture the current message IDs in the channel so we can detect
+      // genuinely NEW messages after our send — avoiding clock-skew issues
+      // between the two Railway containers.
+      const pollUrl = `${base}/api/messaging/channels/${channelId}/messages`;
+
+      const snapshotRes = await fetch(pollUrl).catch(() => null);
+      const knownIds = new Set<string>();
+      if (snapshotRes?.ok) {
+        try {
+          const snapData = await snapshotRes.json();
+          const snapMsgs: any[] = snapData?.data?.messages ?? snapData?.data ?? [];
+          for (const m of snapMsgs) {
+            if (m?.id) knownIds.add(String(m.id));
+          }
+        } catch { /* ignore */ }
+      }
+      console.log(`[DEBUG] Snapshot: ${knownIds.size} existing messages`);
+
+      // ── Step 3: send the message ───────────────────────────────────────────
       const msgUrl = `${base}/api/messaging/channels/${channelId}/messages`;
       console.log(`[DEBUG] Posting message to: ${msgUrl}`);
-
-      // Record the time BEFORE sending so we can filter out all earlier messages.
-      const sentAt = Date.now();
 
       const msgRes = await fetch(msgUrl, {
         method: "POST",
@@ -202,12 +218,18 @@ async function startServer() {
         return res.status(msgRes.status).json({ error: `Agent error: ${msgRaw}` });
       }
 
-      console.log(`[DEBUG] Message submitted at ${new Date(sentAt).toISOString()}`);
+      // Add our own sent message ID to the known set too (if returned)
+      try {
+        const sentData = JSON.parse(msgRaw);
+        const sentId = sentData?.data?.id ?? sentData?.id;
+        if (sentId) knownIds.add(String(sentId));
+      } catch { /* ignore */ }
 
-      // ── Step 3: poll for the agent reply (max 15s, 500ms interval) ────────
-      const pollUrl = `${base}/api/messaging/channels/${channelId}/messages`;
-      const deadline = sentAt + 15_000;
-      const interval = 500;
+      console.log(`[DEBUG] Message sent, polling for agent reply...`);
+
+      // ── Step 4: poll for the agent reply (max 20s, 750ms interval) ────────
+      const deadline = Date.now() + 20_000;
+      const interval = 750;
 
       let agentReply: string | undefined;
 
@@ -232,31 +254,17 @@ async function startServer() {
           continue;
         }
 
-        // Walk through messages looking for an agent reply that arrived
-        // AFTER we sent our message. We check several field name variants
-        // because ElizaOS stores messages with entityId/authorId/author_id
-        // depending on version.
         for (const msg of messages) {
-          // ── timestamp check: only consider messages sent after ours ──
-          const msgTime =
-            msg.createdAt
-              ? (typeof msg.createdAt === "number" ? msg.createdAt : new Date(msg.createdAt).getTime())
-              : 0;
+          // Skip messages we saw before sending
+          if (!msg?.id || knownIds.has(String(msg.id))) continue;
 
-          if (msgTime <= sentAt) continue;
-
-          // ── author check: skip our own messages in all field variants ──
+          // Skip messages from the web user (our own)
           const authorId =
-            msg.author_id ??
-            msg.authorId ??
-            msg.entityId ??
-            msg.senderId ??
-            msg.userId ??
-            "";
-
+            msg.author_id ?? msg.authorId ?? msg.entityId ??
+            msg.senderId ?? msg.userId ?? "";
           if (String(authorId) === WEB_USER_ID) continue;
 
-          // ── content check: skip empty messages ────────────────────────
+          // Skip empty messages
           const text = msg.content ?? msg.text ?? msg.message ?? "";
           if (!text) continue;
 
@@ -268,7 +276,7 @@ async function startServer() {
       }
 
       if (!agentReply) {
-        console.error("[DEBUG] Agent timed out — no reply after 15s");
+        console.error("[DEBUG] Agent timed out — no reply after 20s");
         return res.status(504).json({ error: "Agent did not reply in time. Please try again." });
       }
 
