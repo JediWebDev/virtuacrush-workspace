@@ -1,7 +1,6 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import pg from "pg";
 import bcrypt from "bcrypt";
@@ -66,8 +65,6 @@ async function startServer() {
   });
 
   app.post("/api/auth/login", async (req, res) => {
-    console.log("DEBUG: server.ts is running. Incoming chat request...");
-    const { message, agentId } = req.body;
     const { email, password } = req.body as { email?: string; password?: string };
 
     if (!email?.trim() || !password) {
@@ -101,47 +98,135 @@ async function startServer() {
     }
   });
 
-  // AI Route - Handles logic for external agents or Gemini fallback
-  app.post("/api/chat", async (req, res) => {
-    const { message, agentId } = req.body;
-    const externalEndpoint = process.env.AI_AGENT_ENDPOINT;
+  // ─── ElizaOS v2 Agent Chat ───────────────────────────────────────────────
+  //
+  // ElizaOS v2 (1.x.x) removed the old /:agentId/message endpoint entirely.
+  // The correct flow is:
+  //   1. GET  /api/messaging/dm-channel?userId1=<webUser>&userId2=<agentId>
+  //        → gets or creates a dedicated DM channel for this user↔agent pair
+  //   2. POST /api/messaging/channels/:channelId/messages  (mode: "sync")
+  //        → sends the message and waits for the agent reply in the same request
+  //
+  // Channel IDs are cached in memory so step 1 only runs once per agentId.
+  // ─────────────────────────────────────────────────────────────────────────
 
-    if (!externalEndpoint) {
+  // Stable UUID that represents the anonymous web user on this server.
+  // If you want per-account isolation, swap this for the userId from the JWT.
+  const WEB_USER_ID = "00000000-0000-0000-0000-000000000002";
+
+  // Default ElizaOS server ID (single-server deployments always use this).
+  const ELIZA_SERVER_ID = "00000000-0000-0000-0000-000000000000";
+
+  // In-memory cache: agentId → channelId  (survives restarts fine; Railway
+  // redeploys are infrequent and the DM-channel lookup is cheap anyway).
+  const dmChannelCache = new Map<string, string>();
+
+  app.post("/api/chat", async (req, res) => {
+    const { message, agentId } = req.body as { message?: string; agentId?: string };
+    const base = (process.env.AI_AGENT_ENDPOINT ?? "").replace(/\/$/, "");
+
+    if (!base) {
       return res.status(500).json({ error: "Configuration error: AI_AGENT_ENDPOINT missing." });
     }
 
-    try {
-      const url = `${externalEndpoint.replace(/\/$/, '')}/${agentId}/message`;
-      console.log(`[DEBUG] Proxying to: ${url}`);
+    if (!message?.trim()) {
+      return res.status(400).json({ error: "message is required." });
+    }
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+    if (!agentId?.trim()) {
+      return res.status(400).json({ error: "agentId is required." });
+    }
+
+    try {
+      // ── Step 1: resolve the DM channel for this agent ──────────────────
+      let channelId = dmChannelCache.get(agentId);
+
+      if (!channelId) {
+        const dmUrl = `${base}/api/messaging/dm-channel?userId1=${WEB_USER_ID}&userId2=${agentId}`;
+        console.log(`[DEBUG] Fetching DM channel: ${dmUrl}`);
+
+        const dmRes = await fetch(dmUrl);
+        const dmRaw = await dmRes.text();
+
+        if (!dmRes.ok) {
+          console.error(`[DEBUG] DM channel lookup failed (${dmRes.status}):`, dmRaw);
+          return res.status(502).json({ error: `Could not resolve agent channel: ${dmRaw}` });
+        }
+
+        let dmData: any;
+        try {
+          dmData = JSON.parse(dmRaw);
+        } catch {
+          console.error("[DEBUG] DM channel response is not JSON:", dmRaw);
+          return res.status(502).json({ error: "Agent returned invalid JSON for DM channel." });
+        }
+
+        channelId = dmData?.data?.channel?.id as string | undefined;
+
+        if (!channelId) {
+          console.error("[DEBUG] No channel ID in DM response:", dmData);
+          return res.status(502).json({ error: "No channel ID returned by agent service." });
+        }
+
+        dmChannelCache.set(agentId, channelId);
+        console.log(`[DEBUG] Cached DM channel for agent ${agentId}: ${channelId}`);
+      }
+
+      // ── Step 2: send the message in sync mode ──────────────────────────
+      const msgUrl = `${base}/api/messaging/channels/${channelId}/messages`;
+      console.log(`[DEBUG] Posting message to: ${msgUrl}`);
+
+      const msgRes = await fetch(msgUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text: message,
-          user: "web_user",
-          userId: "web_user",
-          userName: "User",
-          roomId: `default-room-${agentId}`,
+          author_id: WEB_USER_ID,
+          content: message.trim(),
+          message_server_id: ELIZA_SERVER_ID,
+          source_type: "user_message",
+          raw_message: { text: message.trim() },
+          mode: "sync",          // wait for the agent reply before returning
         }),
       });
 
-      // Grab raw text so we can see if it's an error page
-      const rawText = await response.text();
+      const msgRaw = await msgRes.text();
 
-      if (!response.ok) {
-        console.error(`[DEBUG] Backend rejected request (${response.status}):`, rawText);
-        return res.status(response.status).json({ error: `Backend error: ${rawText}` });
+      if (!msgRes.ok) {
+        console.error(`[DEBUG] Agent rejected message (${msgRes.status}):`, msgRaw);
+        // If the channel was deleted/reset on the agent side, bust the cache
+        // so the next request creates a fresh one.
+        if (msgRes.status === 404 || msgRes.status === 403) {
+          dmChannelCache.delete(agentId);
+        }
+        return res.status(msgRes.status).json({ error: `Agent error: ${msgRaw}` });
       }
 
-      const data = JSON.parse(rawText);
-      // Handle both array and object responses
-      const responseText = Array.isArray(data) ? data[0]?.text : data?.text;
+      let data: any;
+      try {
+        data = JSON.parse(msgRaw);
+      } catch {
+        console.error("[DEBUG] Agent message response is not JSON:", msgRaw);
+        return res.status(502).json({ error: "Agent returned invalid JSON for message." });
+      }
 
-      return res.json({ text: responseText || "Empty response from agent." });
+      // ElizaOS sync mode returns the agent reply inside data.data
+      // Shape can vary slightly across patch versions, so we check several spots.
+      const agentReply: string =
+        data?.data?.content ??
+        data?.data?.text ??
+        data?.data?.message ??
+        (Array.isArray(data?.data) ? (data.data[0]?.content ?? data.data[0]?.text) : undefined) ??
+        data?.content ??
+        data?.text ??
+        "The agent did not return a response.";
+
+      return res.json({ text: agentReply });
+
     } catch (error) {
       console.error("[DEBUG] Proxy Exception:", error);
-      return res.status(500).json({ error: `Proxy failed: ${error instanceof Error ? error.message : 'Unknown'}` });
+      return res.status(500).json({
+        error: `Proxy failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      });
     }
   });
 
