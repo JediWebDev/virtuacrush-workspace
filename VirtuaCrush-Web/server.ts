@@ -176,6 +176,9 @@ async function startServer() {
       const msgUrl = `${base}/api/messaging/channels/${channelId}/messages`;
       console.log(`[DEBUG] Posting message to: ${msgUrl}`);
 
+      // Record the time BEFORE sending so we can filter out all earlier messages.
+      const sentAt = Date.now();
+
       const msgRes = await fetch(msgUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -199,21 +202,11 @@ async function startServer() {
         return res.status(msgRes.status).json({ error: `Agent error: ${msgRaw}` });
       }
 
-      // Parse the submission response to get the message ID so we can
-      // detect only replies that arrive AFTER our message.
-      let sentMsgId: string | undefined;
-      try {
-        const msgData = JSON.parse(msgRaw);
-        sentMsgId = msgData?.data?.id as string | undefined;
-        console.log(`[DEBUG] Message submitted, id=${sentMsgId}`);
-      } catch {
-        console.warn("[DEBUG] Could not parse submission response:", msgRaw);
-      }
+      console.log(`[DEBUG] Message submitted at ${new Date(sentAt).toISOString()}`);
 
       // ── Step 3: poll for the agent reply (max 15s, 500ms interval) ────────
-      // The agent processes asynchronously; sync mode only confirms delivery.
       const pollUrl = `${base}/api/messaging/channels/${channelId}/messages`;
-      const deadline = Date.now() + 15_000;
+      const deadline = sentAt + 15_000;
       const interval = 500;
 
       let agentReply: string | undefined;
@@ -225,7 +218,7 @@ async function startServer() {
         try {
           pollRes = await fetch(pollUrl);
         } catch {
-          continue; // network blip — keep trying
+          continue;
         }
 
         if (!pollRes.ok) continue;
@@ -233,30 +226,42 @@ async function startServer() {
         let messages: any[];
         try {
           const pollData = await pollRes.json();
-          // ElizaOS returns messages at data.messages or data
           messages = pollData?.data?.messages ?? pollData?.data ?? [];
+          if (!Array.isArray(messages)) continue;
         } catch {
           continue;
         }
 
-        // Find the latest message that:
-        //   • is NOT from the web user (i.e. it's from an agent)
-        //   • arrived after the message we sent (by array position if sentMsgId found)
-        let foundSentMsg = sentMsgId === undefined; // if we don't know, skip the anchor check
+        // Walk through messages looking for an agent reply that arrived
+        // AFTER we sent our message. We check several field name variants
+        // because ElizaOS stores messages with entityId/authorId/author_id
+        // depending on version.
         for (const msg of messages) {
-          if (!foundSentMsg) {
-            if (msg.id === sentMsgId) foundSentMsg = true;
-            continue;
-          }
-          const isFromAgent =
-            msg.author_id !== WEB_USER_ID &&
-            msg.userId !== WEB_USER_ID &&
-            msg.senderId !== WEB_USER_ID;
+          // ── timestamp check: only consider messages sent after ours ──
+          const msgTime =
+            msg.createdAt
+              ? (typeof msg.createdAt === "number" ? msg.createdAt : new Date(msg.createdAt).getTime())
+              : 0;
 
-          if (isFromAgent) {
-            agentReply = msg.content ?? msg.text ?? msg.message;
-            break;
-          }
+          if (msgTime <= sentAt) continue;
+
+          // ── author check: skip our own messages in all field variants ──
+          const authorId =
+            msg.author_id ??
+            msg.authorId ??
+            msg.entityId ??
+            msg.senderId ??
+            msg.userId ??
+            "";
+
+          if (String(authorId) === WEB_USER_ID) continue;
+
+          // ── content check: skip empty messages ────────────────────────
+          const text = msg.content ?? msg.text ?? msg.message ?? "";
+          if (!text) continue;
+
+          agentReply = text;
+          break;
         }
 
         if (agentReply) break;
