@@ -172,7 +172,7 @@ async function startServer() {
         console.log(`[DEBUG] Cached DM channel for agent ${agentId}: ${channelId}`);
       }
 
-      // ── Step 2: send the message in sync mode ──────────────────────────
+      // ── Step 2: send the message, then poll for the agent's reply ─────────
       const msgUrl = `${base}/api/messaging/channels/${channelId}/messages`;
       console.log(`[DEBUG] Posting message to: ${msgUrl}`);
 
@@ -185,7 +185,7 @@ async function startServer() {
           message_server_id: ELIZA_SERVER_ID,
           source_type: "user_message",
           raw_message: { text: message.trim() },
-          mode: "sync",          // wait for the agent reply before returning
+          mode: "sync",
         }),
       });
 
@@ -193,33 +193,81 @@ async function startServer() {
 
       if (!msgRes.ok) {
         console.error(`[DEBUG] Agent rejected message (${msgRes.status}):`, msgRaw);
-        // If the channel was deleted/reset on the agent side, bust the cache
-        // so the next request creates a fresh one.
         if (msgRes.status === 404 || msgRes.status === 403) {
           dmChannelCache.delete(agentId);
         }
         return res.status(msgRes.status).json({ error: `Agent error: ${msgRaw}` });
       }
 
-      let data: any;
+      // Parse the submission response to get the message ID so we can
+      // detect only replies that arrive AFTER our message.
+      let sentMsgId: string | undefined;
       try {
-        data = JSON.parse(msgRaw);
+        const msgData = JSON.parse(msgRaw);
+        sentMsgId = msgData?.data?.id as string | undefined;
+        console.log(`[DEBUG] Message submitted, id=${sentMsgId}`);
       } catch {
-        console.error("[DEBUG] Agent message response is not JSON:", msgRaw);
-        return res.status(502).json({ error: "Agent returned invalid JSON for message." });
+        console.warn("[DEBUG] Could not parse submission response:", msgRaw);
       }
 
-      // ElizaOS sync mode returns the agent reply inside data.data
-      // Shape can vary slightly across patch versions, so we check several spots.
-      const agentReply: string =
-        data?.data?.content ??
-        data?.data?.text ??
-        data?.data?.message ??
-        (Array.isArray(data?.data) ? (data.data[0]?.content ?? data.data[0]?.text) : undefined) ??
-        data?.content ??
-        data?.text ??
-        "The agent did not return a response.";
+      // ── Step 3: poll for the agent reply (max 15s, 500ms interval) ────────
+      // The agent processes asynchronously; sync mode only confirms delivery.
+      const pollUrl = `${base}/api/messaging/channels/${channelId}/messages`;
+      const deadline = Date.now() + 15_000;
+      const interval = 500;
 
+      let agentReply: string | undefined;
+
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, interval));
+
+        let pollRes: Response;
+        try {
+          pollRes = await fetch(pollUrl);
+        } catch {
+          continue; // network blip — keep trying
+        }
+
+        if (!pollRes.ok) continue;
+
+        let messages: any[];
+        try {
+          const pollData = await pollRes.json();
+          // ElizaOS returns messages at data.messages or data
+          messages = pollData?.data?.messages ?? pollData?.data ?? [];
+        } catch {
+          continue;
+        }
+
+        // Find the latest message that:
+        //   • is NOT from the web user (i.e. it's from an agent)
+        //   • arrived after the message we sent (by array position if sentMsgId found)
+        let foundSentMsg = sentMsgId === undefined; // if we don't know, skip the anchor check
+        for (const msg of messages) {
+          if (!foundSentMsg) {
+            if (msg.id === sentMsgId) foundSentMsg = true;
+            continue;
+          }
+          const isFromAgent =
+            msg.author_id !== WEB_USER_ID &&
+            msg.userId !== WEB_USER_ID &&
+            msg.senderId !== WEB_USER_ID;
+
+          if (isFromAgent) {
+            agentReply = msg.content ?? msg.text ?? msg.message;
+            break;
+          }
+        }
+
+        if (agentReply) break;
+      }
+
+      if (!agentReply) {
+        console.error("[DEBUG] Agent timed out — no reply after 15s");
+        return res.status(504).json({ error: "Agent did not reply in time. Please try again." });
+      }
+
+      console.log(`[DEBUG] Got agent reply: ${agentReply.slice(0, 80)}`);
       return res.json({ text: agentReply });
 
     } catch (error) {
