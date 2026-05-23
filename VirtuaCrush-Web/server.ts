@@ -23,6 +23,21 @@ function signToken(userId: string, tier: string): string {
   return jwt.sign({ userId, tier }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 }
 
+// Security Middleware: Protects the AI routes from unauthorized public access
+function authenticateToken(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) return res.status(401).json({ error: "Access denied. No token provided." });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: "Invalid or expired token." });
+    // @ts-ignore
+    req.user = user;
+    next();
+  });
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -98,35 +113,24 @@ async function startServer() {
     }
   });
 
-  // ─── ElizaOS v2 Agent Chat ───────────────────────────────────────────────
-  //
-  // ElizaOS v2 (1.x.x) removed the old /:agentId/message endpoint entirely.
-  // The correct flow is:
-  //   1. GET  /api/messaging/dm-channel?currentUserId=<webUser>&targetUserId=<agentId>
-  //        → gets or creates a dedicated DM channel for this user↔agent pair
-  //   2. POST /api/messaging/channels/:channelId/messages  (mode: "sync")
-  //        → sends the message and waits for the agent reply in the same request
-  //
-  // Channel IDs are cached in memory so step 1 only runs once per agentId.
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─── ElizaOS v2 Agent Chat Proxy ─────────────────────────────────────────
 
-  // Stable UUID that represents the anonymous web user on this server.
-  // If you want per-account isolation, swap this for the userId from the JWT.
   const WEB_USER_ID = "00000000-0000-0000-0000-000000000002";
-
-  // Default ElizaOS server ID (single-server deployments always use this).
   const ELIZA_SERVER_ID = "00000000-0000-0000-0000-000000000000";
-
-  // In-memory cache: agentId → channelId  (survives restarts fine; Railway
-  // redeploys are infrequent and the DM-channel lookup is cheap anyway).
   const dmChannelCache = new Map<string, string>();
 
-  app.post("/api/chat", async (req, res) => {
+  // Note: authenticateToken middleware is now applied here
+  app.post("/api/chat", authenticateToken, async (req, res) => {
     const { message, agentId } = req.body as { message?: string; agentId?: string };
     const base = (process.env.AI_AGENT_ENDPOINT ?? "").replace(/\/$/, "");
+    const apiKey = process.env.ELIZA_SERVER_AUTH_TOKEN || "";
 
     if (!base) {
       return res.status(500).json({ error: "Configuration error: AI_AGENT_ENDPOINT missing." });
+    }
+
+    if (!apiKey) {
+      return res.status(500).json({ error: "Configuration error: ELIZA_SERVER_AUTH_TOKEN missing." });
     }
 
     if (!message?.trim()) {
@@ -138,14 +142,16 @@ async function startServer() {
     }
 
     try {
-      // ── Step 1: resolve the DM channel for this agent ──────────────────
+      // ── Step 1: Resolve the DM channel for this agent ──────────────────
       let channelId = dmChannelCache.get(agentId);
 
       if (!channelId) {
         const dmUrl = `${base}/api/messaging/dm-channel?currentUserId=${WEB_USER_ID}&targetUserId=${agentId}`;
         console.log(`[DEBUG] Fetching DM channel: ${dmUrl}`);
 
-        const dmRes = await fetch(dmUrl);
+        const dmRes = await fetch(dmUrl, {
+          headers: { "X-API-KEY": apiKey }
+        });
         const dmRaw = await dmRes.text();
 
         if (!dmRes.ok) {
@@ -172,116 +178,48 @@ async function startServer() {
         console.log(`[DEBUG] Cached DM channel for agent ${agentId}: ${channelId}`);
       }
 
-      // ── Step 2: snapshot existing messages before we send ─────────────────
-      // We capture the current message IDs in the channel so we can detect
-      // genuinely NEW messages after our send — avoiding clock-skew issues
-      // between the two Railway containers.
-      const pollUrl = `${base}/api/messaging/channels/${channelId}/messages?limit=100`;
-
-      const snapshotRes = await fetch(pollUrl).catch(() => null);
-      const knownIds = new Set<string>();
-      if (snapshotRes?.ok) {
-        try {
-          const snapData = await snapshotRes.json();
-          const snapMsgs: any[] = snapData?.data?.messages ?? snapData?.data ?? [];
-          for (const m of snapMsgs) {
-            if (m?.id) knownIds.add(String(m.id));
-          }
-        } catch { /* ignore */ }
-      }
-      console.log(`[DEBUG] Snapshot: ${knownIds.size} existing messages`);
-
-      // ── Step 3: send the message ───────────────────────────────────────────
+      // ── Step 2: Send the message and await the sync response ───────────────
       const msgUrl = `${base}/api/messaging/channels/${channelId}/messages`;
       console.log(`[DEBUG] Posting message to: ${msgUrl}`);
 
       const msgRes = await fetch(msgUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "X-API-KEY": apiKey
+        },
         body: JSON.stringify({
           author_id: WEB_USER_ID,
-          content: message.trim(),
+          content: { text: message.trim() }, 
           message_server_id: ELIZA_SERVER_ID,
           source_type: "user_message",
           raw_message: { text: message.trim() },
-          mode: "sync",
+          mode: "sync", 
         }),
       });
 
-      const msgRaw = await msgRes.text();
-
       if (!msgRes.ok) {
-        console.error(`[DEBUG] Agent rejected message (${msgRes.status}):`, msgRaw);
+        const errText = await msgRes.text();
+        console.error(`[DEBUG] Agent rejected message (${msgRes.status}):`, errText);
         if (msgRes.status === 404 || msgRes.status === 403) {
           dmChannelCache.delete(agentId);
         }
-        return res.status(msgRes.status).json({ error: `Agent error: ${msgRaw}` });
+        return res.status(msgRes.status).json({ error: `Agent error: ${errText}` });
       }
 
-      // Add our own sent message ID to the known set too (if returned)
-      try {
-        const sentData = JSON.parse(msgRaw);
-        const sentId = sentData?.data?.id ?? sentData?.id;
-        if (sentId) knownIds.add(String(sentId));
-      } catch { /* ignore */ }
+      // ── Step 3: Extract the reply directly from the POST response ──────────
+      const msgData = await msgRes.json();
+      
+      const replies = Array.isArray(msgData) ? msgData : (msgData?.data ?? []);
+      const agentReply = replies.find((r: any) => r.content?.text)?.content?.text;
 
-      console.log(`[DEBUG] Message sent, polling for agent reply...`);
-
-      // ── Step 4: poll for the agent reply (max 20s, 750ms interval) ────────
-      const deadline = Date.now() + 20_000;
-      const interval = 750;
-
-      let agentReply: string | undefined;
-
-      while (Date.now() < deadline) {
-        await new Promise(r => setTimeout(r, interval));
-
-        let pollRes: Response;
-        try {
-          pollRes = await fetch(pollUrl);
-        } catch {
-          continue;
-        }
-
-        if (!pollRes.ok) continue;
-
-        let messages: any[];
-        try {
-          const pollData = await pollRes.json();
-          messages = pollData?.data?.messages ?? pollData?.data ?? [];
-          if (!Array.isArray(messages)) continue;
-        } catch {
-          continue;
-        }
-
-        for (const msg of messages) {
-          // Skip messages we saw before sending
-          if (!msg?.id || knownIds.has(String(msg.id))) continue;
-
-          // Skip messages from the web user (our own)
-          const authorId =
-            msg.author_id ?? msg.authorId ?? msg.entityId ??
-            msg.senderId ?? msg.userId ?? "";
-          if (String(authorId) === WEB_USER_ID) continue;
-
-          // Skip empty messages
-          const text = msg.content ?? msg.text ?? msg.message ?? "";
-          if (!text) continue;
-
-          agentReply = text;
-          break;
-        }
-
-        if (agentReply) break;
+      if (agentReply) {
+        console.log(`[DEBUG] Got agent reply: ${agentReply.slice(0, 80)}`);
+        return res.json({ text: agentReply });
+      } else {
+        console.error("[DEBUG] Sync mode returned no text reply:", JSON.stringify(msgData));
+        return res.status(500).json({ error: "Agent processed the message but returned no text." });
       }
-
-      if (!agentReply) {
-        console.error("[DEBUG] Agent timed out — no reply after 20s");
-        return res.status(504).json({ error: "Agent did not reply in time. Please try again." });
-      }
-
-      console.log(`[DEBUG] Got agent reply: ${agentReply.slice(0, 80)}`);
-      return res.json({ text: agentReply });
 
     } catch (error) {
       console.error("[DEBUG] Proxy Exception:", error);
