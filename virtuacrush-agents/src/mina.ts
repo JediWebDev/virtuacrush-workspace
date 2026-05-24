@@ -4,7 +4,6 @@ const env = (globalThis as any).process?.env ?? {};
 
 export const character: Character = {
   name: 'Mina',
-  clients: ["direct"],
 
   plugins: [
     // Core plugins first
