@@ -14,6 +14,7 @@ const pool = new Pool({
 // ADD "as string" HERE
 const JWT_SECRET = process.env.JWT_SECRET as string;
 
+<<<<<<< HEAD
 if (!JWT_SECRET) {
   throw new Error("FATAL ERROR: JWT_SECRET is not defined in the environment variables.");
 }
@@ -21,6 +22,8 @@ if (!JWT_SECRET) {
 async function startServer() {
 // ... rest of your code
 
+=======
+>>>>>>> parent of 504641c (Update server.ts)
 async function startServer() {
   const app = express();
   const PORT = 3001; 
@@ -51,6 +54,10 @@ async function startServer() {
 
       const user = newUser.rows[0];
       const token = jwt.sign({ id: user.id, email: user.email, tier: user.tier }, JWT_SECRET, { expiresIn: '24h' });
+<<<<<<< HEAD
+=======
+
+>>>>>>> parent of 504641c (Update server.ts)
       res.status(201).json({ token, user });
     } catch (err) {
       console.error(err);
@@ -75,8 +82,19 @@ async function startServer() {
         return res.status(401).json({ error: "Invalid credentials" });
       }
 
+<<<<<<< HEAD
       const token = jwt.sign({ id: user.id, email: user.email, tier: user.tier }, JWT_SECRET, { expiresIn: '24h' });
       res.json({ token, user: { id: user.id, email: user.email, tier: user.tier } });
+=======
+      // 3. Generate JWT Token
+      const token = jwt.sign({ id: user.id, email: user.email, tier: user.tier }, JWT_SECRET, { expiresIn: '24h' });
+
+      // Return user without the password hash
+      res.json({ 
+        token, 
+        user: { id: user.id, email: user.email, tier: user.tier } 
+      });
+>>>>>>> parent of 504641c (Update server.ts)
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "Server error during login" });
@@ -111,7 +129,11 @@ async function startServer() {
   });
 }
 
+<<<<<<< HEAD
 startServer().catch((err) => {
   console.error("❌ CRITICAL SERVER ERROR:", err);
   process.exit(1);
 })};
+=======
+startServer();
+>>>>>>> parent of 504641c (Update server.ts)
