@@ -27,6 +27,7 @@
     "dist"
   ],
   "dependencies": {
+    "@elizaos/adapter-postgres": "^0.25.6-alpha.1",
     "@elizaos/cli": "1.7.2",
     "@elizaos/client": "1.7.2",
     "@elizaos/core": "1.7.2",
@@ -37,6 +38,7 @@
     "@elizaos/server": "1.7.2",
     "@tanstack/react-query": "^5.67.2",
     "clsx": "^2.1.1",
+    "pg": "^8.21.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "tailwind-merge": "^3.3.1",
