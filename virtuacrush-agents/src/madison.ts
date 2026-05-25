@@ -36,7 +36,9 @@ export const character: Character = {
   ],
 
   settings: {
-    secrets: {},
+    secrets: {
+      OLLAMA_SERVER_URL: "http://127.0.0.1:11434"
+    },
     voice: {
       model: 'en_US-female-medium',
     },
