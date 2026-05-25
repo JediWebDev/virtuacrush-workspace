@@ -14,6 +14,13 @@ const pool = new Pool({
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
+// ADD THIS BLOCK: Tells TypeScript it's definitely a string, and crashes safely if it isn't.
+if (!JWT_SECRET) {
+  throw new Error("FATAL ERROR: JWT_SECRET is not defined in the environment variables.");
+}
+
+const jwtSecret: string = JWT_SECRET;
+
 async function startServer() {
   const app = express();
   const PORT = 3001; 
@@ -46,7 +53,7 @@ async function startServer() {
 
       // 4. Generate JWT Token
       const user = newUser.rows[0];
-      const token = jwt.sign({ id: user.id, email: user.email, tier: user.tier }, JWT_SECRET, { expiresIn: '24h' });
+      const token = jwt.sign({ id: user.id, email: user.email, tier: user.tier }, jwtSecret, { expiresIn: '24h' });
 
       res.status(201).json({ token, user });
     } catch (err) {
@@ -75,7 +82,7 @@ async function startServer() {
       }
 
       // 3. Generate JWT Token
-      const token = jwt.sign({ id: user.id, email: user.email, tier: user.tier }, JWT_SECRET, { expiresIn: '24h' });
+      const token = jwt.sign({ id: user.id, email: user.email, tier: user.tier }, jwtSecret, { expiresIn: '24h' });
 
       // Return user without the password hash
       res.json({ 
