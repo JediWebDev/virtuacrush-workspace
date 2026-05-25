@@ -1,62 +1,40 @@
-import express from "express";
-import path from "path";
-import { createServer as createViteServer } from "vite";
-import { createProxyMiddleware } from "http-proxy-middleware"; 
+import { logger, type IAgentRuntime, type Project, type ProjectAgent } from '@elizaos/core';
+import { character as minaCharacter } from './mina.ts';
+import { character as lexiCharacter } from './lexi.ts';
+import { character as madisonCharacter } from './madison.ts';
+import { character as zanderCharacter } from './zander.ts';
+import affinityPlugin from './plugins/affinity/index.ts';
 
-async function startServer() {
-  const app = express();
-  const PORT = 3001; 
-  const ELIZA_PORT = 3000; // The port your ElizaOS agents run on
-  
-  // STRIPE WEBHOOK MUST GO HERE
-  // Stripe requires the raw, unparsed request body to verify webhook signatures.
-  // We handle this before app.use(express.json()) parses everything.
-  app.post('/api/webhooks/stripe', express.raw({type: 'application/json'}), (req, res) => {
-    // Stripe event validation and subscription logic will go here
-    res.status(200).send('Webhook received');
-  });
+const initCharacter = ({ runtime, name }: { runtime: IAgentRuntime, name: string }) => {
+  logger.info(`Initializing ${name}`);
+};
 
-  // Parse standard JSON requests for the rest of the app
-  app.use(express.json());
-  
-  // CHAT PROXY
-  // Routes frontend requests from http://localhost:3001/api/chat/...
-  // directly to the ElizaOS backend at http://localhost:3000/...
-  // This bypasses CORS issues during local testing.
-  app.use(
-    '/api/chat',
-    createProxyMiddleware({
-      target: `http://127.0.0.1:${ELIZA_PORT}`,
-      changeOrigin: true,
-      // If Eliza expects requests to '/[agentId]/message', you might need to rewrite the path:
-      pathRewrite: {
-        '^/api/chat': '', 
-      },
-    })
-  );
-  
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
-  });
+export const minaAgent: ProjectAgent = {
+  character: minaCharacter,
+  init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, name: minaCharacter.name }),
+  plugins: [affinityPlugin], 
+};
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
-  }
+export const lexiAgent: ProjectAgent = {
+  character: lexiCharacter,
+  init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, name: lexiCharacter.name }),
+  plugins: [affinityPlugin],
+};
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Frontend server running on http://localhost:${PORT}`);
-  });
-}
+export const madisonAgent: ProjectAgent = {
+  character: madisonCharacter,
+  init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, name: madisonCharacter.name }),
+  plugins: [affinityPlugin],
+};
 
-startServer();
+export const zanderAgent: ProjectAgent = {
+  character: zanderCharacter,
+  init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, name: zanderCharacter.name }),
+  plugins: [affinityPlugin],
+};
+
+const project: Project = {
+  agents: [minaAgent, lexiAgent, madisonAgent, zanderAgent],
+};
+
+export default project;
