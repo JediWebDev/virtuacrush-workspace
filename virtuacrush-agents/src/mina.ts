@@ -41,6 +41,7 @@ export const character: Character = {
       model: 'en_US-female-medium',
     },
     avatar: 'mina.png',
+    modelProvider: "ollama",
   },
 
   // ─────────────────────────────────────────────────────────────────────────────

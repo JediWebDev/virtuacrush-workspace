@@ -4,7 +4,7 @@ const env = (globalThis as any).process?.env ?? {};
 
 export const character: Character = {
   name: 'Lexi',
-
+  
   plugins: [
     // Core plugins first
     '@elizaos/plugin-sql',
@@ -41,6 +41,7 @@ export const character: Character = {
       model: 'en_US-female-medium',
     },
     avatar: 'lexi.png',
+    modelProvider: "ollama",
   },
 
   // ─────────────────────────────────────────────────────────────────────────────

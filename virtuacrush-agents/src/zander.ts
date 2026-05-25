@@ -41,6 +41,7 @@ export const character: Character = {
       model: 'en_US-male-medium',
     },
     avatar: 'zander.png',
+    modelProvider: "ollama",
   },
 
   // ─────────────────────────────────────────────────────────────────────────────
