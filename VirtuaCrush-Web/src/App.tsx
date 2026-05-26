@@ -1,9 +1,4 @@
-﻿/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { Routes, Route, useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Lock } from "lucide-react";
@@ -24,31 +19,7 @@ type AppLocationState = {
 
 type AuthMode = "signin" | "signup";
 
-const AUTH_TOKEN_KEY = "authToken";
-
 const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+])[A-Za-z\d!@#$%^&*()_+]{8,}$/;
-
-function tierFromToken(token: string): UserTier | null {
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1] ?? "")) as { tier?: string };
-    if (payload.tier === "free" || payload.tier === "pro" || payload.tier === "vip") {
-      return payload.tier;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function isTokenExpired(token: string): boolean {
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1] ?? "")) as { exp?: number };
-    if (!payload.exp) return false;
-    return Date.now() >= payload.exp * 1000;
-  } catch {
-    return true;
-  }
-}
 
 function ChatDeepLink({ onSelect }: { onSelect: (char: Character) => void }) {
   const { characterId } = useParams();
@@ -66,7 +37,10 @@ function ChatDeepLink({ onSelect }: { onSelect: (char: Character) => void }) {
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // TODO: Better Auth - Replace this local state with `useSession()` from your authClient
   const [userTier, setUserTier] = useState<UserTier>("guest");
+  
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
@@ -107,18 +81,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem(AUTH_TOKEN_KEY);
-    if (!token) return;
-
-    if (isTokenExpired(token)) {
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      return;
-    }
-
-    const tier = tierFromToken(token);
-    if (tier) {
-      setUserTier(tier);
-    }
+    // TODO: Better Auth - This is where you will check the active session on app load
+    // Example: 
+    // const { data, error } = useSession();
+    // if (data?.user) setUserTier(data.user.tier);
   }, []);
 
   useEffect(() => {
@@ -193,29 +159,27 @@ export default function App() {
     setIsAuthLoading(true);
 
     try {
-      const endpoint = authMode === "signup" ? "/api/auth/signup" : "/api/auth/login";
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password }),
-      });
-
-      const data = (await response.json()) as { token?: string; tier?: UserTier; error?: string };
-
-      if (!response.ok) {
-        setAuthError(data.error || "Authentication failed.");
-        return;
+      if (authMode === "signup") {
+        // TODO: Better Auth - Implement Sign Up
+        // await authClient.signUp.email({ email, password, name: "New User" });
+        
+        // MOCK SUCCESS FOR UI TESTING
+        setTimeout(() => {
+          setUserTier("free");
+          closeAuthModal();
+        }, 800);
+      } else {
+        // TODO: Better Auth - Implement Sign In
+        // await authClient.signIn.email({ email, password });
+        
+        // MOCK SUCCESS FOR UI TESTING
+        setTimeout(() => {
+          setUserTier("free"); // Or pull tier from db
+          closeAuthModal();
+        }, 800);
       }
-
-      if (!data.token || !data.tier) {
-        setAuthError("Authentication failed.");
-        return;
-      }
-
-      localStorage.setItem(AUTH_TOKEN_KEY, data.token);
-      setUserTier(data.tier);
-      closeAuthModal();
-    } catch {
+    } catch (err) {
+      // Better auth returns standardized errors you can catch here
       setAuthError("Something went wrong. Please try again.");
     } finally {
       setIsAuthLoading(false);
@@ -252,6 +216,7 @@ export default function App() {
               <Route path="/chat/:characterId" element={<ChatDeepLink onSelect={handleSelect} />} />
             </Routes>
 
+            {/* Auth Modal (UI untouched, logic stubbed for Better Auth) */}
             <AnimatePresence>
               {showAuthModal ? (
                 <motion.div
