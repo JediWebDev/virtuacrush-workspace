@@ -17,7 +17,7 @@ export default function BrowseCharactersPage({ onSelect, userTier }: BrowseChara
         <div className="mb-12">
           <h1 className="font-serif text-4xl font-bold text-stone-900 dark:text-stone-50 md:text-5xl">Browse Characters</h1>
           <p className="mt-3 max-w-2xl text-lg text-stone-600 dark:text-stone-400">
-            Meet every character on VirtuaCrush. Tap a profile to start a conversation or watch their intro.
+            Meet every character on VirtuaCrush. Tap a profile to start a conversation.
           </p>
         </div>
 
