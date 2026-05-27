@@ -3,7 +3,7 @@ import { Routes, Route, useParams, useNavigate, useLocation } from "react-router
 import { motion, AnimatePresence } from "motion/react";
 import { X, Lock } from "lucide-react";
 import { Character, CHARACTERS } from "./types/character";
-import { FREE_CHARS, isFreeCharacter, type UserTier } from "./types/subscription";
+import { type UserTier } from "./types/subscription";
 import ChatInterface from "./components/ChatInterface";
 import Footer from "./components/Footer";
 import Nav from "./components/Nav";
@@ -16,10 +16,6 @@ type AppLocationState = {
   openChat?: string;
   openMessage?: string;
 };
-
-type AuthMode = "signin" | "signup";
-
-const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+])[A-Za-z\d!@#$%^&*()_+]{8,}$/;
 
 function ChatDeepLink({ onSelect }: { onSelect: (char: Character) => void }) {
   const { characterId } = useParams();
@@ -38,72 +34,28 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // TODO: Better Auth - Replace this local state with `useSession()` from your authClient
-  const [userTier, setUserTier] = useState<UserTier>("guest");
+  // Defaulting to "pro" for testing phase to bypass all locks/modals
+  const [userTier, setUserTier] = useState<UserTier>("pro");
   
-  const [showAuthModal, setShowAuthModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [authMode, setAuthMode] = useState<AuthMode>("signup");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [authError, setAuthError] = useState("");
-  const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [activeChat, setActiveChat] = useState<Character | null>(null);
   const [autoOpenMessageId, setAutoOpenMessageId] = useState<string | undefined>();
-  const [affinityByCharacter, setAffinityByCharacter] = useState<Record<string, number>>(() =>
-    Object.fromEntries(CHARACTERS.map((c) => [c.id, c.currentAffinity]))
-  );
 
   const handleSelect = (char: Character) => {
-    if (userTier === "guest") {
-      setShowAuthModal(true);
-      return;
-    }
-
-    if (userTier === "free" && !isFreeCharacter(char.name)) {
-      setShowUpgradeModal(true);
-      return;
-    }
-
+    // Auth and Upgrade checks bypassed for testing
     navigate(`/chat/${char.id}`);
-    setActiveChat({
-      ...char,
-      currentAffinity: affinityByCharacter[char.id] ?? char.currentAffinity,
-    });
+    setActiveChat(char);
   };
-
-  const handleAffinityChange = (characterId: string, affinity: number) => {
-    setAffinityByCharacter((prev) => ({ ...prev, [characterId]: affinity }));
-    setActiveChat((current) =>
-      current?.id === characterId ? { ...current, currentAffinity: affinity } : current
-    );
-  };
-
-  useEffect(() => {
-    // TODO: Better Auth - This is where you will check the active session on app load
-    // Example: 
-    // const { data, error } = useSession();
-    // if (data?.user) setUserTier(data.user.tier);
-  }, []);
 
   useEffect(() => {
     const state = location.state as AppLocationState | null;
     if (state?.openChat) {
       const char = CHARACTERS.find((c) => c.id === state.openChat);
       if (char) {
-        if (userTier === "guest") {
-          setShowAuthModal(true);
-        } else if (userTier === "free" && !isFreeCharacter(char.name)) {
-          setShowUpgradeModal(true);
-        } else {
-          setActiveChat({
-            ...char,
-            currentAffinity: affinityByCharacter[char.id] ?? char.currentAffinity,
-          });
-          if (state.openMessage) {
-            setAutoOpenMessageId(state.openMessage);
-          }
+        // Auth and Upgrade checks bypassed for testing
+        setActiveChat(char);
+        if (state.openMessage) {
+          setAutoOpenMessageId(state.openMessage);
         }
       }
       window.history.replaceState({}, document.title);
@@ -114,77 +66,7 @@ export default function App() {
       setActiveChat(null);
       setAutoOpenMessageId(undefined);
     }
-  }, [location.pathname, location.state, userTier]);
-
-  const resetAuthForm = () => {
-    setEmail("");
-    setPassword("");
-    setConfirmPassword("");
-    setAuthError("");
-    setIsAuthLoading(false);
-  };
-
-  const closeAuthModal = () => {
-    setShowAuthModal(false);
-    resetAuthForm();
-  };
-
-  const handleAuth = async () => {
-    setAuthError("");
-
-    if (!email.trim()) {
-      setAuthError("Email is required.");
-      return;
-    }
-
-    if (authMode === "signup") {
-      if (password !== confirmPassword) {
-        setAuthError("Passwords do not match.");
-        return;
-      }
-
-      if (!PASSWORD_REGEX.test(password)) {
-        setAuthError(
-          "Password must be at least 8 characters and include 1 uppercase letter, 1 number, and 1 special character."
-        );
-        return;
-      }
-    }
-
-    if (!password) {
-      setAuthError("Password is required.");
-      return;
-    }
-
-    setIsAuthLoading(true);
-
-    try {
-      if (authMode === "signup") {
-        // TODO: Better Auth - Implement Sign Up
-        // await authClient.signUp.email({ email, password, name: "New User" });
-        
-        // MOCK SUCCESS FOR UI TESTING
-        setTimeout(() => {
-          setUserTier("free");
-          closeAuthModal();
-        }, 800);
-      } else {
-        // TODO: Better Auth - Implement Sign In
-        // await authClient.signIn.email({ email, password });
-        
-        // MOCK SUCCESS FOR UI TESTING
-        setTimeout(() => {
-          setUserTier("free"); // Or pull tier from db
-          closeAuthModal();
-        }, 800);
-      }
-    } catch (err) {
-      // Better auth returns standardized errors you can catch here
-      setAuthError("Something went wrong. Please try again.");
-    } finally {
-      setIsAuthLoading(false);
-    }
-  };
+  }, [location.pathname, location.state]);
 
   return (
     <div className="flex min-h-screen flex-col bg-stone-50 dark:bg-surface">
@@ -201,7 +83,6 @@ export default function App() {
               setAutoOpenMessageId(undefined);
               navigate("/");
             }}
-            onAffinityChange={handleAffinityChange}
           />
         ) : (
           <>
@@ -216,124 +97,7 @@ export default function App() {
               <Route path="/chat/:characterId" element={<ChatDeepLink onSelect={handleSelect} />} />
             </Routes>
 
-            {/* Auth Modal (UI untouched, logic stubbed for Better Auth) */}
-            <AnimatePresence>
-              {showAuthModal ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-                  onClick={closeAuthModal}
-                >
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.96, y: 12 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.96, y: 12 }}
-                    className="relative w-full max-w-md rounded-3xl border border-black/10 bg-stone-50 p-8 shadow-2xl dark:border-white/10 dark:bg-surface"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      type="button"
-                      onClick={closeAuthModal}
-                      className="absolute right-4 top-4 rounded-lg p-1.5 text-stone-600 transition-colors hover:bg-black/[0.06] hover:text-stone-900 dark:text-stone-400 dark:hover:bg-white/[0.06] dark:hover:text-stone-100"
-                      aria-label="Close"
-                    >
-                      <X size={20} />
-                    </button>
-
-                    <div className="mb-6 flex rounded-xl border border-black/10 bg-black/[0.04] p-1 dark:border-white/10 dark:bg-white/[0.04]">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthMode("signin");
-                          setAuthError("");
-                        }}
-                        className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${
-                          authMode === "signin"
-                            ? "bg-accent text-white shadow-sm"
-                            : "text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
-                        }`}
-                      >
-                        Sign In
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthMode("signup");
-                          setAuthError("");
-                        }}
-                        className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${
-                          authMode === "signup"
-                            ? "bg-accent text-white shadow-sm"
-                            : "text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
-                        }`}
-                      >
-                        Sign Up
-                      </button>
-                    </div>
-
-                    <h2 className="mb-2 pr-8 font-serif text-2xl font-bold text-stone-900 dark:text-stone-50">
-                      {authMode === "signup" ? "Create your free account" : "Welcome back"}
-                    </h2>
-                    <p className="mb-6 text-sm text-stone-600 dark:text-stone-400">
-                      {authMode === "signup"
-                        ? `Chat with ${FREE_CHARS.slice(0, 3).join(", ")} and more on the free plan.`
-                        : "Sign in to continue chatting with your companions."}
-                    </p>
-
-                    <div className="space-y-4">
-                      <input
-                        type="email"
-                        placeholder="Email address"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        disabled={isAuthLoading}
-                        className="w-full rounded-xl border border-black/10 bg-black/[0.04] px-4 py-3 text-stone-800 outline-none transition-colors placeholder:text-stone-500 focus:border-accent/40 focus:ring-2 focus:ring-accent/15 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-100"
-                      />
-                      <input
-                        type="password"
-                        placeholder="Password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        disabled={isAuthLoading}
-                        onKeyDown={(e) => e.key === "Enter" && handleAuth()}
-                        className="w-full rounded-xl border border-black/10 bg-black/[0.04] px-4 py-3 text-stone-800 outline-none transition-colors placeholder:text-stone-500 focus:border-accent/40 focus:ring-2 focus:ring-accent/15 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-100"
-                      />
-                      {authMode === "signup" ? (
-                        <input
-                          type="password"
-                          placeholder="Confirm Password"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          disabled={isAuthLoading}
-                          onKeyDown={(e) => e.key === "Enter" && handleAuth()}
-                          className="w-full rounded-xl border border-black/10 bg-black/[0.04] px-4 py-3 text-stone-800 outline-none transition-colors placeholder:text-stone-500 focus:border-accent/40 focus:ring-2 focus:ring-accent/15 disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-100"
-                        />
-                      ) : null}
-                      {authError ? (
-                        <p className="text-center text-xs text-red-400">{authError}</p>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={handleAuth}
-                        disabled={isAuthLoading}
-                        className="w-full rounded-xl bg-accent py-3.5 text-sm font-semibold text-white shadow-md shadow-accent/25 transition-all hover:bg-accent-deep active:scale-[0.98] disabled:opacity-60"
-                      >
-                        {isAuthLoading
-                          ? authMode === "signup"
-                            ? "Creating account…"
-                            : "Signing in…"
-                          : authMode === "signup"
-                            ? "Join VirtuaCrush"
-                            : "Sign In"}
-                      </button>
-                    </div>
-                  </motion.div>
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
-
+            {/* Upgrade Modal kept structurally just in case it is triggered elsewhere, but shouldn't fire with 'pro' tier */}
             <AnimatePresence>
               {showUpgradeModal ? (
                 <motion.div
