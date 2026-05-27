@@ -32,7 +32,7 @@ const PRICING_TIERS = [
       "Enhanced memory",
       "Voice messages",
       "Premium feed access",
-      "Relationship progression",
+      "Limited image and video generation",
       "Higher message cap",
     ],
   },
@@ -42,11 +42,12 @@ const PRICING_TIERS = [
     period: "/ month",
     highlight: false,
     features: [
-      '"Personalized messages"',
+      "Personalized messages",
       "Special character arcs",
       "Seasonal story drops",
       "Exclusive voice & video drops",
-      '"Late night private mode"',
+      "Expanded image and video generation cap",
+      "Create custom characters",
     ],
   },
 ];
