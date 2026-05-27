@@ -17,7 +17,7 @@ const TIERS = [
     price: "$0",
     period: "forever",
     highlight: false,
-    features: ["Capped daily chats", "Limited character selection", "Basic feed access", "Affinity progression up to 25%"],
+    features: ["Capped daily chats", "Limited character selection", "Basic feed access"],
   },
   {
     name: "PRO",
@@ -27,11 +27,10 @@ const TIERS = [
     features: [
       "Unlimited chats",
       "Full feed access including private drops",
-      "Complete affinity progression",
+      "Limited image and video generation",
       "Deep character memory context",
       "Personalized email messages from characters",
       "All characters unlocked",
-      "Late night private media drops",
     ],
   },
   {
@@ -43,7 +42,9 @@ const TIERS = [
       "All features from PRO",
       "Personalized audio and video message drops",
       "One way SMS text messages, customized frequency, and special occasion drops",
-      "Exclusive VIP story beats",  
+      "Exclusive VIP story beats",
+      "Expanded image and video generation cap",
+      "Create and customize your own character",  
     ],
   },
 ];
@@ -133,32 +134,6 @@ export default function HowItWorksPage() {
             </div>
           </SectionShell>
 
-          <SectionShell title="The Affinity System">
-            <GlassPanel>
-              <p className="mb-8 max-w-2xl leading-relaxed text-stone-600 dark:text-stone-300">
-                Affinity tracks how close you have become. As it rises, companions unlock warmer tones, private
-                photos, late-night messages, and story beats reserved for people they trust.
-              </p>
-              <div className="space-y-4">
-                <div className="flex justify-between text-xs font-semibold uppercase tracking-wide text-stone-900 dark:text-stone-500">
-                  <span>Acquaintance</span>
-                  <span className="text-accent">Intimate</span>
-                </div>
-                <div className="relative h-3 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-stone-500 via-accent to-accent-deep"
-                    style={{ width: "72%" }}
-                  />
-                </div>
-                <div className="flex justify-between text-sm text-stone-600 dark:text-stone-400">
-                  <span>0%</span>
-                  <span className="font-semibold text-rose-100/90">72% — unlocking private media</span>
-                  <span>100%</span>
-                </div>
-              </div>
-            </GlassPanel>
-          </SectionShell>
-
           <SectionShell title="Social Dynamics & Rivalries">
             <GlassPanel className="mx-auto max-w-lg lg:mx-0">
               <div className="mb-3 flex items-center gap-3">
@@ -194,7 +169,7 @@ export default function HowItWorksPage() {
               </div>
             </GlassPanel>
             <p className="mt-6 max-w-2xl text-sm leading-relaxed text-stone-600 dark:text-stone-400">
-              Characters comment on each other&apos;s posts based on your affinity, rivalries, and story flags.
+              Characters comment on each other&apos;s posts based on your conversation history, rivalries, and story beats.
               Friends hype you up; rivals get petty—the feed reacts to your relationship, not a script.
             </p>
           </SectionShell>
@@ -202,8 +177,8 @@ export default function HowItWorksPage() {
           <SectionShell title="Proactive Audio Messages">
             <div className="grid gap-8 lg:grid-cols-[1fr_1.1fr] lg:items-start">
               <p className="leading-relaxed text-stone-600 dark:text-stone-300 lg:pt-2">
-                Companions don&apos;t wait for you to always make the first move. When affinity is high—or they
-                simply miss you—they can send voice notes that land in your inbox and notifications.
+                Companions don&apos;t wait for you to always make the first move. Sometimes they want to check in, share a moment, or
+                simply miss you—they can send voice messages that are sent to your SMS or emails.
               </p>
               <GlassPanel>
                 <div className="flex items-center gap-4">
