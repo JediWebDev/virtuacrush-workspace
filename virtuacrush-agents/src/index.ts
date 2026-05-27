@@ -17,26 +17,26 @@ export const minaAgent: ProjectAgent = {
   plugins: [affinityPlugin],
 };
 
-export const lexiAgent: ProjectAgent = {
-  character: lexiCharacter,
-  init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, name: lexiCharacter.name }),
-  plugins: [affinityPlugin],
-};
+// export const lexiAgent: ProjectAgent = {
+//   character: lexiCharacter,
+//   init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, name: lexiCharacter.name }),
+//   plugins: [affinityPlugin],
+// };
 
-export const madisonAgent: ProjectAgent = {
-  character: madisonCharacter,
-  init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, name: madisonCharacter.name }),
-  plugins: [affinityPlugin],
-};
+// export const madisonAgent: ProjectAgent = {
+//   character: madisonCharacter,
+//   init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, name: madisonCharacter.name }),
+//   plugins: [affinityPlugin],
+// };
 
-export const zanderAgent: ProjectAgent = {
-  character: zanderCharacter,
-  init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, name: zanderCharacter.name }),
-  plugins: [affinityPlugin],
-};
+// export const zanderAgent: ProjectAgent = {
+//   character: zanderCharacter,
+//   init: async (runtime: IAgentRuntime) => await initCharacter({ runtime, name: zanderCharacter.name }),
+//   plugins: [affinityPlugin],
+// };
 
 const project: Project = {
-  agents: [minaAgent, lexiAgent, madisonAgent, zanderAgent],
+  agents: [minaAgent],
 };
 
 export default project;
