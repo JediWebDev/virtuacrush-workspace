@@ -6,13 +6,6 @@ import { character as madisonCharacter } from './madison.ts';
 import { character as zanderCharacter } from './zander.ts';
 import affinityPlugin from './plugins/affinity/index.ts';
 
-// --- DEBUG POSTGRES CONNECTION ---
-// This will test the connection before ElizaOS tries to, forcing the real error to print.
-const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
-pool.connect()
-  .then(() => logger.success("✅ SUCCESS: Connected directly to PostgreSQL!"))
-  .catch((err) => logger.error(`❌ POSTGRES CONNECTION ERROR: ${err.message}`));
-// ---------------------------------
 
 const initCharacter = ({ runtime, name }: { runtime: IAgentRuntime, name: string }) => {
   logger.info(`Initializing ${name}`);
