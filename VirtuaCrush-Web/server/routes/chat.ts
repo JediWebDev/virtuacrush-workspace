@@ -6,7 +6,7 @@
 //   4. On success, persist both turns + increment usage (free users only)
 //   5. On error, send `event: error` and close
 import { Router, type Request, type Response } from 'express';
-import { requireAuth } from '../middleware/auth';
+// import { requireAuth } from '../middleware/auth';
 import { enforceMessageQuota } from '../middleware/rateLimit';
 import { streamChat, type ChatMessage } from '../inworld/chat';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
@@ -24,7 +24,7 @@ interface ChatRequestBody {
   history?: ChatMessage[];
 }
 
-router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, res: Response) => {
+router.post('/stream', enforceMessageQuota, async (req: Request, res: Response) => {
   const { characterId, message, history } = req.body as ChatRequestBody;
 
   // --- Validate ---
