@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useChat } from "../hooks/useChat";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, Play, Lock, History, Search, Info } from "lucide-react";
@@ -8,13 +9,6 @@ import SocialFeed from "./SocialFeed";
 
 const AFFINITY_PER_MESSAGE = 4;
 const MAX_AFFINITY = 100;
-
-interface Message {
-  id: string;
-  text: string;
-  sender: "user" | "bot";
-  timestamp: Date;
-}
 
 type PrivateMessage = {
   id: string;
@@ -132,9 +126,17 @@ function PrivateMessagesInbox({
 }
 
 export default function ChatInterface({ character, onBack, onAffinityChange, autoOpenMessageId, userTier }: Props) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  // 1. Initialize the chat hook with the welcoming system prompt
+  const { messages, send: sendMessage, streaming: isLoading } = useChat({
+    characterId: character.id,
+    initialMessages: [{
+      id: "welcome",
+      role: "assistant",
+      content: `Hey there, I'm ${character.name}, your ${character.role}. ${character.bio} What would you like to talk about?`
+    }]
+  });
+
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [showHistoryView, setShowHistoryView] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
   const [feedOpen, setFeedOpen] = useState(false);
@@ -162,16 +164,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
   }, [character.id, character.currentAffinity]);
 
   useEffect(() => {
-    const welcomeMsg: Message = {
-      id: "welcome",
-      text: `Hey there, I'm ${character.name}, your ${character.role}. ${character.bio} What would you like to talk about?`,
-      sender: "bot",
-      timestamp: new Date()
-    };
-    setMessages([welcomeMsg]);
-  }, [character]);
-
-  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({
         top: scrollRef.current.scrollHeight,
@@ -180,63 +172,20 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
     }
   }, [messages, isLoading]);
 
+  // 2. Refactored handleSend using the hook
   const handleSend = async (overrideText?: string) => {
     const textToSend = overrideText || input;
     if (!textToSend.trim() || isLoading) return;
 
-    const userMsg: Message = {
-      id: Date.now().toString(),
-      text: textToSend,
-      sender: "user",
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMsg]);
     setInput("");
-    setIsLoading(true);
 
+    // Optimistically update affinity
     const nextAffinity = Math.min(MAX_AFFINITY, affinity + AFFINITY_PER_MESSAGE);
     setAffinity(nextAffinity);
     onAffinityChange?.(character.id, nextAffinity);
 
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: textToSend,
-          agentId: character.id,
-        }),
-      });
-
-      if (!response.ok) {
-         const errData = await response.json();
-         throw new Error(errData.error || "Message failed to send. Try again.");
-      }
-
-      const data = await response.json();
-      
-      const botMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        text: data.text || "Something went wrong. Tap send again when you're ready.",
-        sender: "bot",
-        timestamp: new Date()
-      };
-
-      setMessages(prev => [...prev, botMsg]);
-    } catch (error: unknown) {
-      console.error("Chat Error:", error);
-      const message = error instanceof Error ? error.message : "Message failed to send. Try again.";
-      const errorMsg: Message = {
-        id: "err-" + Date.now(),
-        text: message.includes("failed") ? message : "Message failed to send. Try again.",
-        sender: "bot",
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMsg]);
-    } finally {
-      setIsLoading(false);
-    }
+    // Call the hook to handle API request and stream parsing
+    await sendMessage(textToSend);
   };
 
   const suggestions = [
@@ -449,35 +398,36 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
             </div>
           )}
 
+          {/* 3. Render mappings changed to msg.role and msg.content */}
           {messages.map((msg) => (
             <motion.div
               key={msg.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`flex w-full ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
+              className={`flex w-full ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
-              <div className={`flex max-w-[88%] gap-2.5 md:max-w-[72%] ${msg.sender === "user" ? "flex-row-reverse" : "flex-row"}`}>
+              <div className={`flex max-w-[88%] gap-2.5 md:max-w-[72%] ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
                 <div
                   className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                    msg.sender === "user"
+                    msg.role === "user"
                       ? "bg-gradient-to-br from-accent to-violet-warm text-white shadow-md shadow-accent/20"
                       : "border border-black/10 dark:border-white/10 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-200"
                   }`}
                 >
-                  {msg.sender === "user" ? <User size={16} /> : <span className="text-[11px]">{character.name.charAt(0)}</span>}
+                  {msg.role === "user" ? <User size={16} /> : <span className="text-[11px]">{character.name.charAt(0)}</span>}
                 </div>
-                <div className={`min-w-0 space-y-1 ${msg.sender === "user" ? "items-end" : "items-start"} flex flex-col`}>
+                <div className={`min-w-0 space-y-1 ${msg.role === "user" ? "items-end" : "items-start"} flex flex-col`}>
                     <div
                       className={`max-w-full px-4 py-3 text-[15px] leading-relaxed ${
-                        msg.sender === "user"
+                        msg.role === "user"
                           ? "rounded-2xl rounded-tr-sm bg-gradient-to-br from-accent to-accent-deep text-white shadow-sm"
                           : "rounded-2xl rounded-tl-sm border border-black/[0.07] dark:border-white/[0.07] bg-stone-200 dark:bg-stone-800/90 text-stone-800 dark:text-stone-100 shadow-sm backdrop-blur-sm"
                       }`}
                     >
-                    {msg.text}
+                    {msg.content}
                     </div>
-                    <p className={`text-[10px] font-medium tabular-nums text-stone-900 dark:text-stone-500 ${msg.sender === "user" ? "pr-1 text-right" : "pl-1 text-left"}`}>
-                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <p className={`text-[10px] font-medium tabular-nums text-stone-900 dark:text-stone-500 ${msg.role === "user" ? "pr-1 text-right" : "pl-1 text-left"}`}>
+                        Just now
                     </p>
                 </div>
               </div>
