@@ -11,6 +11,7 @@ import HomePage from "./pages/HomePage";
 import BrowseCharactersPage from "./pages/BrowseCharactersPage";
 import AccountPage from "./pages/AccountPage";
 import HowItWorksPage from "./pages/HowItWorksPage";
+import { useSession, signOut } from './lib/auth-client';
 
 type AppLocationState = {
   openChat?: string;
