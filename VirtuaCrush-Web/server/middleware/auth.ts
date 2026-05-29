@@ -1,5 +1,9 @@
 // Better Auth session middleware. Attaches req.user when a valid session
 // cookie is present; returns 401 otherwise.
+//
+// DEV BYPASS: if AUTH_BYPASS=1 is set in .env, attach a fake user instead
+// of 401'ing. Use this ONLY for local testing — remove the env var before
+// any deployment.
 import type { Request, Response, NextFunction } from 'express';
 import { auth } from '../lib/auth';
 
@@ -12,9 +16,14 @@ declare global {
 }
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  // --- DEV BYPASS ---------------------------------------------------------
+  if (process.env.AUTH_BYPASS === '1') {
+    req.user = { id: 'dev-test-user', email: 'dev@local' };
+    return next();
+  }
+  // -----------------------------------------------------------------------
+
   try {
-    // Better Auth's getSession accepts a Headers-like object.
-    // Express headers are a plain object; we cast for Better Auth's stricter type.
     const session = await auth.api.getSession({ headers: req.headers as any });
     if (!session?.user) {
       return res.status(401).json({ error: 'unauthorized' });
