@@ -133,7 +133,7 @@ export default function App() {
                     </h2>
                     <p className="mb-8 text-sm text-stone-400">
                       Upgrade to PRO or VIP to chat with the entire roster, unlock private media, and
-                      access late-night voice notes.
+                      access interactive content.
                     </p>
 
                     <button
