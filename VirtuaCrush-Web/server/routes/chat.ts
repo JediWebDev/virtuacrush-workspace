@@ -22,6 +22,63 @@ interface ChatRequestBody {
   message: string;
 }
 
+router.post('/greet', requireAuth, async (req: Request, res: Response) => {
+  const { characterId } = req.body as { characterId: string };
+
+  if (!characterId) {
+    return res.status(400).json({ error: 'invalid_request' });
+  }
+
+  try {
+    // Check for existing history
+    const { rows } = await pool.query(
+      `SELECT 1 FROM chat_messages
+       WHERE user_id = $1 AND character_id = $2
+       LIMIT 1`,
+      [req.user!.id, characterId],
+    );
+
+    if (rows.length > 0) {
+      const history = await loadHistory(req.user!.id, characterId);
+      return res.json({ hasHistory: true, history });
+    }
+
+    // New user — fetch affinity (0 for a brand new user)
+    const affinityResult = await pool.query(
+      `SELECT score FROM character_affinity
+       WHERE user_id = $1 AND character_id = $2`,
+      [req.user!.id, characterId],
+    );
+    const affinityScore = affinityResult.rows[0]
+      ? parseFloat(affinityResult.rows[0].score)
+      : 0;
+
+    // Build a greeting-specific prompt and generate through the LLM
+    const greetingPrompt = buildGreetingPrompt(affinityScore);
+
+    let greetingText = '';
+    for await (const chunk of streamChat({
+      characterId: characterId as CharacterId,
+      history: [],
+      userMessage: greetingPrompt,
+    })) {
+      greetingText += chunk;
+    }
+
+    // Save the greeting as the first assistant turn
+    await pool.query(
+      `INSERT INTO chat_messages (user_id, character_id, role, content)
+       VALUES ($1, $2, 'assistant', $3)`,
+      [req.user!.id, characterId, greetingText],
+    );
+
+    return res.json({ hasHistory: false, greeting: greetingText });
+  } catch (err) {
+    console.error('[chat] greet error:', err);
+    return res.status(500).json({ error: 'greet_failed' });
+  }
+});
+
 router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, res: Response) => {
   const { characterId, message } = req.body as ChatRequestBody;
 
@@ -100,6 +157,33 @@ async function loadHistory(userId: string, characterId: string): Promise<ChatMes
     [userId, characterId],
   );
   return rows.reverse();
+}
+
+function buildGreetingPrompt(affinityScore: number): string {
+  if (affinityScore === 0) {
+    return `[SYSTEM: This is the very first time you are meeting this user. ` +
+      `You know nothing about them — not their name, interests, or anything else. ` +
+      `Greet them naturally as you would a complete stranger. ` +
+      `Keep it to 1-2 sentences and ask one simple question to learn something about them. ` +
+      `Do not reference any shared history. Do not ask multiple questions at once.]`;
+  }
+  if (affinityScore <= 25) {
+    return `[SYSTEM: You have spoken with this user briefly before but don't know them well yet. ` +
+      `Greet them warmly but without assuming familiarity. Keep it to 1-2 sentences.]`;
+  }
+  if (affinityScore <= 50) {
+    return `[SYSTEM: You and this user have been talking for a while and are becoming genuine friends. ` +
+      `Greet them like someone you are happy to see again. Keep it to 1-2 sentences. ` +
+      `You can reference that they have talked before without inventing specific details.]`;
+  }
+  if (affinityScore <= 75) {
+    return `[SYSTEM: You and this user are close friends with real history together. ` +
+      `Greet them warmly and with familiarity, as if picking up where you left off. ` +
+      `Keep it to 1-2 sentences.]`;
+  }
+  return `[SYSTEM: You and this user share a deep, intimate bond. ` +
+    `Greet them with genuine warmth and affection, as someone you have truly missed. ` +
+    `Keep it to 1-2 sentences.]`;
 }
 
 async function persistTurn(p: {

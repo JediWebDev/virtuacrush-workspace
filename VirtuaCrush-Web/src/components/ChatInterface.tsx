@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
+import { fetchGreeting } from "../lib/api";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, Play, Lock, History, Search, Info } from "lucide-react";
@@ -123,14 +124,10 @@ function PrivateMessagesInbox({
 }
 
 export default function ChatInterface({ character, onBack, onAffinityChange, autoOpenMessageId, userTier }: Props) {
-  // 1. Initialize the chat hook with the welcoming system prompt
-  const { messages, send: sendMessage, streaming: isLoading, affinityScore: serverAffinity } = useChat({
+  const [affinity, setAffinity] = useState(character.currentAffinity);
+  const { messages, setMessages, send: sendMessage, streaming: isLoading } = useChat({
     characterId: character.id,
-    initialMessages: [{
-      id: "welcome",
-      role: "assistant",
-      content: `Hey there, I'm ${character.name}, your ${character.role}. ${character.bio} What would you like to talk about?`
-    }],
+    initialMessages: [],
     onAffinityUpdate: (score) => {
       setAffinity(score);
       onAffinityChange?.(character.id, score);
@@ -138,14 +135,59 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
   });
 
   const [input, setInput] = useState("");
+  const [greetingLoading, setGreetingLoading] = useState(true);
   const [showHistoryView, setShowHistoryView] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
   const [feedOpen, setFeedOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [activeMessage, setActiveMessage] = useState<typeof DEMO_AUDIO_MESSAGE | null>(null);
   const navigate = useNavigate();
-  const [affinity, setAffinity] = useState(character.currentAffinity);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setGreetingLoading(true);
+    setMessages([]);
+
+    async function initGreeting() {
+      try {
+        const result = await fetchGreeting(character.id);
+
+        if (cancelled) return;
+
+        if (result.hasHistory) {
+          if (result.history?.length) {
+            setMessages(
+              result.history.map((m, i) => ({
+                id: `history-${i}`,
+                role: m.role,
+                content: m.content,
+              })),
+            );
+          }
+          setGreetingLoading(false);
+          return;
+        }
+
+        if (result.greeting) {
+          setMessages([
+            {
+              id: 'greeting',
+              role: 'assistant',
+              content: result.greeting,
+            },
+          ]);
+        }
+      } catch (err) {
+        console.error('[greet] failed:', err);
+      } finally {
+        if (!cancelled) setGreetingLoading(false);
+      }
+    }
+
+    initGreeting();
+    return () => { cancelled = true; };
+  }, [character.id, setMessages]);
 
   const characterWithAffinity: Character = { ...character, currentAffinity: affinity };
 
@@ -393,7 +435,13 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
           )}
 
           {/* 3. Render mappings changed to msg.role and msg.content */}
-          {messages.map((msg) => (
+          {greetingLoading ? (
+            <div className="flex items-center justify-start px-1">
+              <div className="rounded-2xl bg-zinc-800 px-4 py-2 text-sm text-zinc-400">
+                …
+              </div>
+            </div>
+          ) : messages.map((msg) => (
             <motion.div
               key={msg.id}
               initial={{ opacity: 0, y: 10 }}
@@ -427,7 +475,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
               </div>
             </motion.div>
           ))}
-          {isLoading && (
+          {isLoading && !greetingLoading && (
             <motion.div 
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}

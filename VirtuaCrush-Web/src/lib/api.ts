@@ -20,3 +20,20 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!res.ok) throw new ApiError(res.status, body);
   return body as T;
 }
+
+export async function fetchGreeting(
+  characterId: string,
+): Promise<{
+  hasHistory: boolean;
+  greeting?: string;
+  history?: { role: 'user' | 'assistant'; content: string }[];
+}> {
+  const res = await fetch('/api/chat/greet', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ characterId }),
+  });
+  if (!res.ok) throw new Error('greet_failed');
+  return res.json();
+}
