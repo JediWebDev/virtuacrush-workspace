@@ -12,11 +12,8 @@ import { streamChat, type ChatMessage } from '../inworld/chat';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
 import { pool } from '../db/pool';
-import {
-  incrementAffinity,
-  getAffinityDeltaFromEmotion,
-  type InworldEmotionEvent,
-} from '../db/affinity';
+import { incrementAffinity, getAffinityDeltaFromUserMessage } from '../db/affinity';
+import { classifyHostility } from '../inworld/moderation';
 import type { CharacterId } from '../inworld/characters';
 
 const router = Router();
@@ -96,6 +93,11 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
   const turns: ChatMessage[] = await loadHistory(req.user!.id, characterId);
 
+  // Score the user's message for hostility in parallel with the chat stream so
+  // it adds no user-visible latency. Resolves to a 0..1 score, or null if the
+  // classifier was unavailable (the heuristic still applies in that case).
+  const hostilityPromise = classifyHostility(message);
+
   // --- SSE headers ---
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -109,7 +111,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   };
 
   let assistantFull = '';
-  let emotionEvent: InworldEmotionEvent | undefined;
   const abortController = new AbortController();
   req.on('close', () => abortController.abort());
 
@@ -124,9 +125,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         assistantFull += chunk.text;
         send('chunk', { text: chunk.text });
       }
-      if (chunk.emotionEvent) {
-        emotionEvent = chunk.emotionEvent;
-      }
     }
 
     // Persist both user + assistant turns. Done after streaming so we never
@@ -138,7 +136,11 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       assistantMessage: assistantFull,
     });
 
-    const affinityDelta = getAffinityDeltaFromEmotion(emotionEvent);
+    // Affinity is scored from the USER's message: a small increment for normal
+    // engagement, a penalty for hostile/abusive messages. Hybrid signal =
+    // synchronous heuristic combined with the parallel LLM classifier.
+    const classifierHostility = await hostilityPromise;
+    const affinityDelta = getAffinityDeltaFromUserMessage(message, classifierHostility);
     const newAffinityScore = await incrementAffinity(req.user!.id, characterId, affinityDelta);
 
     // Bump usage only for free users so paid users have a clean 0/null state.

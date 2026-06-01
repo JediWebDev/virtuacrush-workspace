@@ -3,6 +3,14 @@ import { pool } from './pool';
 export const AFFINITY_PER_MESSAGE = 0.2;
 export const MAX_AFFINITY = 100;
 
+/** Largest single-message penalty an abusive message can incur. */
+export const MAX_ABUSE_PENALTY = 5;
+/**
+ * Combined hostility score (0..1) at or above which a message is treated as
+ * abusive and penalized instead of earning the base engagement increment.
+ */
+export const HOSTILITY_THRESHOLD = 0.3;
+
 /** Emotion packet from Inworld's streaming LLM response. */
 export interface InworldEmotionEvent {
   behavior: string;
@@ -36,7 +44,7 @@ export async function incrementAffinity(
 ): Promise<number> {
   const { rows } = await pool.query<{ score: string }>(
     `INSERT INTO character_affinity (user_id, character_id, score)
-     VALUES ($1, $2, LEAST($3::numeric, $4))
+     VALUES ($1, $2, LEAST(GREATEST($3::numeric, 0), $4))
      ON CONFLICT (user_id, character_id) DO UPDATE
        SET score = LEAST(
              GREATEST(character_affinity.score + $3::numeric, 0),
@@ -102,4 +110,81 @@ export function getAffinityDeltaFromEmotion(
 
   console.warn(`[affinity] unknown behavior "${behavior}", delta=0`);
   return 0;
+}
+
+// --- User-message hostility scoring (hybrid: heuristic + LLM classifier) ---
+
+// Obvious slurs / strongly abusive terms. A single hit is enough to flag a
+// message as abusive without waiting on the classifier. Kept intentionally
+// small and high-precision; the LLM classifier handles nuance and context.
+const STRONG_ABUSE_TERMS = [
+  'kill yourself',
+  'kys',
+  'die',
+  'retard',
+  'whore',
+  'slut',
+  'bitch',
+  'cunt',
+  'faggot',
+  'fag',
+  'nigger',
+  'rape',
+];
+
+// Common insult patterns directed at the character ("you are an idiot", etc.).
+const INSULT_PATTERN =
+  /\byou(?:'re|\s+are|\s+r)?\s+(?:a\s+|an\s+|such\s+a\s+|so\s+|really\s+)?(?:stupid|dumb|idiot|moron|ugly|worthless|useless|pathetic|trash|garbage|disgusting|annoying)\b/i;
+
+/**
+ * Cheap, synchronous hostility estimate for a user message in [0, 1].
+ * Catches obvious abuse with zero latency/cost. Returns 0 for normal text.
+ */
+export function heuristicHostility(message: string): number {
+  if (!message) return 0;
+  const text = message.toLowerCase();
+
+  for (const term of STRONG_ABUSE_TERMS) {
+    if (text.includes(term)) return 1;
+  }
+
+  if (INSULT_PATTERN.test(message)) return 0.7;
+
+  return 0;
+}
+
+/**
+ * Combines the synchronous heuristic with an (optional) LLM classifier score
+ * into a single affinity delta for a user message.
+ *
+ * - Normal messages earn the small base engagement increment (+0.2).
+ * - Messages whose combined hostility >= HOSTILITY_THRESHOLD are penalized,
+ *   scaling from a small dip up to -MAX_ABUSE_PENALTY for the worst messages.
+ *
+ * `classifierHostility` is the 0..1 score from classifyHostility(); pass
+ * undefined/null if the classifier was unavailable (heuristic still applies).
+ */
+export function getAffinityDeltaFromUserMessage(
+  message: string,
+  classifierHostility?: number | null,
+): number {
+  const heuristic = heuristicHostility(message);
+  const classifier =
+    typeof classifierHostility === 'number' && Number.isFinite(classifierHostility)
+      ? Math.max(0, Math.min(1, classifierHostility))
+      : 0;
+  const hostility = Math.max(heuristic, classifier);
+
+  if (hostility < HOSTILITY_THRESHOLD) {
+    return AFFINITY_PER_MESSAGE;
+  }
+
+  // Map hostility [threshold..1] -> penalty [~ -1 .. -MAX_ABUSE_PENALTY].
+  const scaled = (hostility - HOSTILITY_THRESHOLD) / (1 - HOSTILITY_THRESHOLD);
+  const delta = -(1 + scaled * (MAX_ABUSE_PENALTY - 1));
+  console.log(
+    `[affinity] hostility heuristic=${heuristic.toFixed(2)} classifier=${classifier.toFixed(2)} ` +
+      `combined=${hostility.toFixed(2)} delta=${delta.toFixed(2)}`,
+  );
+  return delta;
 }
