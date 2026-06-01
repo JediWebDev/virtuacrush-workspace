@@ -1,3 +1,4 @@
+import Anthropic from '@anthropic-ai/sdk';
 import { pool } from './pool';
 
 export const AFFINITY_PER_MESSAGE = 0.2;
@@ -48,4 +49,61 @@ export async function getAllAffinity(userId: string): Promise<Record<string, num
     [userId],
   );
   return Object.fromEntries(rows.map((r) => [r.character_id, parseFloat(r.score)]));
+}
+
+type ToneBucket = 'loving' | 'caring' | 'neutral' | 'dismissive' | 'hostile';
+
+const TONE_DELTAS: Record<ToneBucket, number> = {
+  loving: 0.8,
+  caring: 0.4,
+  neutral: 0.1,
+  dismissive: -0.3,
+  hostile: -1.5,
+};
+
+/**
+ * Classifies the emotional tone of a single user message and returns the
+ * corresponding affinity delta. Falls back to the neutral delta on any error
+ * so a classifier failure never breaks the chat flow.
+ */
+export async function classifyToneAndGetDelta(userMessage: string): Promise<number> {
+  const client = new Anthropic();
+
+  const systemPrompt = `You are a tone classifier for a companion chat app.
+Classify the emotional tone of the user's message into exactly one of these five categories:
+- loving: affectionate, romantic, deeply complimentary, expresses missing the character, strong positive emotion
+- caring: warm, supportive, interested, asks about the character's wellbeing, friendly and kind
+- neutral: casual conversation, small talk, questions about topics, factual exchanges, no strong emotional tone
+- dismissive: cold, indifferent, one-word responses that show disinterest, ignoring or brushing off the character
+- hostile: insulting, aggressive, using slurs, belittling, sexually harassing, threatening, or deliberately cruel
+
+Respond with ONLY the single word label. No punctuation. No explanation.`;
+
+  try {
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 10,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+    });
+
+    const raw = response.content
+      .filter((b) => b.type === 'text')
+      .map((b) => (b as { type: 'text'; text: string }).text)
+      .join('')
+      .trim()
+      .toLowerCase() as ToneBucket;
+
+    const delta = TONE_DELTAS[raw];
+    if (delta === undefined) {
+      console.warn(`[affinity] unexpected tone label: "${raw}", defaulting to neutral`);
+      return TONE_DELTAS.neutral;
+    }
+
+    console.log(`[affinity] tone="${raw}" delta=${delta} msg="${userMessage.slice(0, 60)}"`);
+    return delta;
+  } catch (err) {
+    console.error('[affinity] tone classification failed, defaulting to neutral:', err);
+    return TONE_DELTAS.neutral;
+  }
 }

@@ -12,7 +12,7 @@ import { streamChat, type ChatMessage } from '../inworld/chat';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
 import { pool } from '../db/pool';
-import { incrementAffinity } from '../db/affinity';
+import { incrementAffinity, classifyToneAndGetDelta } from '../db/affinity';
 import type { CharacterId } from '../inworld/characters';
 
 const router = Router();
@@ -128,8 +128,10 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       assistantMessage: assistantFull,
     });
 
-    // Increment affinity on the backend. Client displays whatever score we return.
-    const newAffinityScore = await incrementAffinity(req.user!.id, characterId);
+    // Classify tone of the user's message, then apply the corresponding delta.
+    // classifyToneAndGetDelta() never throws — falls back to +0.1 on error.
+    const affinityDelta = await classifyToneAndGetDelta(message);
+    const newAffinityScore = await incrementAffinity(req.user!.id, characterId, affinityDelta);
 
     // Bump usage only for free users so paid users have a clean 0/null state.
     let remaining: number | null = null;
