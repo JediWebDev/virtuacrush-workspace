@@ -1,8 +1,8 @@
 export type UserTier = "guest" | "free" | "pro" | "vip";
 
-export const FREE_CHARS = ["Mina", "Avery", "Madison", "Zander"] as const;
+export const FREE_CHARS = ["Mina", "Avery", "Serena", "Darien"] as const;
 
-export const SPOTLIGHT_CHARS = ["Mina", "Avey", "Madison"] as const;
+export const SPOTLIGHT_CHARS = ["Mina", "Avery", "Serena", "Darien"] as const;
 
 /** Match roster names like `Tiffany "Mina" Greer` or `Callie Spencer`. */
 export function matchesCharacterName(fullName: string, tokens: readonly string[]): boolean {
