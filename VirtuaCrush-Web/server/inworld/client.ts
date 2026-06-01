@@ -13,7 +13,7 @@ export function getLLM(): Promise<LLM> {
     // Model choice trade-off:
     //   - openai/gpt-4o-mini: cheap, fast, great for companion chat (default)
     //   - openai/gpt-4o:      smarter, ~10x cost, use if quality complaints
-    //   - openrouter/owl-alpha:     via OpenRouter (see server/lib/openrouter.ts)
+    //   - deepinfra/google/gemma-3-4b-it:  lightweight local-router option
     llmPromise = LLM.create({
       remoteConfig: {
         modelId: process.env.INWORLD_MODEL_ID ?? 'openai/gpt-4o-mini',

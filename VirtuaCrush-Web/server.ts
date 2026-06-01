@@ -10,8 +10,8 @@
 //   7. Health check
 import 'dotenv/config';
 
-if (!process.env.OPENROUTER_API_KEY?.trim()) {
-  console.error('[startup] OPENROUTER_API_KEY is not set — tone classification will fail');
+if (!process.env.INWORLD_API_KEY?.trim()) {
+  console.error('[startup] INWORLD_API_KEY is not set — chat and emotion scoring will fail');
 }
 
 import express from 'express';

@@ -12,7 +12,11 @@ import { streamChat, type ChatMessage } from '../inworld/chat';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
 import { pool } from '../db/pool';
-import { incrementAffinity, classifyToneAndGetDelta } from '../db/affinity';
+import {
+  incrementAffinity,
+  getAffinityDeltaFromEmotion,
+  type InworldEmotionEvent,
+} from '../db/affinity';
 import type { CharacterId } from '../inworld/characters';
 
 const router = Router();
@@ -62,7 +66,7 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
       history: [],
       userMessage: greetingPrompt,
     })) {
-      greetingText += chunk;
+      if (chunk.text) greetingText += chunk.text;
     }
 
     // Save the greeting as the first assistant turn
@@ -105,6 +109,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   };
 
   let assistantFull = '';
+  let emotionEvent: InworldEmotionEvent | undefined;
   const abortController = new AbortController();
   req.on('close', () => abortController.abort());
 
@@ -115,8 +120,13 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       userMessage: message,
     })) {
       if (abortController.signal.aborted) break;
-      assistantFull += chunk;
-      send('chunk', { text: chunk });
+      if (chunk.text) {
+        assistantFull += chunk.text;
+        send('chunk', { text: chunk.text });
+      }
+      if (chunk.emotionEvent) {
+        emotionEvent = chunk.emotionEvent;
+      }
     }
 
     // Persist both user + assistant turns. Done after streaming so we never
@@ -128,9 +138,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       assistantMessage: assistantFull,
     });
 
-    // Classify tone of the user's message, then apply the corresponding delta.
-    // classifyToneAndGetDelta() never throws — returns 0 delta on API failure.
-    const affinityDelta = await classifyToneAndGetDelta(message);
+    const affinityDelta = getAffinityDeltaFromEmotion(emotionEvent);
     const newAffinityScore = await incrementAffinity(req.user!.id, characterId, affinityDelta);
 
     // Bump usage only for free users so paid users have a clean 0/null state.

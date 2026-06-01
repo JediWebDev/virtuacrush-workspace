@@ -1,7 +1,8 @@
 // Streaming chat function. Takes the user's message + recent history + character,
-// returns an async iterable of text chunks suitable for SSE.
+// returns an async iterable of text/emotion chunks suitable for SSE + affinity scoring.
 import { getLLM } from './client';
 import { getCharacter, type CharacterId } from './characters';
+import type { InworldEmotionEvent } from '../db/affinity';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -14,13 +15,13 @@ export interface StreamChatParams {
   userMessage: string;
 }
 
+export interface StreamChatChunk {
+  text?: string;
+  emotionEvent?: InworldEmotionEvent;
+}
+
 /**
  * Build a single prompt string from the persona + history + new message.
- * Trade-off: the Inworld LLM primitive accepts either a raw `prompt` string
- * or a chat-style `messages` array. We use the string form here because it
- * works across every modelId without per-provider message-format quirks.
- * If you switch to a chat-completion model and want function calling or
- * vision later, swap this for the messages array form.
  */
 function buildPrompt(system: string, history: ChatMessage[], userMessage: string): string {
   const turns = history
@@ -29,37 +30,83 @@ function buildPrompt(system: string, history: ChatMessage[], userMessage: string
   return `${system}\n\n${turns ? turns + '\n' : ''}User: ${userMessage}\nCharacter:`;
 }
 
-/**
- * Trim history so we never blow past the model's context window.
- * 30 most-recent turns (~15 user + 15 assistant) keeps prompts well under 8k tokens
- * for normal chat. Bump this up if you're using a 128k context model and want
- * longer memory.
- */
 const MAX_HISTORY_TURNS = 30;
 
-export async function* streamChat(params: StreamChatParams): AsyncGenerator<string> {
+function extractEmotionEvent(chunk: unknown): InworldEmotionEvent | undefined {
+  if (!chunk || typeof chunk !== 'object') return undefined;
+
+  const record = chunk as Record<string, unknown>;
+  const raw =
+    record.emotionEvent ??
+    record.emotion_event ??
+    (record.metadata && typeof record.metadata === 'object'
+      ? (record.metadata as Record<string, unknown>).emotionEvent ??
+        (record.metadata as Record<string, unknown>).emotion_event
+      : undefined);
+
+  if (!raw || typeof raw !== 'object') return undefined;
+
+  const evt = raw as Record<string, unknown>;
+  const behavior = evt.behavior;
+  if (typeof behavior !== 'string' || !behavior.trim()) return undefined;
+
+  const strengthRaw = evt.strength;
+  const strength =
+    typeof strengthRaw === 'number'
+      ? strengthRaw
+      : typeof strengthRaw === 'string'
+        ? parseFloat(strengthRaw)
+        : 0;
+
+  return {
+    behavior: behavior.trim(),
+    strength: Number.isFinite(strength) ? strength : 0,
+  };
+}
+
+function extractText(chunk: unknown): string | undefined {
+  if (!chunk || typeof chunk !== 'object') return undefined;
+  const record = chunk as Record<string, unknown>;
+  const text = record.content ?? record.text;
+  return typeof text === 'string' && text.length > 0 ? text : undefined;
+}
+
+export async function* streamChat(params: StreamChatParams): AsyncGenerator<StreamChatChunk> {
   const character = getCharacter(params.characterId);
   const llm = await getLLM();
 
   const trimmedHistory = params.history.slice(-MAX_HISTORY_TURNS);
   const prompt = buildPrompt(character.systemPrompt, trimmedHistory, params.userMessage);
 
-  // The Inworld Runtime LLM primitive exposes streaming via generateContentStream().
-  // It returns an async iterable of { text } chunks. If your installed SDK
-  // version differs, the fallback path below uses generateContentComplete().
   const llmAny = llm as unknown as {
-    generateContentStream?: (opts: { prompt: string }) => AsyncIterable<{ text: string }>;
-    generateContentComplete: (opts: { prompt: string }) => Promise<string | { text: string }>;
+    generateContentStream?: (opts: { prompt: string }) => AsyncIterable<unknown>;
+    generateContent?: (opts: { prompt: string }) => Promise<AsyncIterable<unknown>>;
+    generateContentComplete: (opts: { prompt: string }) => Promise<string | { text?: string; content?: string }>;
+  };
+
+  const emitChunk = function* (raw: unknown): Generator<StreamChatChunk> {
+    const text = extractText(raw);
+    const emotionEvent = extractEmotionEvent(raw);
+    if (text) yield { text };
+    if (emotionEvent) yield { emotionEvent };
   };
 
   if (typeof llmAny.generateContentStream === 'function') {
-    for await (const chunk of llmAny.generateContentStream({ prompt })) {
-      if (chunk?.text) yield chunk.text;
+    for await (const raw of llmAny.generateContentStream({ prompt })) {
+      yield* emitChunk(raw);
     }
     return;
   }
 
-  // Fallback: non-streaming. Still works, just no typing-effect on client.
+  if (typeof llmAny.generateContent === 'function') {
+    const stream = await llmAny.generateContent({ prompt });
+    for await (const raw of stream) {
+      yield* emitChunk(raw);
+    }
+    return;
+  }
+
   const result = await llmAny.generateContentComplete({ prompt });
-  yield typeof result === 'string' ? result : result.text;
+  const text = typeof result === 'string' ? result : (result.content ?? result.text ?? '');
+  if (text) yield { text };
 }

@@ -1,8 +1,17 @@
-import { createChatCompletion } from '../lib/openrouter';
 import { pool } from './pool';
 
 export const AFFINITY_PER_MESSAGE = 0.2;
 export const MAX_AFFINITY = 100;
+
+/** Emotion packet from Inworld's streaming LLM response. */
+export interface InworldEmotionEvent {
+  behavior: string;
+  strength: number;
+}
+
+const POSITIVE_BEHAVIORS = new Set(['JOY', 'AFFECTION', 'AMUSEMENT']);
+const NEGATIVE_BEHAVIORS = new Set(['ANGER', 'SADNESS', 'DISGUST']);
+const NEUTRAL_BEHAVIORS = new Set(['NEUTRAL']);
 
 /**
  * Returns the current affinity score for a user/character pair.
@@ -51,52 +60,46 @@ export async function getAllAffinity(userId: string): Promise<Record<string, num
   return Object.fromEntries(rows.map((r) => [r.character_id, parseFloat(r.score)]));
 }
 
-type ToneBucket = 'loving' | 'caring' | 'neutral' | 'dismissive' | 'hostile';
-
-const TONE_DELTAS: Record<ToneBucket, number> = {
-  loving: 0.8,
-  caring: 0.4,
-  neutral: 0.1,
-  dismissive: -0.3,
-  hostile: -1.5,
-};
+function normalizeStrength(strength: number): number {
+  if (!Number.isFinite(strength)) return 0;
+  if (strength > 1) return Math.min(strength / 100, 1);
+  return Math.max(0, Math.min(1, strength));
+}
 
 /**
- * Classifies the emotional tone of a single user message and returns the
- * corresponding affinity delta. Returns 0 on API failure so classification
- * errors never change affinity (and never reward hostile messages).
+ * Maps Inworld emotionEvent (behavior + strength) to an affinity delta (+1..+3, -1..-3, or 0).
+ * Missing or unknown events return 0 so chat never crashes.
  */
-export async function classifyToneAndGetDelta(userMessage: string): Promise<number> {
-  const systemPrompt = `You are a tone classifier for a companion chat app.
-Classify the emotional tone of the user's message into exactly one of these five categories:
-- loving: affectionate, romantic, deeply complimentary, expresses missing the character, strong positive emotion
-- caring: warm, supportive, interested, asks about the character's wellbeing, friendly and kind
-- neutral: casual conversation, small talk, questions about topics, factual exchanges, no strong emotional tone
-- dismissive: cold, indifferent, one-word responses that show disinterest, ignoring or brushing off the character
-- hostile: insulting, aggressive, using slurs, belittling, sexually harassing, threatening, or deliberately cruel
-
-Respond with ONLY the single word label. No punctuation. No explanation.`;
-
-  try {
-    // migrated to OpenRouter (openrouter/owl-alpha)
-    const text = await createChatCompletion({
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userMessage }],
-      max_tokens: 10,
-    });
-
-    const raw = text.trim().toLowerCase() as ToneBucket;
-
-    const delta = TONE_DELTAS[raw];
-    if (delta === undefined) {
-      console.warn(`[affinity] unexpected tone label: "${raw}", defaulting to neutral`);
-      return TONE_DELTAS.neutral;
-    }
-
-    console.log(`[affinity] tone="${raw}" delta=${delta} msg="${userMessage.slice(0, 60)}"`);
-    return delta;
-  } catch (err) {
-    console.error('[affinity] tone classification failed, applying zero delta:', err);
+export function getAffinityDeltaFromEmotion(
+  emotionEvent?: InworldEmotionEvent | null,
+): number {
+  if (!emotionEvent?.behavior) {
     return 0;
   }
+
+  const behavior = emotionEvent.behavior.trim().toUpperCase();
+  const magnitude = 1 + normalizeStrength(emotionEvent.strength) * 2;
+
+  if (NEUTRAL_BEHAVIORS.has(behavior)) {
+    return 0;
+  }
+
+  if (POSITIVE_BEHAVIORS.has(behavior)) {
+    const delta = magnitude;
+    console.log(
+      `[affinity] behavior="${behavior}" strength=${emotionEvent.strength} delta=+${delta.toFixed(2)}`,
+    );
+    return delta;
+  }
+
+  if (NEGATIVE_BEHAVIORS.has(behavior)) {
+    const delta = -magnitude;
+    console.log(
+      `[affinity] behavior="${behavior}" strength=${emotionEvent.strength} delta=${delta.toFixed(2)}`,
+    );
+    return delta;
+  }
+
+  console.warn(`[affinity] unknown behavior "${behavior}", delta=0`);
+  return 0;
 }
