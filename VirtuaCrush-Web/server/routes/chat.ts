@@ -129,7 +129,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     });
 
     // Classify tone of the user's message, then apply the corresponding delta.
-    // classifyToneAndGetDelta() never throws — falls back to +0.1 on error.
+    // classifyToneAndGetDelta() never throws — returns 0 delta on API failure.
     const affinityDelta = await classifyToneAndGetDelta(message);
     const newAffinityScore = await incrementAffinity(req.user!.id, characterId, affinityDelta);
 

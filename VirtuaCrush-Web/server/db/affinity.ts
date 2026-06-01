@@ -63,8 +63,8 @@ const TONE_DELTAS: Record<ToneBucket, number> = {
 
 /**
  * Classifies the emotional tone of a single user message and returns the
- * corresponding affinity delta. Falls back to the neutral delta on any error
- * so a classifier failure never breaks the chat flow.
+ * corresponding affinity delta. Returns 0 on API failure so classification
+ * errors never change affinity (and never reward hostile messages).
  */
 export async function classifyToneAndGetDelta(userMessage: string): Promise<number> {
   const systemPrompt = `You are a tone classifier for a companion chat app.
@@ -96,7 +96,7 @@ Respond with ONLY the single word label. No punctuation. No explanation.`;
     console.log(`[affinity] tone="${raw}" delta=${delta} msg="${userMessage.slice(0, 60)}"`);
     return delta;
   } catch (err) {
-    console.error('[affinity] tone classification failed, defaulting to neutral:', err);
-    return TONE_DELTAS.neutral;
+    console.error('[affinity] tone classification failed, applying zero delta:', err);
+    return 0;
   }
 }

@@ -21,7 +21,7 @@ interface ChatCompletionResponse {
 }
 
 function openRouterHeaders(): Record<string, string> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
   if (!apiKey) {
     throw new Error('OPENROUTER_API_KEY is not set');
   }

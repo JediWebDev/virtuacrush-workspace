@@ -10,6 +10,10 @@
 //   7. Health check
 import 'dotenv/config';
 
+if (!process.env.OPENROUTER_API_KEY?.trim()) {
+  console.error('[startup] OPENROUTER_API_KEY is not set — tone classification will fail');
+}
+
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
