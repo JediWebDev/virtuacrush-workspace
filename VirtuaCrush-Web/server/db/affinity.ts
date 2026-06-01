@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { createChatCompletion } from '../lib/openrouter';
 import { pool } from './pool';
 
 export const AFFINITY_PER_MESSAGE = 0.2;
@@ -67,8 +67,6 @@ const TONE_DELTAS: Record<ToneBucket, number> = {
  * so a classifier failure never breaks the chat flow.
  */
 export async function classifyToneAndGetDelta(userMessage: string): Promise<number> {
-  const client = new Anthropic();
-
   const systemPrompt = `You are a tone classifier for a companion chat app.
 Classify the emotional tone of the user's message into exactly one of these five categories:
 - loving: affectionate, romantic, deeply complimentary, expresses missing the character, strong positive emotion
@@ -80,19 +78,14 @@ Classify the emotional tone of the user's message into exactly one of these five
 Respond with ONLY the single word label. No punctuation. No explanation.`;
 
   try {
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 10,
+    // migrated to OpenRouter (openrouter/owl-alpha)
+    const text = await createChatCompletion({
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }],
+      max_tokens: 10,
     });
 
-    const raw = response.content
-      .filter((b) => b.type === 'text')
-      .map((b) => (b as { type: 'text'; text: string }).text)
-      .join('')
-      .trim()
-      .toLowerCase() as ToneBucket;
+    const raw = text.trim().toLowerCase() as ToneBucket;
 
     const delta = TONE_DELTAS[raw];
     if (delta === undefined) {
