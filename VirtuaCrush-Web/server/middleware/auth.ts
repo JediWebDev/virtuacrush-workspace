@@ -18,6 +18,10 @@ declare global {
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   // --- DEV BYPASS ---------------------------------------------------------
   if (process.env.AUTH_BYPASS === '1') {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[auth] AUTH_BYPASS is set in production — blocking request');
+      return res.status(500).json({ error: 'misconfigured' });
+    }
     req.user = { id: 'dev-test-user', email: 'dev@local' };
     return next();
   }

@@ -19,6 +19,7 @@ import { auth } from './server/lib/auth';
 import chatRouter from './server/routes/chat';
 import usageRouter from './server/routes/usage';
 import stripeRouter from './server/routes/stripe';
+import affinityRouter from './server/routes/affinity';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
@@ -52,6 +53,7 @@ app.all('/api/auth/*', toNodeHandler(auth));
 // --- Application API --------------------------------------------------------
 app.use('/api/chat', chatRouter);
 app.use('/api/usage', usageRouter);
+app.use('/api/affinity', affinityRouter);
 
 // --- Health check -----------------------------------------------------------
 app.get('/api/health', (_req, res) => res.json({ ok: true }));

@@ -7,9 +7,6 @@ import { Character } from "../types/character";
 import { hasPremiumAccess, type UserTier } from "../types/subscription";
 import SocialFeed from "./SocialFeed";
 
-const AFFINITY_PER_MESSAGE = 4;
-const MAX_AFFINITY = 100;
-
 type PrivateMessage = {
   id: string;
   title: string;
@@ -127,13 +124,17 @@ function PrivateMessagesInbox({
 
 export default function ChatInterface({ character, onBack, onAffinityChange, autoOpenMessageId, userTier }: Props) {
   // 1. Initialize the chat hook with the welcoming system prompt
-  const { messages, send: sendMessage, streaming: isLoading } = useChat({
+  const { messages, send: sendMessage, streaming: isLoading, affinityScore: serverAffinity } = useChat({
     characterId: character.id,
     initialMessages: [{
       id: "welcome",
       role: "assistant",
       content: `Hey there, I'm ${character.name}, your ${character.role}. ${character.bio} What would you like to talk about?`
-    }]
+    }],
+    onAffinityUpdate: (score) => {
+      setAffinity(score);
+      onAffinityChange?.(character.id, score);
+    },
   });
 
   const [input, setInput] = useState("");
@@ -178,13 +179,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
     if (!textToSend.trim() || isLoading) return;
 
     setInput("");
-
-    // Optimistically update affinity
-    const nextAffinity = Math.min(MAX_AFFINITY, affinity + AFFINITY_PER_MESSAGE);
-    setAffinity(nextAffinity);
-    onAffinityChange?.(character.id, nextAffinity);
-
-    // Call the hook to handle API request and stream parsing
     await sendMessage(textToSend);
   };
 

@@ -12,6 +12,7 @@ import { streamChat, type ChatMessage } from '../inworld/chat';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
 import { pool } from '../db/pool';
+import { incrementAffinity } from '../db/affinity';
 import type { CharacterId } from '../inworld/characters';
 
 const router = Router();
@@ -19,13 +20,10 @@ const router = Router();
 interface ChatRequestBody {
   characterId: CharacterId;
   message: string;
-  // Optional: client-supplied history. If omitted we load from DB so chats
-  // sync across devices.
-  history?: ChatMessage[];
 }
 
 router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, res: Response) => {
-  const { characterId, message, history } = req.body as ChatRequestBody;
+  const { characterId, message } = req.body as ChatRequestBody;
 
   // --- Validate ---
   if (!characterId || typeof message !== 'string' || message.trim().length === 0) {
@@ -35,7 +33,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     return res.status(400).json({ error: 'message_too_long', max: 4000 });
   }
 
-  const turns: ChatMessage[] = history ?? (await loadHistory(req.user!.id, characterId));
+  const turns: ChatMessage[] = await loadHistory(req.user!.id, characterId);
 
   // --- SSE headers ---
   res.setHeader('Content-Type', 'text/event-stream');
@@ -73,6 +71,9 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       assistantMessage: assistantFull,
     });
 
+    // Increment affinity on the backend. Client displays whatever score we return.
+    const newAffinityScore = await incrementAffinity(req.user!.id, characterId);
+
     // Bump usage only for free users so paid users have a clean 0/null state.
     let remaining: number | null = null;
     if (!(await isSubscribed(req.user!.id))) {
@@ -80,7 +81,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       remaining = Math.max(0, FREE_TIER_DAILY_LIMIT - used);
     }
 
-    send('done', { remaining });
+    send('done', { remaining, affinityScore: newAffinityScore });
     res.end();
   } catch (err) {
     console.error('[chat] stream error:', err);
