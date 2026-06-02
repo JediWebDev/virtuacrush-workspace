@@ -13,6 +13,7 @@ export interface StreamChatParams {
   characterId: CharacterId;
   history: ChatMessage[];   // Prior turns, oldest first. Last item is NOT the current user message.
   userMessage: string;
+  memoryContext?: string;   // Long-term memory block injected into the system prompt (RAG).
 }
 
 export interface StreamChatChunk {
@@ -23,11 +24,17 @@ export interface StreamChatChunk {
 /**
  * Build a single prompt string from the persona + history + new message.
  */
-function buildPrompt(system: string, history: ChatMessage[], userMessage: string): string {
+function buildPrompt(
+  system: string,
+  history: ChatMessage[],
+  userMessage: string,
+  memoryContext?: string,
+): string {
   const turns = history
     .map((m) => `${m.role === 'user' ? 'User' : 'Character'}: ${m.content}`)
     .join('\n');
-  return `${system}\n\n${turns ? turns + '\n' : ''}User: ${userMessage}\nCharacter:`;
+  const systemWithMemory = memoryContext ? `${system}${memoryContext}` : system;
+  return `${systemWithMemory}\n\n${turns ? turns + '\n' : ''}User: ${userMessage}\nCharacter:`;
 }
 
 const MAX_HISTORY_TURNS = 30;
@@ -76,7 +83,12 @@ export async function* streamChat(params: StreamChatParams): AsyncGenerator<Stre
   const llm = await getLLM();
 
   const trimmedHistory = params.history.slice(-MAX_HISTORY_TURNS);
-  const prompt = buildPrompt(character.systemPrompt, trimmedHistory, params.userMessage);
+  const prompt = buildPrompt(
+    character.systemPrompt,
+    trimmedHistory,
+    params.userMessage,
+    params.memoryContext,
+  );
 
   const llmAny = llm as unknown as {
     generateContentStream?: (opts: { prompt: string }) => AsyncIterable<unknown>;

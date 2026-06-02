@@ -14,7 +14,16 @@ import { isSubscribed } from '../db/subscriptions';
 import { pool } from '../db/pool';
 import { incrementAffinity, getAffinityDeltaFromUserMessage } from '../db/affinity';
 import { classifyHostility } from '../inworld/moderation';
-import type { CharacterId } from '../inworld/characters';
+import {
+  retrieveRelevantMemories,
+  formatMemoryBlock,
+  extractAndStoreFacts,
+} from '../db/memory';
+import { getCharacter, type CharacterId } from '../inworld/characters';
+
+// Recent turns fed to the LLM for local coherence. Long-term recall comes from
+// RAG memory (db/memory.ts), not from replaying a long transcript.
+const RECENT_TURNS_FOR_PROMPT = 6;
 
 const router = Router();
 
@@ -44,29 +53,12 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
       return res.json({ hasHistory: true, history });
     }
 
-    // New user — fetch affinity (0 for a brand new user)
-    const affinityResult = await pool.query(
-      `SELECT score FROM character_affinity
-       WHERE user_id = $1 AND character_id = $2`,
-      [req.user!.id, characterId],
-    );
-    const affinityScore = affinityResult.rows[0]
-      ? parseFloat(affinityResult.rows[0].score)
-      : 0;
+    // First contact: send the character's unique, hand-written greeting verbatim
+    // and persist it as the first assistant turn. On every later visit history
+    // exists, so this greeting is shown only once.
+    const character = getCharacter(characterId);
+    const greetingText = character.greeting;
 
-    // Build a greeting-specific prompt and generate through the LLM
-    const greetingPrompt = buildGreetingPrompt(affinityScore);
-
-    let greetingText = '';
-    for await (const chunk of streamChat({
-      characterId: characterId as CharacterId,
-      history: [],
-      userMessage: greetingPrompt,
-    })) {
-      if (chunk.text) greetingText += chunk.text;
-    }
-
-    // Save the greeting as the first assistant turn
     await pool.query(
       `INSERT INTO chat_messages (user_id, character_id, role, content)
        VALUES ($1, $2, 'assistant', $3)`,
@@ -91,12 +83,23 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     return res.status(400).json({ error: 'message_too_long', max: 4000 });
   }
 
-  const turns: ChatMessage[] = await loadHistory(req.user!.id, characterId);
+  // Small recent window for local coherence; long-term recall is handled by RAG.
+  const turns: ChatMessage[] = await loadRecentTurns(
+    req.user!.id,
+    characterId,
+    RECENT_TURNS_FOR_PROMPT,
+  );
 
-  // Score the user's message for hostility in parallel with the chat stream so
-  // it adds no user-visible latency. Resolves to a 0..1 score, or null if the
-  // classifier was unavailable (the heuristic still applies in that case).
+  // Retrieve long-term memories relevant to this message, and score hostility,
+  // both in parallel with setup so they add no user-visible latency.
+  const memoriesPromise = retrieveRelevantMemories({
+    userId: req.user!.id,
+    queryText: message,
+  });
   const hostilityPromise = classifyHostility(message);
+
+  // Memory retrieval gates the prompt, so await it before streaming.
+  const memoryContext = formatMemoryBlock(await memoriesPromise);
 
   // --- SSE headers ---
   res.setHeader('Content-Type', 'text/event-stream');
@@ -119,6 +122,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       characterId,
       history: turns,
       userMessage: message,
+      memoryContext,
     })) {
       if (abortController.signal.aborted) break;
       if (chunk.text) {
@@ -130,6 +134,15 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     // Persist both user + assistant turns. Done after streaming so we never
     // save half-finished assistant responses on errors.
     await persistTurn({
+      userId: req.user!.id,
+      characterId,
+      userMessage: message,
+      assistantMessage: assistantFull,
+    });
+
+    // Update long-term memory from this exchange. Fire-and-forget: extraction +
+    // embedding are slow and must not delay the response or break chat on error.
+    void extractAndStoreFacts({
       userId: req.user!.id,
       characterId,
       userMessage: message,
@@ -159,43 +172,25 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   }
 });
 
-async function loadHistory(userId: string, characterId: string): Promise<ChatMessage[]> {
+async function loadRecentTurns(
+  userId: string,
+  characterId: string,
+  limit: number,
+): Promise<ChatMessage[]> {
   // Query DESC + LIMIT to get the N most-recent turns, then reverse for chronological order.
   const { rows } = await pool.query<{ role: 'user' | 'assistant'; content: string }>(
     `SELECT role, content FROM chat_messages
      WHERE user_id = $1 AND character_id = $2
      ORDER BY created_at DESC
-     LIMIT 30`,
-    [userId, characterId],
+     LIMIT $3`,
+    [userId, characterId, limit],
   );
   return rows.reverse();
 }
 
-function buildGreetingPrompt(affinityScore: number): string {
-  if (affinityScore === 0) {
-    return `[SYSTEM: This is the very first time you are meeting this user. ` +
-      `You know nothing about them — not their name, interests, or anything else. ` +
-      `Greet them naturally as you would a complete stranger. ` +
-      `Keep it to 1-2 sentences and ask one simple question to learn something about them. ` +
-      `Do not reference any shared history. Do not ask multiple questions at once.]`;
-  }
-  if (affinityScore <= 25) {
-    return `[SYSTEM: You have spoken with this user briefly before but don't know them well yet. ` +
-      `Greet them warmly but without assuming familiarity. Keep it to 1-2 sentences.]`;
-  }
-  if (affinityScore <= 50) {
-    return `[SYSTEM: You and this user have been talking for a while and are becoming genuine friends. ` +
-      `Greet them like someone you are happy to see again. Keep it to 1-2 sentences. ` +
-      `You can reference that they have talked before without inventing specific details.]`;
-  }
-  if (affinityScore <= 75) {
-    return `[SYSTEM: You and this user are close friends with real history together. ` +
-      `Greet them warmly and with familiarity, as if picking up where you left off. ` +
-      `Keep it to 1-2 sentences.]`;
-  }
-  return `[SYSTEM: You and this user share a deep, intimate bond. ` +
-    `Greet them with genuine warmth and affection, as someone you have truly missed. ` +
-    `Keep it to 1-2 sentences.]`;
+// Full-ish backlog used by /greet to render the conversation when it already exists.
+function loadHistory(userId: string, characterId: string): Promise<ChatMessage[]> {
+  return loadRecentTurns(userId, characterId, 30);
 }
 
 async function persistTurn(p: {
