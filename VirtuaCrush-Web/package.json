@@ -12,7 +12,8 @@
     "migrate": "psql $DATABASE_URL -f db/migrations/001_better_auth.sql -f db/migrations/002_uasage_and_subs.sql -f db/migrations/003_affinity.sql -f db/migrations/004_memory.sql",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx --test \"server/**/*.test.ts\""
+    "test": "tsx --test \"server/**/*.test.ts\"",
+    "db:reset": "psql $DATABASE_URL -f db/reset_chat.sql"
   },
   "dependencies": {
     "@inworld/runtime": "^1.0.6",
