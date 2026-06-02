@@ -153,3 +153,49 @@ export async function retrieveRelevantMemories(params: {
     return [];
   }
 }
+
+// --- Admin / debug helpers ---------------------------------------------------
+
+export interface StoredMemory {
+  id: string;
+  fact: string;
+  sourceCharacterId: string | null;
+  createdAt: string;
+}
+
+/** Lists all stored facts for a user, newest first. */
+export async function listMemories(userId: string): Promise<StoredMemory[]> {
+  const { rows } = await pool.query<{
+    id: string;
+    fact: string;
+    source_character_id: string | null;
+    created_at: string;
+  }>(
+    `SELECT id, fact, source_character_id, created_at
+     FROM user_memory
+     WHERE user_id = $1
+     ORDER BY created_at DESC`,
+    [userId],
+  );
+  return rows.map((r) => ({
+    id: String(r.id),
+    fact: r.fact,
+    sourceCharacterId: r.source_character_id,
+    createdAt: r.created_at,
+  }));
+}
+
+/** Deletes one fact by id, scoped to the user. Returns true if a row was removed. */
+export async function deleteMemory(userId: string, id: string): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `DELETE FROM user_memory WHERE user_id = $1 AND id = $2`,
+    [userId, id],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+/** Deletes all facts for a user. Returns the number of rows removed. */
+export async function clearMemories(userId: string): Promise<number> {
+  const { rowCount } = await pool.query(`DELETE FROM user_memory WHERE user_id = $1`, [userId]);
+  return rowCount ?? 0;
+}

@@ -24,6 +24,7 @@ import chatRouter from './server/routes/chat';
 import usageRouter from './server/routes/usage';
 import stripeRouter from './server/routes/stripe';
 import affinityRouter from './server/routes/affinity';
+import memoryRouter from './server/routes/memory';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
@@ -58,6 +59,7 @@ app.all('/api/auth/*', toNodeHandler(auth));
 app.use('/api/chat', chatRouter);
 app.use('/api/usage', usageRouter);
 app.use('/api/affinity', affinityRouter);
+app.use('/api/memory', memoryRouter);
 
 // --- Health check -----------------------------------------------------------
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
