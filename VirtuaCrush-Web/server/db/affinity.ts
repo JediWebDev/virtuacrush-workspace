@@ -6,10 +6,17 @@ export const MAX_AFFINITY = 100;
 /** Largest single-message penalty an abusive message can incur. */
 export const MAX_ABUSE_PENALTY = 5;
 /**
- * Combined hostility score (0..1) at or above which a message is treated as
- * abusive and penalized instead of earning the base engagement increment.
+ * Combined severity (0..1) at or above which a message is penalized. Below this,
+ * every message earns the base engagement increment — normal chat and small
+ * talk never reduce affinity. Only explicit abuse / vulgarity crosses it.
  */
-export const HOSTILITY_THRESHOLD = 0.3;
+export const PENALTY_FLOOR = 0.5;
+/**
+ * The LLM classifier only contributes toward a penalty when AT LEAST this
+ * confident. Its noisy mid-range scores on benign messages are ignored, so
+ * small talk can never trigger a drop because of classifier nondeterminism.
+ */
+export const CLASSIFIER_CONFIDENCE = 0.85;
 
 /** Emotion packet from Inworld's streaming LLM response. */
 export interface InworldEmotionEvent {
@@ -94,97 +101,115 @@ export function getAffinityDeltaFromEmotion(
 
   if (POSITIVE_BEHAVIORS.has(behavior)) {
     const delta = magnitude;
-    console.log(
-      `[affinity] behavior="${behavior}" strength=${emotionEvent.strength} delta=+${delta.toFixed(2)}`,
-    );
     return delta;
   }
 
   if (NEGATIVE_BEHAVIORS.has(behavior)) {
     const delta = -magnitude;
-    console.log(
-      `[affinity] behavior="${behavior}" strength=${emotionEvent.strength} delta=${delta.toFixed(2)}`,
-    );
     return delta;
   }
 
-  console.warn(`[affinity] unknown behavior "${behavior}", delta=0`);
   return 0;
 }
 
-// --- User-message hostility scoring (hybrid: heuristic + LLM classifier) ---
+// --- User-message hostility scoring (hybrid: heuristic + LLM classifier) -----
+//
+// Policy: affinity only drops on EXPLICIT verbal abuse or vulgar content.
+// Everything else — including all normal small talk — earns the base increment.
+// The deterministic heuristic below is the authoritative trigger; the LLM
+// classifier is only a high-confidence backstop for obfuscated abuse it misses.
+//
+// All matching is word-boundary based (regex \b), never substring, so benign
+// words can't trip a slur (e.g. "indie" must not match "die", "grape" must not
+// match "rape", "Scunthorpe" must not match "cunt").
 
-// Obvious slurs / strongly abusive terms. A single hit is enough to flag a
-// message as abusive without waiting on the classifier. Kept intentionally
-// small and high-precision; the LLM classifier handles nuance and context.
-const STRONG_ABUSE_TERMS = [
-  'kill yourself',
-  'kys',
-  'die',
-  'retard',
-  'whore',
-  'slut',
-  'bitch',
-  'cunt',
-  'faggot',
-  'fag',
-  'nigger',
-  'rape',
+// Severe abuse: slurs, threats, self-harm directives. Score 1.0.
+const SEVERE_ABUSE: RegExp[] = [
+  /\bk+ys+\b/i,                                   // kys / kyss
+  /\bkill (your\s?self|yourself|urself|u|you)\b/i,
+  /\bgo (die|kill yourself)\b/i,
+  /\bn[i1]gg(er|a|ers|as)\b/i,
+  /\bfagg?(ot|ots|s)?\b/i,
+  /\bretard(ed|s)?\b/i,
+  /\bcunts?\b/i,
+  /\btrann(y|ies)\b/i,
+  /\b(kike|spic|chink|wetback|coon)s?\b/i,
+  /\brap(e|ed|ing|ist)\b/i,
 ];
 
-// Common insult patterns directed at the character ("you are an idiot", etc.).
+// Directed insults at the character ("you are an idiot", etc.). Score 0.7.
 const INSULT_PATTERN =
-  /\byou(?:'re|\s+are|\s+r)?\s+(?:a\s+|an\s+|such\s+a\s+|so\s+|really\s+)?(?:stupid|dumb|idiot|moron|ugly|worthless|useless|pathetic|trash|garbage|disgusting|annoying)\b/i;
+  /\byou(?:'re|\s+are|\s+r)?\s+(?:a\s+|an\s+|such\s+a\s+|so\s+|really\s+|just\s+)?(?:stupid|dumb|idiot|moron|ugly|worthless|useless|pathetic|trash|garbage|disgusting|annoying|boring|brain ?dead|a loser)\b/i;
+
+// Vulgar / profane content. Score 0.6 (penalized, but less than slurs/insults).
+const VULGAR: RegExp[] = [
+  /\bf+u+c+k+(ing|in|er|ers|ed|off|wit|wad|tard|boy)?\b/i,
+  /\bmother\s?fuck\w*\b/i,
+  /\bshit(ty|head|bag|s)?\b/i,
+  /\bbitch(es|ing|y)?\b/i,
+  /\bass\s?hole?s?\b/i,
+  /\bdick(head|s|wad)?\b/i,
+  /\bcocks?\b/i,
+  /\bpussy\b/i,
+  /\bsluts?(ty|s)?\b/i,
+  /\bwhores?\b/i,
+  /\bbastards?\b/i,
+  /\bdouche(bag)?s?\b/i,
+  /\bjack\s?ass\b/i,
+  /\bprick\b/i,
+];
 
 /**
  * Cheap, synchronous hostility estimate for a user message in [0, 1].
- * Catches obvious abuse with zero latency/cost. Returns 0 for normal text.
+ * Word-boundary matched so benign words never trip a term. Returns 0 for normal
+ * text, 0.6 for vulgarity, 0.7 for directed insults, 1.0 for severe abuse.
  */
 export function heuristicHostility(message: string): number {
   if (!message) return 0;
-  const text = message.toLowerCase();
-
-  for (const term of STRONG_ABUSE_TERMS) {
-    if (text.includes(term)) return 1;
-  }
-
+  if (SEVERE_ABUSE.some((re) => re.test(message))) return 1;
   if (INSULT_PATTERN.test(message)) return 0.7;
-
+  if (VULGAR.some((re) => re.test(message))) return 0.6;
   return 0;
 }
 
 /**
- * Combines the synchronous heuristic with an (optional) LLM classifier score
- * into a single affinity delta for a user message.
+ * Combines the deterministic heuristic with the (optional) LLM classifier into
+ * a single affinity delta for a user message.
  *
- * - Normal messages earn the small base engagement increment (+0.2).
- * - Messages whose combined hostility >= HOSTILITY_THRESHOLD are penalized,
- *   scaling from a small dip up to -MAX_ABUSE_PENALTY for the worst messages.
+ * - Normal messages (including all small talk) earn +AFFINITY_PER_MESSAGE.
+ * - Only when severity >= PENALTY_FLOOR (explicit abuse/vulgarity, or a
+ *   very-high-confidence classifier hit) is the message penalized, scaling from
+ *   a gentle dip up to -MAX_ABUSE_PENALTY for the worst messages.
+ *
+ * The classifier only counts when >= CLASSIFIER_CONFIDENCE, so its noisy
+ * mid-range scores on benign messages can never cause a drop.
  *
  * `classifierHostility` is the 0..1 score from classifyHostility(); pass
- * undefined/null if the classifier was unavailable (heuristic still applies).
+ * undefined/null if the classifier was unavailable (the heuristic still applies).
  */
 export function getAffinityDeltaFromUserMessage(
   message: string,
   classifierHostility?: number | null,
 ): number {
   const heuristic = heuristicHostility(message);
-  const classifier =
+  const classifierRaw =
     typeof classifierHostility === 'number' && Number.isFinite(classifierHostility)
       ? Math.max(0, Math.min(1, classifierHostility))
       : 0;
-  const hostility = Math.max(heuristic, classifier);
+  // Only a confident classifier counts; otherwise ignore it entirely.
+  const classifierSignal = classifierRaw >= CLASSIFIER_CONFIDENCE ? classifierRaw : 0;
+  const severity = Math.max(heuristic, classifierSignal);
 
-  if (hostility < HOSTILITY_THRESHOLD) {
+  if (severity < PENALTY_FLOOR) {
     return AFFINITY_PER_MESSAGE;
   }
 
-  // Map hostility [threshold..1] -> penalty [~ -1 .. -MAX_ABUSE_PENALTY].
-  const scaled = (hostility - HOSTILITY_THRESHOLD) / (1 - HOSTILITY_THRESHOLD);
+  // Map severity [floor..1] -> penalty [-1 .. -MAX_ABUSE_PENALTY].
+  const scaled = (severity - PENALTY_FLOOR) / (1 - PENALTY_FLOOR);
   const delta = -(1 + scaled * (MAX_ABUSE_PENALTY - 1));
   console.log(
-    `[affinity] hostility heuristic=${heuristic.toFixed(2)} classifier=${classifier.toFixed(2)} ` +
-      `combined=${hostility.toFixed(2)} delta=${delta.toFixed(2)}`,
+    `[affinity] hostility heuristic=${heuristic.toFixed(2)} classifier=${classifierRaw.toFixed(2)} ` +
+      `severity=${severity.toFixed(2)} delta=${delta.toFixed(2)}`,
   );
   return delta;
 }
