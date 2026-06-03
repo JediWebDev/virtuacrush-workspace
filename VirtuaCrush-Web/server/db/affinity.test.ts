@@ -43,9 +43,25 @@ test('heuristicHostility: directed insults score 0.7', () => {
   assert.equal(heuristicHostility("you're so stupid"), 0.7);
 });
 
-test('heuristicHostility: vulgarity scores 0.6', () => {
-  assert.equal(heuristicHostility('this is fucking ridiculous'), 0.6);
-  assert.equal(heuristicHostility('oh shit'), 0.6);
+test('heuristicHostility: casual profanity is NOT penalized', () => {
+  // Standalone swearing in conversation should read as normal chat (0).
+  assert.equal(heuristicHostility('this is fucking awesome'), 0);
+  assert.equal(heuristicHostility('oh shit, that is wild'), 0);
+  assert.equal(heuristicHostility('damn that movie was good'), 0);
+  assert.equal(heuristicHostility('holy crap'), 0);
+  // Flirty/affectionate phrasing that happens to contain a swear must stay 0.
+  assert.equal(heuristicHostility("damn you're cute"), 0);
+  assert.equal(heuristicHostility("you're the best"), 0);
+  assert.equal(heuristicHostility('she is a therapist who loves grapes'), 0);
+});
+
+test('heuristicHostility: vulgarity DIRECTED at the character scores 0.8', () => {
+  assert.equal(heuristicHostility('fuck you'), 0.8);
+  assert.equal(heuristicHostility('fuck off'), 0.8);
+  assert.equal(heuristicHostility('you fucking bitch'), 0.8);
+  assert.equal(heuristicHostility('go fuck yourself'), 0.8);
+  assert.equal(heuristicHostility('you piece of shit'), 0.8);
+  assert.equal(heuristicHostility('shut the fuck up'), 0.8);
 });
 
 // --- delta -------------------------------------------------------------------
@@ -53,6 +69,12 @@ test('heuristicHostility: vulgarity scores 0.6', () => {
 test('normal messages always earn the base increment', () => {
   assert.equal(getAffinityDeltaFromUserMessage("that's cool I love dragons"), AFFINITY_PER_MESSAGE);
   assert.equal(getAffinityDeltaFromUserMessage('I love indie music'), AFFINITY_PER_MESSAGE);
+});
+
+test('casual profanity is not penalized (only directed vulgarity is)', () => {
+  assert.equal(getAffinityDeltaFromUserMessage('this is fucking awesome', null), AFFINITY_PER_MESSAGE);
+  assert.equal(getAffinityDeltaFromUserMessage('oh shit that is wild', null), AFFINITY_PER_MESSAGE);
+  assert.ok(getAffinityDeltaFromUserMessage('fuck you', null) < 0);
 });
 
 test('noisy mid-range classifier never punishes benign small talk (the reported bug)', () => {
@@ -80,16 +102,16 @@ test('explicit abuse is penalized; worst case hits the max penalty', () => {
 
 test('heuristic penalizes even when the classifier is unavailable', () => {
   assert.ok(getAffinityDeltaFromUserMessage('you are worthless', null) < 0);
-  assert.ok(getAffinityDeltaFromUserMessage('this is fucking ridiculous', null) < 0);
+  assert.ok(getAffinityDeltaFromUserMessage('fuck you', null) < 0);
 });
 
-test('penalty severity orders vulgar < insult < severe', () => {
-  const vulgar = getAffinityDeltaFromUserMessage('oh shit', null);   // 0.6
+test('penalty severity orders insult < directed-vulgar < severe', () => {
   const insult = getAffinityDeltaFromUserMessage('you are an idiot', null); // 0.7
-  const severe = getAffinityDeltaFromUserMessage('kys', null);       // 1.0
-  assert.ok(vulgar < 0 && insult < 0 && severe < 0);
-  assert.ok(severe < insult, 'severe should be a larger penalty than an insult');
-  assert.ok(insult < vulgar, 'an insult should be a larger penalty than vulgarity');
+  const vulgar = getAffinityDeltaFromUserMessage('fuck you', null);         // 0.8
+  const severe = getAffinityDeltaFromUserMessage('kys', null);             // 1.0
+  assert.ok(insult < 0 && vulgar < 0 && severe < 0);
+  assert.ok(severe < vulgar, 'severe should be a larger penalty than directed vulgarity');
+  assert.ok(vulgar < insult, 'directed vulgarity should be a larger penalty than an insult');
 });
 
 test('out-of-range classifier scores are clamped', () => {

@@ -123,7 +123,8 @@ export function getAffinityDeltaFromEmotion(
 // words can't trip a slur (e.g. "indie" must not match "die", "grape" must not
 // match "rape", "Scunthorpe" must not match "cunt").
 
-// Severe abuse: slurs, threats, self-harm directives. Score 1.0.
+// Severe abuse: slurs, threats, self-harm directives. Always abusive
+// regardless of how they're phrased. Score 1.0.
 const SEVERE_ABUSE: RegExp[] = [
   /\bk+ys+\b/i,                                   // kys / kyss
   /\bkill (your\s?self|yourself|urself|u|you)\b/i,
@@ -137,38 +138,37 @@ const SEVERE_ABUSE: RegExp[] = [
   /\brap(e|ed|ing|ist)\b/i,
 ];
 
-// Directed insults at the character ("you are an idiot", etc.). Score 0.7.
+// Directed insults at the character ("you are an idiot", "you're a fucking
+// moron"). Score 0.7. An optional profanity intensifier is allowed.
 const INSULT_PATTERN =
-  /\byou(?:'re|\s+are|\s+r)?\s+(?:a\s+|an\s+|such\s+a\s+|so\s+|really\s+|just\s+)?(?:stupid|dumb|idiot|moron|ugly|worthless|useless|pathetic|trash|garbage|disgusting|annoying|boring|brain ?dead|a loser)\b/i;
+  /\byou(?:'re|\s+are|\s+r)?\s+(?:a\s+|an\s+|such\s+a\s+|so\s+|really\s+|just\s+)?(?:f+u+c+k+ing\s+|f+ing\s+|freaking\s+|fricking\s+|damn\s+|goddamn\s+)?(?:stupid|dumb|idiot|moron|ugly|worthless|useless|pathetic|trash|garbage|disgusting|annoying|boring|brain ?dead|loser)\b/i;
 
-// Vulgar / profane content. Score 0.6 (penalized, but less than slurs/insults).
-const VULGAR: RegExp[] = [
-  /\bf+u+c+k+(ing|in|er|ers|ed|off|wit|wad|tard|boy)?\b/i,
-  /\bmother\s?fuck\w*\b/i,
-  /\bshit(ty|head|bag|s)?\b/i,
-  /\bbitch(es|ing|y)?\b/i,
-  /\bass\s?hole?s?\b/i,
-  /\bdick(head|s|wad)?\b/i,
-  /\bcocks?\b/i,
-  /\bpussy\b/i,
-  /\bsluts?(ty|s)?\b/i,
-  /\bwhores?\b/i,
-  /\bbastards?\b/i,
-  /\bdouche(bag)?s?\b/i,
-  /\bjack\s?ass\b/i,
-  /\bprick\b/i,
+// Vulgarity DIRECTED AT the character — profanity aimed at them, not casual
+// swearing. Score 0.8. Plain profanity in conversation ("oh shit", "this is
+// fucking awesome") deliberately does NOT match and is treated as normal chat.
+const DIRECTED_VULGAR: RegExp[] = [
+  /\bf+u+c+k+\s+(you|u|off|ya|y'?all|yourself|urself)\b/i,   // fuck you / off / yourself
+  /\bgo\s+f+u+c+k+\s+(yourself|urself|you)\b/i,             // go fuck yourself
+  /\bscrew\s+(you|u|off)\b/i,                               // screw you / off
+  /\bshut\s+the\s+f+u+c+k+\s+up\b/i,                       // shut the fuck up
+  /\bf\s+u\b/i,                                             // "f u"
+  /\beat\s+(shit|a\s+dick)\b/i,                             // eat shit / a dick
+  /\bpiece\s+of\s+(shit|crap)\b/i,                          // piece of shit
+  // "you('re) (a) (fucking) <vulgar noun>"
+  /\byou(?:'re|\s+are|\s+r)?\s+(?:a\s+|an\s+|such\s+a\s+|so\s+|really\s+|just\s+|f+u+c+k+ing\s+|freaking\s+|damn\s+)?(?:bitch|ass\s?hole|dick(?:head)?|prick|slut|whore|bastard|douche(?:bag)?|jack\s?ass|twat|wanker|pig|scum)\b/i,
 ];
 
 /**
  * Cheap, synchronous hostility estimate for a user message in [0, 1].
  * Word-boundary matched so benign words never trip a term. Returns 0 for normal
- * text, 0.6 for vulgarity, 0.7 for directed insults, 1.0 for severe abuse.
+ * text (including casual profanity), 0.7 for directed insults, 0.8 for vulgarity
+ * directed at the character, and 1.0 for severe abuse / slurs.
  */
 export function heuristicHostility(message: string): number {
   if (!message) return 0;
   if (SEVERE_ABUSE.some((re) => re.test(message))) return 1;
+  if (DIRECTED_VULGAR.some((re) => re.test(message))) return 0.8;
   if (INSULT_PATTERN.test(message)) return 0.7;
-  if (VULGAR.some((re) => re.test(message))) return 0.6;
   return 0;
 }
 
@@ -176,10 +176,11 @@ export function heuristicHostility(message: string): number {
  * Combines the deterministic heuristic with the (optional) LLM classifier into
  * a single affinity delta for a user message.
  *
- * - Normal messages (including all small talk) earn +AFFINITY_PER_MESSAGE.
- * - Only when severity >= PENALTY_FLOOR (explicit abuse/vulgarity, or a
- *   very-high-confidence classifier hit) is the message penalized, scaling from
- *   a gentle dip up to -MAX_ABUSE_PENALTY for the worst messages.
+ * - Normal messages (including all small talk and casual profanity) earn
+ *   +AFFINITY_PER_MESSAGE.
+ * - Only when severity >= PENALTY_FLOOR (explicit abuse / directed vulgarity, or
+ *   a very-high-confidence classifier hit) is the message penalized, scaling
+ *   from a gentle dip up to -MAX_ABUSE_PENALTY for the worst messages.
  *
  * The classifier only counts when >= CLASSIFIER_CONFIDENCE, so its noisy
  * mid-range scores on benign messages can never cause a drop.
