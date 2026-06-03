@@ -129,3 +129,22 @@ export async function regenerateStaleStates(limit = 500): Promise<number> {
   }
   return updated;
 }
+
+/**
+ * Adjusts the user's goal progress for a character by delta, clamped to
+ * [0, 100]. Returns the new progress (or 0 if no state row exists yet).
+ */
+export async function bumpGoalProgress(
+  userId: string,
+  characterId: string,
+  delta: number,
+): Promise<number> {
+  const { rows } = await pool.query<{ goal_progress: number }>(
+    `UPDATE character_state
+       SET goal_progress = LEAST(GREATEST(goal_progress + $3, 0), 100), updated_at = NOW()
+     WHERE user_id = $1 AND character_id = $2
+     RETURNING goal_progress`,
+    [userId, characterId, Math.round(delta)],
+  );
+  return rows[0] ? Number(rows[0].goal_progress) : 0;
+}

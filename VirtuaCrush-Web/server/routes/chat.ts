@@ -22,6 +22,8 @@ import {
 import { getCharacter, type CharacterId } from '../inworld/characters';
 import { getOrGenerateDailyState } from '../db/state';
 import { formatStateBlock } from '../db/story_util';
+import { isChoiceDue } from '../db/choice_util';
+import { maybeCreateChoice } from '../db/choices';
 
 // Recent turns fed to the LLM for local coherence. Long-term recall comes from
 // RAG memory (db/memory.ts), not from replaying a long transcript.
@@ -171,6 +173,25 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     }
 
     send('done', { remaining, affinityScore: newAffinityScore });
+
+    // Opportunistically offer a timed dialogue choice (gamification hook #2).
+    // Sent as a separate SSE event AFTER `done` so the reply isn't delayed.
+    if (!abortController.signal.aborted) {
+      try {
+        const { rows: cntRows } = await pool.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM chat_messages
+           WHERE user_id = $1 AND character_id = $2 AND role = 'user'`,
+          [req.user!.id, characterId],
+        );
+        if (isChoiceDue(Number(cntRows[0]?.n ?? 0))) {
+          const choice = await maybeCreateChoice(req.user!.id, characterId);
+          if (choice && !abortController.signal.aborted) send('choice', choice);
+        }
+      } catch (choiceErr) {
+        console.warn('[chat] choice offer failed:', choiceErr);
+      }
+    }
+
     res.end();
   } catch (err) {
     console.error('[chat] stream error:', err);

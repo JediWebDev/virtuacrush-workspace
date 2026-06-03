@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { Heart, MessageCircle, Lock } from "lucide-react";
 import { Character, SocialPost, SocialComment } from "../types/character";
 import type { UserTier } from "../types/subscription";
+import { fetchDynamicPosts, type DynamicPost } from "../lib/api";
 
 function displayName(fullName: string): string {
   const quoted = fullName.match(/"([^"]+)"/);
@@ -106,10 +107,40 @@ interface SocialFeedProps {
   className?: string;
   isActive?: boolean;
   userTier: UserTier;
+  /** Bump to refetch dynamic posts (e.g. after a goal-advancing choice). */
+  refreshKey?: number;
 }
 
-export default function SocialFeed({ character, className = "", isActive = true, userTier }: SocialFeedProps) {
+// A small pseudo-random but stable like count for a dynamic post.
+function likesForPost(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return 40 + (h % 260);
+}
+
+function dynamicToSocialPost(p: DynamicPost): SocialPost {
+  return {
+    id: `dyn-${p.id}`,
+    text: p.text,
+    timestamp: "Just now",
+    initialLikes: likesForPost(p.id),
+    isAboutUser: false,
+    requiredAffinity: 0,
+    comments: [],
+  };
+}
+
+export default function SocialFeed({ character, className = "", isActive = true, userTier, refreshKey = 0 }: SocialFeedProps) {
   const name = displayName(character.name);
+  const [dynamicPosts, setDynamicPosts] = useState<SocialPost[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchDynamicPosts(character.id)
+      .then((posts) => { if (!cancelled) setDynamicPosts(posts.map(dynamicToSocialPost)); })
+      .catch(() => { /* feed still works without dynamic posts */ });
+    return () => { cancelled = true; };
+  }, [character.id, refreshKey]);
   const feedPosts = character.feedPosts.slice(0, 4);
   const teaser = feedPosts[0];
   const showPaywall = userTier === "guest" || userTier === "free";
@@ -126,6 +157,11 @@ export default function SocialFeed({ character, className = "", isActive = true,
         )}
       </header>
       <div className="no-scrollbar flex-1 overflow-y-auto px-4 py-4">
+        {dynamicPosts.map((post) => (
+          <div key={post.id} className="mb-4">
+            <PostCard post={post} character={character} isLive={isActive} />
+          </div>
+        ))}
         {!teaser ? (
           <p className="rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.03] p-4 text-center text-sm text-stone-900 dark:text-stone-500">
             Keep chatting to unlock more of {name}&apos;s feed.

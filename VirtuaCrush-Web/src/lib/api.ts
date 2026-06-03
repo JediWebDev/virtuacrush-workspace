@@ -51,3 +51,56 @@ export interface CharacterState {
 export async function fetchCharacterState(characterId: string): Promise<CharacterState> {
   return api<CharacterState>(`/api/state/${encodeURIComponent(characterId)}`);
 }
+
+// --- Timed dialogue choices (mechanic #2) ------------------------------------
+
+export interface DialogueChoice {
+  id: string;
+  prompt: string;
+  options: { label: string }[];
+  expiresAt: string;   // ISO timestamp; the hourglass deadline (server-authoritative)
+  ttlSeconds: number;
+}
+
+export interface ChoiceResolution {
+  ok: boolean;
+  timedOut?: boolean;
+  reaction?: string;       // the character's reply to append to the chat
+  advancedGoal?: boolean;
+  posted?: boolean;        // a social post was created
+  affinityScore?: number;
+  goalProgress?: number;
+}
+
+export async function fetchActiveChoice(characterId: string): Promise<DialogueChoice | null> {
+  const res = await api<{ choice: DialogueChoice | null }>(
+    `/api/choice/${encodeURIComponent(characterId)}`,
+  );
+  return res.choice;
+}
+
+export async function selectChoice(choiceId: string, optionIndex: number): Promise<ChoiceResolution> {
+  return api<ChoiceResolution>(`/api/choice/${encodeURIComponent(choiceId)}/select`, {
+    method: 'POST',
+    body: JSON.stringify({ optionIndex }),
+  });
+}
+
+export async function timeoutChoice(choiceId: string): Promise<ChoiceResolution> {
+  return api<ChoiceResolution>(`/api/choice/${encodeURIComponent(choiceId)}/timeout`, {
+    method: 'POST',
+  });
+}
+
+// --- Dynamic social posts ----------------------------------------------------
+
+export interface DynamicPost {
+  id: string;
+  text: string;
+  createdAt: string;
+}
+
+export async function fetchDynamicPosts(characterId: string): Promise<DynamicPost[]> {
+  const res = await api<{ posts: DynamicPost[] }>(`/api/posts/${encodeURIComponent(characterId)}`);
+  return res.posts;
+}

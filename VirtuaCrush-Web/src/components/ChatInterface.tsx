@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
-import { fetchGreeting, fetchCharacterState, type CharacterState } from "../lib/api";
+import { fetchGreeting, fetchCharacterState, fetchActiveChoice, type CharacterState, type DialogueChoice, type ChoiceResolution } from "../lib/api";
+import ChoiceCard from "./ChoiceCard";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, Play, Lock, History, Search, Info } from "lucide-react";
@@ -132,6 +133,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
       setAffinity(score);
       onAffinityChange?.(character.id, score);
     },
+    onChoice: (c: DialogueChoice) => setChoice(c),
   });
 
   const [input, setInput] = useState("");
@@ -142,6 +144,8 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
   const [profileOpen, setProfileOpen] = useState(false);
   const [activeMessage, setActiveMessage] = useState<typeof DEMO_AUDIO_MESSAGE | null>(null);
   const [storyState, setStoryState] = useState<CharacterState | null>(null);
+  const [choice, setChoice] = useState<DialogueChoice | null>(null);
+  const [feedRefreshKey, setFeedRefreshKey] = useState(0);
   const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -190,15 +194,41 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
     return () => { cancelled = true; };
   }, [character.id, setMessages]);
 
-  // Fetch the character's current story-engine state for the status strip.
+  // Fetch the character's current story-engine state for the status strip,
+  // and resume any pending timed choice.
   useEffect(() => {
     let cancelled = false;
     setStoryState(null);
+    setChoice(null);
     fetchCharacterState(character.id)
       .then((s) => { if (!cancelled) setStoryState(s); })
       .catch((err) => console.error('[state] fetch failed:', err));
+    fetchActiveChoice(character.id)
+      .then((c) => { if (!cancelled && c) setChoice(c); })
+      .catch((err) => console.error('[choice] resume failed:', err));
     return () => { cancelled = true; };
   }, [character.id]);
+
+  // Resolve a timed choice: append the user's pick + the character's reaction,
+  // update affinity, refresh the feed if a social post was created.
+  const handleChoiceResolved = (result: ChoiceResolution, chosenLabel?: string) => {
+    setChoice(null);
+    setMessages((prev) => {
+      const next = [...prev];
+      if (chosenLabel) {
+        next.push({ id: crypto.randomUUID(), role: 'user', content: chosenLabel });
+      }
+      if (result.reaction) {
+        next.push({ id: crypto.randomUUID(), role: 'assistant', content: result.reaction });
+      }
+      return next;
+    });
+    if (typeof result.affinityScore === 'number') {
+      setAffinity(result.affinityScore);
+      onAffinityChange?.(character.id, result.affinityScore);
+    }
+    if (result.posted) setFeedRefreshKey((k) => k + 1);
+  };
 
   const characterWithAffinity: Character = { ...character, currentAffinity: affinity };
 
@@ -538,6 +568,11 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
             </div>
         )}
 
+        {choice ? (
+          <div className="px-4 pt-2 md:px-8">
+            <ChoiceCard choice={choice} characterName={character.name} onResolved={handleChoiceResolved} />
+          </div>
+        ) : null}
         <div className="border-t border-black/[0.05] dark:border-white/[0.05] bg-gradient-to-t from-surface to-transparent p-4 md:p-8 md:pt-6">
           <div className="relative mx-auto max-w-3xl">
             <div className="relative flex items-center gap-2">
@@ -566,7 +601,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
       </motion.div>
       {/* Desktop social feed */}
       <div className="hidden min-h-0 flex-col border-l border-black/[0.06] dark:border-white/[0.06] lg:flex">
-        <SocialFeed character={characterWithAffinity} className="h-full w-full" isActive userTier={userTier} />
+        <SocialFeed character={characterWithAffinity} className="h-full w-full" isActive userTier={userTier} refreshKey={feedRefreshKey} />
       </div>
 
       <AnimatePresence>
@@ -598,7 +633,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
                   <X size={20} />
                 </button>
               </div>
-              <SocialFeed character={characterWithAffinity} className="min-h-0 flex-1" isActive={feedOpen} userTier={userTier} />
+              <SocialFeed character={characterWithAffinity} className="min-h-0 flex-1" isActive={feedOpen} userTier={userTier} refreshKey={feedRefreshKey} />
             </motion.div>
           </>
         )}
