@@ -31,16 +31,21 @@ export function formatSituationBlock(
     const loc = getLocation(scene.location);
     if (loc) {
       return (
-        `\n\nSCENE — YOU ARE ON A DATE RIGHT NOW: You and the user are together ${loc.description}. ` +
-        `Stay fully present in this moment and let the setting color what you say — you can reference ${loc.cues}. ` +
-        `Do not talk as if you're at home or apart; you are here, together.`
+        `\n\n=== CURRENT SETTING (happening RIGHT NOW, in real time) ===\n` +
+        `You are physically OUT ON A DATE with the user, together ${loc.description}. ` +
+        `This is your current location: ${loc.label}. You are NOT at home and you are NOT apart from the user.\n` +
+        `If the user asks where you are, where you both are, or what you're doing, your answer is: here together at ${loc.label}. ` +
+        `Never say you are at home or alone. Stay present and let the place color your words — you can reference ${loc.cues}. ` +
+        `You arrived here together earlier in this date; treat it as established.`
       );
     }
   }
   const activity = state.activity ? state.activity : 'taking it easy';
   return (
-    `\n\nWHAT YOU'RE UP TO: You're at your own place, ${activity} (mood: ${state.mood || 'easy'}). ` +
-    `You and the user are texting from a distance right now, not in the same room.`
+    `\n\n=== CURRENT SETTING ===\n` +
+    `You are at your OWN place, ${activity} (mood: ${state.mood || 'easy'}). ` +
+    `You and the user are NOT in the same room — you're texting from a distance. ` +
+    `If asked, you are at home doing your own thing, chatting with them remotely.`
   );
 }
 

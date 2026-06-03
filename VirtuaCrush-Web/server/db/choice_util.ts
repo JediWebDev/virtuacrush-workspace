@@ -14,6 +14,16 @@ export const CHOICE_TIMEOUT_AFFINITY = -1; // disengagement penalty on timeout
 
 export const DEFAULT_TIMEOUT_REACTION = '*sighs and turns away*';
 
+export interface BillItem {
+  label: string;
+  amount: number;
+}
+
+export interface BillData {
+  items: BillItem[];
+  total: number;
+}
+
 export interface ChoiceOption {
   label: string;
   advancesGoal: boolean;

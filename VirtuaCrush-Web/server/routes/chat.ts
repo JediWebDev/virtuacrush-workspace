@@ -22,7 +22,7 @@ import {
 import { getCharacter, type CharacterId } from '../inworld/characters';
 import { getSituation } from '../db/state';
 import { formatSituationBlock } from '../db/scene_util';
-import { isChoiceDue } from '../db/choice_util';
+import { detectPlanCue, shouldOfferDateChoice } from '../db/cue_util';
 import { maybeCreateChoice } from '../db/choices';
 
 // Recent turns fed to the LLM for local coherence. Long-term recall comes from
@@ -177,17 +177,38 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
     send('done', { remaining, affinityScore: newAffinityScore });
 
-    // Opportunistically offer a timed dialogue choice (gamification hook #2).
-    // Sent as a separate SSE event AFTER `done` so the reply isn't delayed.
-    if (!abortController.signal.aborted) {
+    // Offer a date choice when the conversation naturally turns toward making
+    // plans (cue-based, with a cooldown). Only when apart — during a date the
+    // only prompt is the persistent "End date" bill flow. Sent as its own SSE
+    // event AFTER `done` so the reply isn't delayed.
+    if (!abortController.signal.aborted && situation.scene.mode === 'apart') {
       try {
         const { rows: cntRows } = await pool.query<{ n: number }>(
           `SELECT count(*)::int AS n FROM chat_messages
            WHERE user_id = $1 AND character_id = $2 AND role = 'user'`,
           [req.user!.id, characterId],
         );
-        if (isChoiceDue(Number(cntRows[0]?.n ?? 0))) {
-          const choice = await maybeCreateChoice(req.user!.id, characterId, Number(cntRows[0]?.n ?? 0));
+        const userMsgCount = Number(cntRows[0]?.n ?? 0);
+
+        const { rows: lastRows } = await pool.query<{ created_at: string }>(
+          `SELECT created_at FROM dialogue_choices
+           WHERE user_id = $1 AND character_id = $2 ORDER BY created_at DESC LIMIT 1`,
+          [req.user!.id, characterId],
+        );
+        const hadPriorChoice = lastRows.length > 0;
+        let msgsSinceLastChoice = userMsgCount;
+        if (hadPriorChoice) {
+          const { rows: sinceRows } = await pool.query<{ n: number }>(
+            `SELECT count(*)::int AS n FROM chat_messages
+             WHERE user_id = $1 AND character_id = $2 AND role = 'user' AND created_at > $3`,
+            [req.user!.id, characterId, lastRows[0].created_at],
+          );
+          msgsSinceLastChoice = Number(sinceRows[0]?.n ?? 0);
+        }
+
+        const cue = detectPlanCue(message, assistantFull);
+        if (shouldOfferDateChoice({ userMsgCount, msgsSinceLastChoice, hadPriorChoice, cue })) {
+          const choice = await maybeCreateChoice(req.user!.id, characterId, userMsgCount);
           if (choice && !abortController.signal.aborted) send('choice', choice);
         }
       } catch (choiceErr) {

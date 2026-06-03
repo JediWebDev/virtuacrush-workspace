@@ -97,6 +97,23 @@ export default function ChoiceCard({ choice, characterName, onResolved }: Props)
         {choice.prompt}
       </p>
 
+      {choice.bill ? (
+        <div className="mx-4 mb-3 rounded-xl border border-black/10 bg-white/70 p-3 text-sm dark:border-white/10 dark:bg-white/[0.04]">
+          <ul className="space-y-1">
+            {choice.bill.items.map((it, i) => (
+              <li key={i} className="flex justify-between gap-3 text-stone-700 dark:text-stone-200">
+                <span className="min-w-0 truncate">{it.label}</span>
+                <span className="tabular-nums">${it.amount.toFixed(2)}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-2 flex justify-between border-t border-black/10 pt-2 font-semibold text-stone-900 dark:border-white/10 dark:text-stone-50">
+            <span>Total</span>
+            <span className="tabular-nums">${choice.bill.total.toFixed(2)}</span>
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-2 px-4 pb-4 sm:flex-row">
         {choice.options.map((opt, i) => (
           <button

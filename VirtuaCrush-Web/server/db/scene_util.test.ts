@@ -28,7 +28,7 @@ test('formatSituationBlock: apart places them at home, remote', () => {
 
 test('formatSituationBlock: together but unknown location falls back to apart text', () => {
   const b = formatSituationBlock({ activity: 'x', mood: 'y' }, { mode: 'together', location: 'void', billPending: false }, 'A');
-  assert.ok(b.includes("WHAT YOU'RE UP TO"));
+  assert.ok(b.includes('CURRENT SETTING'));
 });
 
 test('chooseChoiceKind: bill at a paid venue with pending bill', () => {

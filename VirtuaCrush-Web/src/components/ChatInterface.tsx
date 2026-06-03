@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
 import { fetchGreeting, fetchCharacterState, fetchActiveChoice, type CharacterState, type DialogueChoice, type ChoiceResolution } from "../lib/api";
 import ChoiceCard from "./ChoiceCard";
+import { endDate, shareViralMoment } from "../lib/api";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, Play, Lock, History, Search, Info } from "lucide-react";
@@ -53,6 +54,18 @@ const CHAT_HISTORY_ARCHIVE = [
     preview: "You: Hey — glad we matched on here.",
   },
 ];
+
+// Subtle themed background per date location. Drop a real photo at
+// /public/scenes/<location>.jpg to layer it over the gradient.
+const SCENE_BG: Record<string, string> = {
+  coffee_shop: "linear-gradient(160deg, rgba(120,72,40,0.20), rgba(60,40,30,0.10))",
+  restaurant: "linear-gradient(160deg, rgba(90,30,45,0.22), rgba(30,20,30,0.12))",
+  movie_theater: "linear-gradient(160deg, rgba(22,22,45,0.34), rgba(8,8,18,0.20))",
+  mall: "linear-gradient(160deg, rgba(40,80,120,0.18), rgba(30,40,70,0.10))",
+  park: "linear-gradient(160deg, rgba(40,110,60,0.18), rgba(30,70,50,0.10))",
+  user_home: "linear-gradient(160deg, rgba(120,90,140,0.18), rgba(40,30,50,0.10))",
+  character_home: "linear-gradient(160deg, rgba(70,90,130,0.18), rgba(30,35,55,0.10))",
+};
 
 interface Props {
   character: Character;
@@ -146,6 +159,8 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
   const [storyState, setStoryState] = useState<CharacterState | null>(null);
   const [choice, setChoice] = useState<DialogueChoice | null>(null);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
+  const [viralMoment, setViralMoment] = useState<string | null>(null);
+  const [endingDate, setEndingDate] = useState(false);
   const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -200,6 +215,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
     let cancelled = false;
     setStoryState(null);
     setChoice(null);
+    setViralMoment(null);
     fetchCharacterState(character.id)
       .then((s) => { if (!cancelled) setStoryState(s); })
       .catch((err) => console.error('[state] fetch failed:', err));
@@ -228,10 +244,36 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
       onAffinityChange?.(character.id, result.affinityScore);
     }
     if (result.posted) setFeedRefreshKey((k) => k + 1);
+    if (result.viral && result.reaction) setViralMoment(result.reaction);
     // Scene/affinity may have changed — refresh the status strip.
     fetchCharacterState(character.id)
       .then((st) => setStoryState(st))
       .catch(() => { /* non-fatal */ });
+  };
+
+  const handleEndDate = async () => {
+    if (endingDate) return;
+    setEndingDate(true);
+    try {
+      const billChoice = await endDate(character.id);
+      setChoice(billChoice);
+    } catch (err) {
+      console.error('[date] end failed:', err);
+    } finally {
+      setEndingDate(false);
+    }
+  };
+
+  const handleShareViral = async () => {
+    const text = viralMoment;
+    setViralMoment(null);
+    if (!text) return;
+    try {
+      await shareViralMoment(character.id, text);
+      setFeedRefreshKey((k) => k + 1);
+    } catch (err) {
+      console.error('[share] failed:', err);
+    }
   };
 
   const characterWithAffinity: Character = { ...character, currentAffinity: affinity };
@@ -478,6 +520,15 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
         <div
             ref={scrollRef}
             className="no-scrollbar flex-1 space-y-4 overflow-y-auto p-4 md:space-y-5 md:p-8"
+            style={
+              storyState?.scene?.mode === "together" && storyState.scene.location && SCENE_BG[storyState.scene.location]
+                ? {
+                    backgroundImage: `url(/scenes/${storyState.scene.location}.jpg), ${SCENE_BG[storyState.scene.location]}`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }
+                : undefined
+            }
         >
           {messages.length === 1 && (
             <div className="flex flex-col items-center justify-center space-y-6 py-16 text-center md:py-24">
@@ -578,6 +629,34 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
             </div>
         )}
 
+        {storyState?.scene?.mode === "together" && !choice && !viralMoment ? (
+          <div className="px-4 pt-2 md:px-8">
+            <button
+              type="button"
+              onClick={handleEndDate}
+              disabled={endingDate}
+              className="mx-auto flex w-full max-w-3xl items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent/[0.06] px-4 py-2.5 text-sm font-semibold text-accent transition-all hover:bg-accent/10 disabled:opacity-50"
+            >
+              {endingDate ? "Getting the bill…" : "End date · get the bill 💳"}
+            </button>
+          </div>
+        ) : null}
+        {viralMoment ? (
+          <div className="px-4 pt-2 md:px-8">
+            <div className="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-xl border border-rose-400/40 bg-rose-500/[0.07] px-4 py-3 sm:flex-row sm:items-center">
+              <span className="min-w-0 flex-1 text-sm text-stone-700 dark:text-stone-200">
+                💢 {character.name} is fuming about the bill — this is going viral.
+              </span>
+              <button
+                type="button"
+                onClick={handleShareViral}
+                className="shrink-0 rounded-lg bg-rose-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-rose-600"
+              >
+                Share to feed 📸
+              </button>
+            </div>
+          </div>
+        ) : null}
         {choice ? (
           <div className="px-4 pt-2 md:px-8">
             <ChoiceCard choice={choice} characterName={character.name} onResolved={handleChoiceResolved} />

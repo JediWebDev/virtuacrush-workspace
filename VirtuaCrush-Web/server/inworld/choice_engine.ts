@@ -4,7 +4,7 @@
 // Fails soft: returns null so the caller simply doesn't offer a choice.
 import { getLLM } from './client';
 import { getLore } from './lore';
-import { parseGeneratedChoice, DEFAULT_TIMEOUT_REACTION, type GeneratedChoice } from '../db/choice_util';
+import { parseGeneratedChoice, DEFAULT_TIMEOUT_REACTION, type GeneratedChoice, type BillData } from '../db/choice_util';
 import { DATE_LOCATION_SLUGS, LOCATIONS, getLocation, coerceDateLocation } from './scenes';
 
 function buildChoicePrompt(params: {
@@ -178,6 +178,97 @@ Respond with ONLY this JSON (no prose/fences):
         typeof obj?.timeoutReaction === 'string' && obj.timeoutReaction.trim()
           ? obj.timeoutReaction.trim().slice(0, 200)
           : DEFAULT_TIMEOUT_REACTION,
+    };
+  } catch (err) {
+    console.warn(`[choice] bill generation failed for ${params.characterId}:`, err);
+    return fallback;
+  }
+}
+
+// --- Itemized "end date" bill ------------------------------------------------
+
+export interface GeneratedBill {
+  prompt: string;
+  bill: BillData;
+  payReaction: string; // when the USER pays (grateful/teasing)
+  ventReaction: string; // when the CHARACTER gets stuck paying (annoyed, viral)
+  timeoutReaction: string;
+}
+
+function roundMoney(n: number): number {
+  return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100;
+}
+
+/**
+ * Generates an itemized bill for ending a date, factoring in anything chaotic
+ * that happened (from the recent conversation) — e.g. broken fixtures. Fails
+ * soft to a sensible default bill.
+ */
+export async function generateItemizedBill(params: {
+  characterId: string;
+  displayName: string;
+  locationSlug: string;
+  recentText: string;
+}): Promise<GeneratedBill> {
+  const loc = getLocation(params.locationSlug);
+  const venue = loc ? loc.label : 'the date';
+  const venueDesc = loc ? loc.description : 'out together';
+
+  const fallback: GeneratedBill = {
+    prompt: `The bill for ${venue} lands on the table...`,
+    bill: { items: [{ label: `${venue} for two`, amount: 46 }], total: 46 },
+    payReaction: "Oh — you're getting this? Look at you. I'm impressed, honestly.",
+    ventReaction: `Wait, I'm paying? Again? Unbelievable. I'm putting this on my story, everyone needs to know.`,
+    timeoutReaction: '*awkwardly slides the bill back and forth across the table*',
+  };
+
+  const prompt = `Itemize the final bill for a date that is ending. ${params.displayName} and the user were ${venueDesc}.
+
+Base it on a realistic ${venue} outing, PLUS anything notable or chaotic that happened in the recent conversation below — if the user caused damage or mayhem (e.g. broke a bathroom fixture, knocked over a display, ordered absurdly), add a pricey, funny line item for it.
+
+RECENT CONVERSATION:
+"""
+${params.recentText.slice(0, 2500)}
+"""
+
+Respond with ONLY this JSON (no prose/fences). Amounts are plain USD numbers:
+{
+  "prompt": "<1 sentence, in-character, the bill arrives>",
+  "items": [ {"label": "<line item>", "amount": <number>}, ... 2 to 5 items ],
+  "payReaction": "<${params.displayName}, grateful/teasing, when the USER pays>",
+  "ventReaction": "<${params.displayName}, genuinely annoyed and venting in a funny, shareable way, when THEY get stuck with the bill>",
+  "timeoutReaction": "<brief stage action if the user freezes>"
+}`;
+
+  try {
+    const llm = await llmComplete();
+    const raw = await llm.generateContentComplete({ prompt });
+    const text = typeof raw === 'string' ? raw : (raw?.content ?? raw?.text ?? '');
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) return fallback;
+    const obj = JSON.parse(m[0]);
+
+    const items = Array.isArray(obj?.items)
+      ? obj.items
+          .map((it: any) => ({
+            label: typeof it?.label === 'string' ? it.label.trim().slice(0, 80) : '',
+            amount: roundMoney(Number(it?.amount)),
+          }))
+          .filter((it: { label: string; amount: number }) => it.label && it.amount > 0)
+          .slice(0, 6)
+      : [];
+    if (items.length === 0) return fallback;
+
+    const total = roundMoney(items.reduce((s: number, it: { amount: number }) => s + it.amount, 0));
+    const str = (v: unknown, fb: string) =>
+      typeof v === 'string' && v.trim() ? v.trim().slice(0, 400) : fb;
+
+    return {
+      prompt: str(obj?.prompt, fallback.prompt),
+      bill: { items, total },
+      payReaction: str(obj?.payReaction, fallback.payReaction),
+      ventReaction: str(obj?.ventReaction, fallback.ventReaction),
+      timeoutReaction: str(obj?.timeoutReaction, fallback.timeoutReaction).slice(0, 200),
     };
   } catch (err) {
     console.warn(`[choice] bill generation failed for ${params.characterId}:`, err);

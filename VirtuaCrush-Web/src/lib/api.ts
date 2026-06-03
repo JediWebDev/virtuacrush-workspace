@@ -62,11 +62,17 @@ export async function fetchCharacterState(characterId: string): Promise<Characte
 
 // --- Timed dialogue choices (mechanic #2) ------------------------------------
 
+export interface BillLine {
+  label: string;
+  amount: number;
+}
+
 export interface DialogueChoice {
   id: string;
   kind: "date" | "bill" | "goal";
   prompt: string;
   options: { label: string }[];
+  bill?: { items: BillLine[]; total: number };
   expiresAt: string;   // ISO timestamp; the hourglass deadline (server-authoritative)
   ttlSeconds: number;
 }
@@ -77,6 +83,8 @@ export interface ChoiceResolution {
   reaction?: string;       // the character's reply to append to the chat
   advancedGoal?: boolean;
   posted?: boolean;        // a social post was created
+  viral?: boolean;         // a shareable "viral moment" (character venting)
+  ended?: boolean;         // the date ended
   affinityScore?: number;
   goalProgress?: number;
 }
@@ -98,6 +106,23 @@ export async function selectChoice(choiceId: string, optionIndex: number): Promi
 export async function timeoutChoice(choiceId: string): Promise<ChoiceResolution> {
   return api<ChoiceResolution>(`/api/choice/${encodeURIComponent(choiceId)}/timeout`, {
     method: 'POST',
+  });
+}
+
+/** Ends the current date: generates the itemized bill choice. */
+export async function endDate(characterId: string): Promise<DialogueChoice> {
+  const res = await api<{ choice: DialogueChoice }>(
+    `/api/date/${encodeURIComponent(characterId)}/end`,
+    { method: 'POST' },
+  );
+  return res.choice;
+}
+
+/** Shares a viral moment (a character's vent) to their feed. */
+export async function shareViralMoment(characterId: string, text: string): Promise<void> {
+  await api(`/api/posts/${encodeURIComponent(characterId)}/share`, {
+    method: 'POST',
+    body: JSON.stringify({ text }),
   });
 }
 

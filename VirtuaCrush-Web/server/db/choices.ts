@@ -5,7 +5,7 @@
 // Server is authoritative on the deadline and all effects. Everything fails soft.
 import { pool } from './pool';
 import { getCharacter } from '../inworld/characters';
-import { generateDateChoice, generateBillChoice, generateChoice } from '../inworld/choice_engine';
+import { generateDateChoice, generateBillChoice, generateChoice, generateItemizedBill } from '../inworld/choice_engine';
 import { getSituation, getScene, setScene, bumpGoalProgress } from './state';
 import { incrementAffinity } from './affinity';
 import { createPost } from './posts';
@@ -23,6 +23,7 @@ import {
   CHOICE_TTL_SECONDS,
   CHOICE_TIMEOUT_AFFINITY,
   type ChoiceOption,
+  type BillData,
 } from './choice_util';
 
 /** Shape sent to the client — labels + kind; reactions stay server-side. */
@@ -31,6 +32,7 @@ export interface ChoiceDTO {
   kind: ChoiceKind;
   prompt: string;
   options: { label: string }[];
+  bill?: BillData; // itemized breakdown for 'bill' (end-date) choices
   expiresAt: string;
   ttlSeconds: number;
 }
@@ -44,9 +46,10 @@ interface ChoiceRow {
   timeout_reaction: string;
   status: 'pending' | 'chosen' | 'timed_out';
   expires_at: string;
+  bill: BillData | null;
 }
 
-const ROW_COLS = `id, character_id, kind, prompt, options, timeout_reaction, status, expires_at`;
+const ROW_COLS = `id, character_id, kind, prompt, options, timeout_reaction, status, expires_at, bill`;
 
 function toDTO(row: ChoiceRow): ChoiceDTO {
   return {
@@ -54,6 +57,7 @@ function toDTO(row: ChoiceRow): ChoiceDTO {
     kind: row.kind,
     prompt: row.prompt,
     options: row.options.map((o) => ({ label: o.label })),
+    bill: row.bill ?? undefined,
     expiresAt: new Date(row.expires_at).toISOString(),
     ttlSeconds: CHOICE_TTL_SECONDS,
   };
@@ -69,6 +73,40 @@ async function loadRow(userId: string, choiceId: string): Promise<ChoiceRow | nu
 
 async function markTimedOut(id: string): Promise<void> {
   await pool.query(`UPDATE dialogue_choices SET status = 'timed_out' WHERE id = $1`, [id]);
+}
+
+/**
+ * Persists a resolved choice into the conversation so the LLM has in-context
+ * grounding (e.g. "we went to the movies") on the next turn. Never throws.
+ */
+async function persistChoiceTurns(
+  userId: string,
+  characterId: string,
+  userLabel: string | null,
+  assistantText: string | null,
+): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    if (userLabel) {
+      await client.query(
+        `INSERT INTO chat_messages (user_id, character_id, role, content) VALUES ($1, $2, 'user', $3)`,
+        [userId, characterId, userLabel],
+      );
+    }
+    if (assistantText) {
+      await client.query(
+        `INSERT INTO chat_messages (user_id, character_id, role, content) VALUES ($1, $2, 'assistant', $3)`,
+        [userId, characterId, assistantText],
+      );
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.warn('[choice] persist turns failed:', e);
+  } finally {
+    client.release();
+  }
 }
 
 export async function getActiveChoice(
@@ -131,8 +169,8 @@ export async function maybeCreateChoice(
   const expiresAt = new Date(Date.now() + CHOICE_TTL_SECONDS * 1000).toISOString();
   const { rows } = await pool.query<ChoiceRow>(
     `INSERT INTO dialogue_choices
-       (user_id, character_id, kind, prompt, options, timeout_reaction, status, expires_at)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'pending', $7)
+       (user_id, character_id, kind, prompt, options, timeout_reaction, status, expires_at, bill)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'pending', $7, NULL)
      RETURNING ${ROW_COLS}`,
     [userId, characterId, kind, generated.prompt, JSON.stringify(generated.options), generated.timeoutReaction, expiresAt],
   );
@@ -147,6 +185,8 @@ export interface SelectResult {
   advancedGoal?: boolean;
   posted?: boolean;
   sceneChanged?: boolean; // hint the client to refetch scene state
+  viral?: boolean;        // a shareable "viral moment" (character venting)
+  ended?: boolean;        // the date ended (scene returned to apart)
   affinityScore?: number;
   goalProgress?: number;
 }
@@ -166,6 +206,7 @@ export async function selectChoice(
   if (isExpired(new Date(row.expires_at).getTime())) {
     await markTimedOut(row.id);
     const affinityScore = await incrementAffinity(userId, characterId, CHOICE_TIMEOUT_AFFINITY);
+    await persistChoiceTurns(userId, characterId, null, row.timeout_reaction);
     return { ok: true, timedOut: true, reaction: row.timeout_reaction, affinityScore };
   }
 
@@ -187,19 +228,18 @@ export async function selectChoice(
       location,
       billPending: isPaidLocation(location),
     });
+    await persistChoiceTurns(userId, characterId, option.label, option.reaction);
     return { ok: true, reaction: option.reaction, affinityScore, sceneChanged: true };
   }
 
-  // --- bill: settle the tab, stay at the venue ---
+  // --- bill: settle the tab; the date ends afterward ---
   if (row.kind === 'bill') {
     const affinityScore = await incrementAffinity(userId, characterId, billAffinity(optionIndex));
-    const scene = await getScene(userId, characterId);
-    await setScene(userId, characterId, {
-      mode: 'together',
-      location: scene.location,
-      billPending: false,
-    });
-    return { ok: true, reaction: option.reaction, affinityScore, sceneChanged: true };
+    // Date over: return the character to their own place.
+    await setScene(userId, characterId, { mode: 'apart', location: null, billPending: false });
+    await persistChoiceTurns(userId, characterId, option.label, option.reaction);
+    const viral = optionIndex === 1; // user let the character pay -> annoyed vent
+    return { ok: true, reaction: option.reaction, affinityScore, viral, sceneChanged: true, ended: true };
   }
 
   // --- goal: advance progress, maybe post ---
@@ -211,6 +251,7 @@ export async function selectChoice(
     await createPost(userId, characterId, option.post);
     posted = true;
   }
+  await persistChoiceTurns(userId, characterId, option.label, option.reaction);
   return {
     ok: true,
     reaction: option.reaction,
@@ -230,5 +271,67 @@ export async function timeoutChoice(userId: string, choiceId: string): Promise<S
   }
   await markTimedOut(row.id);
   const affinityScore = await incrementAffinity(userId, row.character_id, CHOICE_TIMEOUT_AFFINITY);
+  await persistChoiceTurns(userId, row.character_id, null, row.timeout_reaction);
   return { ok: true, timedOut: true, reaction: row.timeout_reaction, affinityScore };
+}
+
+/**
+ * "End date" flow: generates an itemized bill (factoring in date shenanigans)
+ * and stores it as a bill choice. Returns the choice DTO with the breakdown, or
+ * null if the user isn't currently on a date.
+ */
+export async function createEndDateBill(
+  userId: string,
+  characterId: string,
+): Promise<ChoiceDTO | null> {
+  const scene = await getScene(userId, characterId);
+  if (scene.mode !== 'together') return null;
+
+  let displayName: string;
+  try {
+    displayName = getCharacter(characterId).displayName;
+  } catch {
+    return null;
+  }
+
+  // Supersede any active pending choice so only the bill is live.
+  await pool.query(
+    `UPDATE dialogue_choices SET status = 'timed_out'
+     WHERE user_id = $1 AND character_id = $2 AND status = 'pending'`,
+    [userId, characterId],
+  );
+
+  // Recent conversation provides context for any billable mayhem.
+  const { rows: turnRows } = await pool.query<{ role: string; content: string }>(
+    `SELECT role, content FROM chat_messages
+     WHERE user_id = $1 AND character_id = $2
+     ORDER BY created_at DESC LIMIT 12`,
+    [userId, characterId],
+  );
+  const recentText = turnRows
+    .reverse()
+    .map((r) => `${r.role === 'user' ? 'User' : displayName}: ${r.content}`)
+    .join('\n');
+
+  const gen = await generateItemizedBill({
+    characterId,
+    displayName,
+    locationSlug: scene.location ?? 'restaurant',
+    recentText,
+  });
+
+  const options: ChoiceOption[] = [
+    { label: "I've got this 💳", advancesGoal: false, reaction: gen.payReaction },
+    { label: `Let ${displayName} pay`, advancesGoal: false, reaction: gen.ventReaction },
+  ];
+
+  const expiresAt = new Date(Date.now() + CHOICE_TTL_SECONDS * 1000).toISOString();
+  const { rows } = await pool.query<ChoiceRow>(
+    `INSERT INTO dialogue_choices
+       (user_id, character_id, kind, prompt, options, timeout_reaction, status, expires_at, bill)
+     VALUES ($1, $2, 'bill', $3, $4::jsonb, $5, 'pending', $6, $7::jsonb)
+     RETURNING ${ROW_COLS}`,
+    [userId, characterId, gen.prompt, JSON.stringify(options), gen.timeoutReaction, expiresAt, JSON.stringify(gen.bill)],
+  );
+  return toDTO(rows[0]);
 }
