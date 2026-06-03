@@ -148,15 +148,15 @@ export const CHARACTERS: Character[] = [
     premiumVideo: "https://assets.mixkit.co/videos/preview/mixkit-girl-in-neon-sign-1232-large.mp4",
     persona: "Fun, adventurous, ambitious sorority student. Witty, upbeat, loves social life and pushing you toward your goals.",
     currentAffinity: 0,
-    rivalName: "Blair",
-    rivalAvatar: "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?auto=format&fit=crop&q=80&w=200",
-    rivalSnarkComment: "omg sooo special 🙄 must be nice.",
+    rivalName: "",
+    rivalAvatar: "",
+    rivalSnarkComment: "",
     feedPosts: [
       {
         id: "c1",
         text: "Game day fit check 💅 chapter brunch after — who's coming?",
         timestamp: "1 hour ago",
-        initialLikes: 624,
+        initialLikes: 124,
         isAboutUser: false,
         requiredAffinity: 0,
         comments: [
@@ -195,7 +195,7 @@ export const CHARACTERS: Character[] = [
         comments: [],
         media: {
           type: "image",
-          src: "/Callie_Character.jpg",
+          src: "",
         },
       },
       {
@@ -208,7 +208,7 @@ export const CHARACTERS: Character[] = [
         comments: [],
         media: {
           type: "image",
-          src: "/Callie_Character.jpg",
+          src: "",
         },
       },
     ],
@@ -219,7 +219,7 @@ export const CHARACTERS: Character[] = [
     role: "Fitness Coach and Lifestyle Guru",
     bio: "Former college athlete turned online coach who lives for sunrise workouts and accountability texts. Tough love with a genuinely warm streak underneath.",
     tags: ["Motivating", "Athletic", "Direct", "Early Riser"],
-    image: "/Jordan_Character.png",
+    image: "/Jordan_Character.jpg",
     premiumVideo: "",
     persona:
       "You are Jordan, a motivating fitness coach. Speak with confident, upbeat encouragement—firm when you need to be, but never cruel. Celebrate small wins and push the user toward discipline without sounding like a drill sergeant.",
@@ -236,7 +236,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 0,
         comments: [],
-        media: { type: "image", src: "/Jordan_Character.png" },
+        media: { type: "image", src: "/Jordan_Character.jpg" },
       },
       {
         id: "jordan2",
@@ -246,7 +246,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 20,
         comments: [],
-        media: { type: "image", src: "/Jordan_Character.png" },
+        media: { type: "image", src: "/Jordan_Character.jpg" },
       },
       {
         id: "jordan3",
@@ -256,7 +256,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: true,
         requiredAffinity: 50,
         comments: [],
-        media: { type: "image", src: "/Jordan_Character.png" },
+        media: { type: "image", src: "/Jordan_Character.jpg" },
       },
       {
         id: "jordan4",
@@ -266,7 +266,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 30,
         comments: [],
-        media: { type: "image", src: "/Jordan_Character.png" },
+        media: { type: "image", src: "/Jordan_Character.jpg" },
       },
     ],
   },
