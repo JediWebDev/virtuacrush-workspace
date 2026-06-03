@@ -228,6 +228,10 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
       onAffinityChange?.(character.id, result.affinityScore);
     }
     if (result.posted) setFeedRefreshKey((k) => k + 1);
+    // Scene/affinity may have changed — refresh the status strip.
+    fetchCharacterState(character.id)
+      .then((st) => setStoryState(st))
+      .catch(() => { /* non-fatal */ });
   };
 
   const characterWithAffinity: Character = { ...character, currentAffinity: affinity };
@@ -455,9 +459,15 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
               </span>
               <span className="min-w-0 truncate text-stone-600 dark:text-stone-300">
                 <span className="font-semibold text-stone-800 dark:text-stone-100">{character.name}</span>{" "}
-                is {storyState.activity}
+                {storyState.scene?.mode === "together" && storyState.sceneLabel
+                  ? `· on a date at the ${storyState.sceneLabel.toLowerCase()}`
+                  : `is ${storyState.activity}`}
               </span>
-              {storyState.mood ? (
+              {storyState.scene?.mode === "together" ? (
+                <span className="ml-auto hidden shrink-0 rounded-full border border-accent/30 bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent sm:inline">
+                  On a date 💞
+                </span>
+              ) : storyState.mood ? (
                 <span className="ml-auto hidden shrink-0 rounded-full border border-accent/20 bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent sm:inline">
                   {storyState.mood}
                 </span>

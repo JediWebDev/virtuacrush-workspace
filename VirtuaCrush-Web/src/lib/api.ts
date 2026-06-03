@@ -37,6 +37,12 @@ export async function fetchGreeting(
   if (!res.ok) throw new Error('greet_failed');
   return res.json();
 }
+export interface SceneInfo {
+  mode: "apart" | "together";
+  location: string | null;
+  billPending: boolean;
+}
+
 export interface CharacterState {
   characterId: string;
   activity: string;
@@ -44,6 +50,8 @@ export interface CharacterState {
   headline: string;
   goalProgress: number;
   goal: string;
+  scene?: SceneInfo;
+  sceneLabel?: string | null;
 }
 
 // Current story-engine state (what the character is "doing" today) for the
@@ -56,6 +64,7 @@ export async function fetchCharacterState(characterId: string): Promise<Characte
 
 export interface DialogueChoice {
   id: string;
+  kind: "date" | "bill" | "goal";
   prompt: string;
   options: { label: string }[];
   expiresAt: string;   // ISO timestamp; the hourglass deadline (server-authoritative)

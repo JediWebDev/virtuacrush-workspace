@@ -1,12 +1,22 @@
-// Timed dialogue-choice orchestration: create a pending choice, resolve it by
-// selection, or resolve it by timeout. Server is authoritative on the deadline
-// and on all affinity/goal effects. Everything fails soft.
+// Timed dialogue-choice orchestration for the dating loop. Three kinds:
+//   'date' — where to go / what to do together (moves the scene),
+//   'bill' — who pays at a paid venue (humorous, affinity effect),
+//   'goal' — the rarer goal beat (advances progress, may create a social post).
+// Server is authoritative on the deadline and all effects. Everything fails soft.
 import { pool } from './pool';
 import { getCharacter } from '../inworld/characters';
-import { generateChoice } from '../inworld/choice_engine';
-import { getOrGenerateDailyState, bumpGoalProgress } from './state';
+import { generateDateChoice, generateBillChoice, generateChoice } from '../inworld/choice_engine';
+import { getSituation, getScene, setScene, bumpGoalProgress } from './state';
 import { incrementAffinity } from './affinity';
 import { createPost } from './posts';
+import { getLocation, isPaidLocation, coerceDateLocation } from '../inworld/scenes';
+import {
+  chooseChoiceKind,
+  isGoalBeatDue,
+  billAffinity,
+  CHOICE_DATE_AFFINITY,
+  type ChoiceKind,
+} from './scene_util';
 import {
   effectsForOption,
   isExpired,
@@ -15,9 +25,10 @@ import {
   type ChoiceOption,
 } from './choice_util';
 
-/** Shape sent to the client — labels only; reactions stay server-side. */
+/** Shape sent to the client — labels + kind; reactions stay server-side. */
 export interface ChoiceDTO {
   id: string;
+  kind: ChoiceKind;
   prompt: string;
   options: { label: string }[];
   expiresAt: string;
@@ -27,6 +38,7 @@ export interface ChoiceDTO {
 interface ChoiceRow {
   id: string;
   character_id: string;
+  kind: ChoiceKind;
   prompt: string;
   options: ChoiceOption[];
   timeout_reaction: string;
@@ -34,11 +46,12 @@ interface ChoiceRow {
   expires_at: string;
 }
 
-const ROW_COLS = `id, character_id, prompt, options, timeout_reaction, status, expires_at`;
+const ROW_COLS = `id, character_id, kind, prompt, options, timeout_reaction, status, expires_at`;
 
 function toDTO(row: ChoiceRow): ChoiceDTO {
   return {
     id: String(row.id),
+    kind: row.kind,
     prompt: row.prompt,
     options: row.options.map((o) => ({ label: o.label })),
     expiresAt: new Date(row.expires_at).toISOString(),
@@ -58,10 +71,6 @@ async function markTimedOut(id: string): Promise<void> {
   await pool.query(`UPDATE dialogue_choices SET status = 'timed_out' WHERE id = $1`, [id]);
 }
 
-/**
- * Returns the active (pending, not-yet-expired) choice for resume, or null.
- * Lazily marks an expired pending choice as timed_out.
- */
 export async function getActiveChoice(
   userId: string,
   characterId: string,
@@ -82,12 +91,13 @@ export async function getActiveChoice(
 }
 
 /**
- * Generates and stores a new pending choice if there isn't already an active
- * one. Returns the client DTO, or null if one is active or generation failed.
+ * Generates and stores a new pending choice (date / bill / goal) appropriate to
+ * the current scene, if there isn't already an active one.
  */
 export async function maybeCreateChoice(
   userId: string,
   characterId: string,
+  userMessageCount: number,
 ): Promise<ChoiceDTO | null> {
   if (await getActiveChoice(userId, characterId)) return null;
 
@@ -95,26 +105,36 @@ export async function maybeCreateChoice(
   try {
     displayName = getCharacter(characterId).displayName;
   } catch {
-    return null; // unknown character
+    return null;
   }
 
-  const state = await getOrGenerateDailyState(userId, characterId);
-  const generated = await generateChoice({
-    characterId,
-    displayName,
-    activity: state.activity,
-    mood: state.mood,
-    goalProgress: state.goalProgress,
-  });
+  const { state, scene } = await getSituation(userId, characterId);
+  const locationKind = getLocation(scene.location)?.kind ?? null;
+  const preferGoal = scene.mode === 'apart' && isGoalBeatDue(userMessageCount);
+  const kind = chooseChoiceKind({ mode: scene.mode, locationKind, billPending: scene.billPending, preferGoal });
+
+  const generated =
+    kind === 'bill'
+      ? await generateBillChoice({ characterId, displayName, locationSlug: scene.location ?? 'restaurant' })
+      : kind === 'goal'
+        ? await generateChoice({
+            characterId,
+            displayName,
+            activity: state.activity,
+            mood: state.mood,
+            goalProgress: state.goalProgress,
+          })
+        : await generateDateChoice({ characterId, displayName, activity: state.activity, mood: state.mood });
+
   if (!generated) return null;
 
   const expiresAt = new Date(Date.now() + CHOICE_TTL_SECONDS * 1000).toISOString();
   const { rows } = await pool.query<ChoiceRow>(
     `INSERT INTO dialogue_choices
-       (user_id, character_id, prompt, options, timeout_reaction, status, expires_at)
-     VALUES ($1, $2, $3, $4::jsonb, $5, 'pending', $6)
+       (user_id, character_id, kind, prompt, options, timeout_reaction, status, expires_at)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'pending', $7)
      RETURNING ${ROW_COLS}`,
-    [userId, characterId, generated.prompt, JSON.stringify(generated.options), generated.timeoutReaction, expiresAt],
+    [userId, characterId, kind, generated.prompt, JSON.stringify(generated.options), generated.timeoutReaction, expiresAt],
   );
   return toDTO(rows[0]);
 }
@@ -126,11 +146,12 @@ export interface SelectResult {
   reaction?: string;
   advancedGoal?: boolean;
   posted?: boolean;
+  sceneChanged?: boolean; // hint the client to refetch scene state
   affinityScore?: number;
   goalProgress?: number;
 }
 
-/** Resolves a choice by the user's selection, applying all effects. */
+/** Resolves a choice by the user's selection, applying kind-specific effects. */
 export async function selectChoice(
   userId: string,
   choiceId: string,
@@ -142,7 +163,6 @@ export async function selectChoice(
 
   const characterId = row.character_id;
 
-  // Deadline passed -> treat as a timeout instead of applying the selection.
   if (isExpired(new Date(row.expires_at).getTime())) {
     await markTimedOut(row.id);
     const affinityScore = await incrementAffinity(userId, characterId, CHOICE_TIMEOUT_AFFINITY);
@@ -153,21 +173,44 @@ export async function selectChoice(
   const option = row.options[optionIndex];
   if (!option) return { ok: false, error: 'invalid_option' };
 
-  const { affinityDelta, goalDelta } = effectsForOption(option.advancesGoal);
-  const affinityScore = await incrementAffinity(userId, characterId, affinityDelta);
-  const goalProgress = await bumpGoalProgress(userId, characterId, goalDelta);
-
   await pool.query(
     `UPDATE dialogue_choices SET status = 'chosen', chosen_index = $2 WHERE id = $1`,
     [row.id, optionIndex],
   );
 
+  // --- date: move the scene to the chosen venue ---
+  if (row.kind === 'date') {
+    const location = coerceDateLocation(option.location);
+    const affinityScore = await incrementAffinity(userId, characterId, CHOICE_DATE_AFFINITY);
+    await setScene(userId, characterId, {
+      mode: 'together',
+      location,
+      billPending: isPaidLocation(location),
+    });
+    return { ok: true, reaction: option.reaction, affinityScore, sceneChanged: true };
+  }
+
+  // --- bill: settle the tab, stay at the venue ---
+  if (row.kind === 'bill') {
+    const affinityScore = await incrementAffinity(userId, characterId, billAffinity(optionIndex));
+    const scene = await getScene(userId, characterId);
+    await setScene(userId, characterId, {
+      mode: 'together',
+      location: scene.location,
+      billPending: false,
+    });
+    return { ok: true, reaction: option.reaction, affinityScore, sceneChanged: true };
+  }
+
+  // --- goal: advance progress, maybe post ---
+  const { affinityDelta, goalDelta } = effectsForOption(option.advancesGoal);
+  const affinityScore = await incrementAffinity(userId, characterId, affinityDelta);
+  const goalProgress = await bumpGoalProgress(userId, characterId, goalDelta);
   let posted = false;
   if (option.advancesGoal && option.post) {
     await createPost(userId, characterId, option.post);
     posted = true;
   }
-
   return {
     ok: true,
     reaction: option.reaction,

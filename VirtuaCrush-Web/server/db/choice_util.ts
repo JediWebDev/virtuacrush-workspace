@@ -18,7 +18,8 @@ export interface ChoiceOption {
   label: string;
   advancesGoal: boolean;
   reaction: string;
-  post?: string; // social-post text when this option advances the goal
+  post?: string;     // social-post text when this option advances the goal
+  location?: string; // venue slug to move the scene to (date choices)
 }
 
 export interface GeneratedChoice {
@@ -62,7 +63,8 @@ export function parseGeneratedChoice(
     if (!label || !reaction) return null;
     const advancesGoal = o?.advancesGoal === true;
     const post = cleanStr(o?.post, 280);
-    return { label, advancesGoal, reaction, post: post || undefined };
+    const location = cleanStr(o?.location, 40);
+    return { label, advancesGoal, reaction, post: post || undefined, location: location || undefined };
   });
   if (opts.some((o: ChoiceOption | null) => o === null)) return null;
 

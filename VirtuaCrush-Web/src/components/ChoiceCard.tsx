@@ -72,7 +72,11 @@ export default function ChoiceCard({ choice, characterName, onResolved }: Props)
           <Hourglass size={16} />
         </motion.span>
         <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
-          {characterName} needs an answer
+          {choice.kind === "bill"
+            ? "The bill arrives"
+            : choice.kind === "date"
+              ? `${characterName} wants to go out`
+              : `${characterName} needs an answer`}
         </span>
         <span
           className={`ml-auto text-xs font-bold tabular-nums ${urgent ? "text-rose-500" : "text-stone-500 dark:text-stone-400"}`}

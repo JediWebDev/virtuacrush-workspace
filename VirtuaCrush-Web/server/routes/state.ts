@@ -3,8 +3,9 @@
 // render the "what they're doing right now" status strip above the chat.
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/auth';
-import { getOrGenerateDailyState } from '../db/state';
+import { getSituation } from '../db/state';
 import { getLore } from '../inworld/lore';
+import { getLocation } from '../inworld/scenes';
 
 const router = Router();
 
@@ -12,7 +13,7 @@ const router = Router();
 router.get('/:characterId', requireAuth, async (req: Request, res: Response) => {
   const { characterId } = req.params;
   try {
-    const state = await getOrGenerateDailyState(req.user!.id, characterId);
+    const { state, scene } = await getSituation(req.user!.id, characterId);
     res.json({
       characterId,
       activity: state.activity,
@@ -20,6 +21,8 @@ router.get('/:characterId', requireAuth, async (req: Request, res: Response) => 
       headline: state.headline,
       goalProgress: state.goalProgress,
       goal: getLore(characterId).goal,
+      scene,
+      sceneLabel: scene.mode === 'together' ? (getLocation(scene.location)?.label ?? null) : null,
     });
   } catch (err) {
     console.error('[state] get failed:', err);

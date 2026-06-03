@@ -1,22 +1,12 @@
-// Story-state persistence + orchestration.
+// Story-state + scene persistence and orchestration.
 //
-// Hybrid regeneration:
-//   - Lazy (compute-on-read): getOrGenerateDailyState() generates and caches a
-//     fresh state the first time it's read on a new day. Guarantees correctness
-//     even with no scheduler.
-//   - Batch (scheduled): regenerateStaleStates() refreshes all stale rows ahead
-//     of time so the first read of the day is instant. Run from a cron/job.
-//
-// Per-user: one row per (user, character); the storyline diverges per player.
+// Hybrid daily regeneration (lazy on read + scheduled batch) plus the per-date
+// scene (mode/location/bill). Per-user: one row per (user, character).
 import { pool } from './pool';
 import { getCharacter } from '../inworld/characters';
 import { generateDailyState } from '../inworld/story_engine';
-import {
-  utcDateString,
-  isStale,
-  advanceProgress,
-  type DailyState,
-} from './story_util';
+import { utcDateString, isStale, advanceProgress, type DailyState } from './story_util';
+import type { SceneState, SceneMode } from './scene_util';
 
 interface StateRow {
   character_id: string;
@@ -25,6 +15,17 @@ interface StateRow {
   mood: string;
   headline: string;
   goal_progress: number;
+  scene_mode: SceneMode;
+  scene_location: string | null;
+  bill_pending: boolean;
+}
+
+const COLS = `character_id, state_date, activity, mood, headline, goal_progress,
+              scene_mode, scene_location, bill_pending`;
+
+export interface Situation {
+  state: DailyState;
+  scene: SceneState;
 }
 
 function rowToState(r: StateRow): DailyState {
@@ -36,22 +37,29 @@ function rowToState(r: StateRow): DailyState {
   };
 }
 
+function rowToScene(r: StateRow): SceneState {
+  return {
+    mode: r.scene_mode === 'together' ? 'together' : 'apart',
+    location: r.scene_location ?? null,
+    billPending: !!r.bill_pending,
+  };
+}
+
 async function readRow(userId: string, characterId: string): Promise<StateRow | null> {
   const { rows } = await pool.query<StateRow>(
-    `SELECT character_id, state_date, activity, mood, headline, goal_progress
-     FROM character_state WHERE user_id = $1 AND character_id = $2`,
+    `SELECT ${COLS} FROM character_state WHERE user_id = $1 AND character_id = $2`,
     [userId, characterId],
   );
   return rows[0] ?? null;
 }
 
-/** Generates a new daily state from the prior row and upserts it. Returns the new state. */
+/** Generates a new daily state from the prior row and upserts it (scene resets to home/apart). */
 async function generateAndStore(
   userId: string,
   characterId: string,
   prior: StateRow | null,
   today: string,
-): Promise<DailyState> {
+): Promise<StateRow> {
   const character = getCharacter(characterId); // throws on unknown id
   const generated = await generateDailyState({
     characterId,
@@ -65,43 +73,103 @@ async function generateAndStore(
 
   const { rows } = await pool.query<StateRow>(
     `INSERT INTO character_state
-       (user_id, character_id, state_date, activity, mood, headline, goal_progress, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+       (user_id, character_id, state_date, activity, mood, headline, goal_progress,
+        scene_mode, scene_location, bill_pending, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'apart', NULL, false, NOW())
      ON CONFLICT (user_id, character_id) DO UPDATE
        SET state_date = EXCLUDED.state_date,
            activity = EXCLUDED.activity,
            mood = EXCLUDED.mood,
            headline = EXCLUDED.headline,
            goal_progress = EXCLUDED.goal_progress,
+           scene_mode = 'apart',
+           scene_location = NULL,
+           bill_pending = false,
            updated_at = NOW()
-     RETURNING character_id, state_date, activity, mood, headline, goal_progress`,
+     RETURNING ${COLS}`,
     [userId, characterId, today, generated.activity, generated.mood, generated.headline, goalProgress],
   );
-  return rowToState(rows[0]);
+  return rows[0];
 }
 
-/**
- * Returns the character's current daily state for this user, generating (and
- * caching) a fresh one if none exists or the stored one is from a previous day.
- * Falls back to the stale row if generation throws, so chat/UI never breaks.
- */
-export async function getOrGenerateDailyState(
-  userId: string,
-  characterId: string,
-): Promise<DailyState> {
+/** Ensures a fresh (today's) state row exists, regenerating if stale. Never throws. */
+async function ensureFreshRow(userId: string, characterId: string): Promise<StateRow> {
   const today = utcDateString();
   const row = await readRow(userId, characterId);
-  if (row && !isStale(row.state_date, today)) {
-    return rowToState(row);
-  }
+  if (row && !isStale(row.state_date, today)) return row;
   try {
     return await generateAndStore(userId, characterId, row, today);
   } catch (err) {
     console.warn('[state] generate failed; serving prior/empty state:', err);
-    return row
-      ? rowToState(row)
-      : { activity: '', mood: '', headline: '', goalProgress: 0 };
+    return (
+      row ?? {
+        character_id: characterId,
+        state_date: today,
+        activity: '',
+        mood: '',
+        headline: '',
+        goal_progress: 0,
+        scene_mode: 'apart',
+        scene_location: null,
+        bill_pending: false,
+      }
+    );
   }
+}
+
+/** Current daily state for this user/character (lazily generated on a new day). */
+export async function getOrGenerateDailyState(
+  userId: string,
+  characterId: string,
+): Promise<DailyState> {
+  return rowToState(await ensureFreshRow(userId, characterId));
+}
+
+/** Current daily state AND scene together (one read). */
+export async function getSituation(userId: string, characterId: string): Promise<Situation> {
+  const row = await ensureFreshRow(userId, characterId);
+  return { state: rowToState(row), scene: rowToScene(row) };
+}
+
+/** Reads just the scene (assumes a row exists; returns apart default if not). */
+export async function getScene(userId: string, characterId: string): Promise<SceneState> {
+  const row = await readRow(userId, characterId);
+  return row ? rowToScene(row) : { mode: 'apart', location: null, billPending: false };
+}
+
+/** Updates the scene for a user/character. Returns the new scene. */
+export async function setScene(
+  userId: string,
+  characterId: string,
+  scene: SceneState,
+): Promise<SceneState> {
+  const { rows } = await pool.query<StateRow>(
+    `UPDATE character_state
+       SET scene_mode = $3, scene_location = $4, bill_pending = $5, updated_at = NOW()
+     WHERE user_id = $1 AND character_id = $2
+     RETURNING ${COLS}`,
+    [userId, characterId, scene.mode, scene.location, scene.billPending],
+  );
+  return rows[0] ? rowToScene(rows[0]) : scene;
+}
+
+/**
+ * Adjusts the user's goal progress for a character by delta, clamped to
+ * [0, 100]. Returns the new progress (or 0 if no state row exists yet).
+ */
+export async function bumpGoalProgress(
+  userId: string,
+  characterId: string,
+  delta: number,
+): Promise<number> {
+  const { rows } = await pool.query<{ goal_progress: number }>(
+    `UPDATE character_state
+       SET goal_progress = LEAST(GREATEST(goal_progress + $3, 0), 100), updated_at = NOW()
+     WHERE user_id = $1 AND character_id = $2
+     RETURNING goal_progress`,
+    [userId, characterId, Math.round(delta)],
+  );
+  return rows[0] ? Number(rows[0].goal_progress) : 0;
 }
 
 /**
@@ -128,23 +196,4 @@ export async function regenerateStaleStates(limit = 500): Promise<number> {
     }
   }
   return updated;
-}
-
-/**
- * Adjusts the user's goal progress for a character by delta, clamped to
- * [0, 100]. Returns the new progress (or 0 if no state row exists yet).
- */
-export async function bumpGoalProgress(
-  userId: string,
-  characterId: string,
-  delta: number,
-): Promise<number> {
-  const { rows } = await pool.query<{ goal_progress: number }>(
-    `UPDATE character_state
-       SET goal_progress = LEAST(GREATEST(goal_progress + $3, 0), 100), updated_at = NOW()
-     WHERE user_id = $1 AND character_id = $2
-     RETURNING goal_progress`,
-    [userId, characterId, Math.round(delta)],
-  );
-  return rows[0] ? Number(rows[0].goal_progress) : 0;
 }

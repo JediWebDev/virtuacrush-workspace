@@ -20,8 +20,8 @@ import {
   extractAndStoreFacts,
 } from '../db/memory';
 import { getCharacter, type CharacterId } from '../inworld/characters';
-import { getOrGenerateDailyState } from '../db/state';
-import { formatStateBlock } from '../db/story_util';
+import { getSituation } from '../db/state';
+import { formatSituationBlock } from '../db/scene_util';
 import { isChoiceDue } from '../db/choice_util';
 import { maybeCreateChoice } from '../db/choices';
 
@@ -100,15 +100,18 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     userId: req.user!.id,
     queryText: message,
   });
-  // Current story-engine state (what the character is doing today). Lazily
-  // generated if it's a new day; never throws.
-  const statePromise = getOrGenerateDailyState(req.user!.id, characterId);
+  // Current situation = daily story state + dating scene (on a date or at home).
+  // Lazily generated if it's a new day; never throws.
+  const situationPromise = getSituation(req.user!.id, characterId);
   const hostilityPromise = classifyHostility(message);
 
   // Both gate the prompt, so await them before streaming. The system prompt
-  // gets the character's current situation followed by long-term memories.
-  const [state, memories] = await Promise.all([statePromise, memoriesPromise]);
-  const memoryContext = formatStateBlock(state) + formatMemoryBlock(memories);
+  // gets the character's current scene/situation followed by long-term memories.
+  const [situation, memories] = await Promise.all([situationPromise, memoriesPromise]);
+  let displayName = characterId;
+  try { displayName = getCharacter(characterId).displayName; } catch { /* unknown id */ }
+  const memoryContext =
+    formatSituationBlock(situation.state, situation.scene, displayName) + formatMemoryBlock(memories);
 
   // --- SSE headers ---
   res.setHeader('Content-Type', 'text/event-stream');
@@ -184,7 +187,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           [req.user!.id, characterId],
         );
         if (isChoiceDue(Number(cntRows[0]?.n ?? 0))) {
-          const choice = await maybeCreateChoice(req.user!.id, characterId);
+          const choice = await maybeCreateChoice(req.user!.id, characterId, Number(cntRows[0]?.n ?? 0));
           if (choice && !abortController.signal.aborted) send('choice', choice);
         }
       } catch (choiceErr) {
