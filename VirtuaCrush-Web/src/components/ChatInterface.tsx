@@ -3,6 +3,7 @@ import { useChat } from "../hooks/useChat";
 import { fetchGreeting, fetchCharacterState, fetchActiveChoice, type CharacterState, type DialogueChoice, type ChoiceResolution } from "../lib/api";
 import ChoiceCard from "./ChoiceCard";
 import { endDate, shareViralMoment } from "../lib/api";
+import { splitNarration } from "../lib/narration";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, Play, Lock, History, Search, Info } from "lucide-react";
@@ -562,40 +563,66 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
                 …
               </div>
             </div>
-          ) : messages.map((msg) => (
-            <motion.div
-              key={msg.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`flex w-full ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-            >
-              <div className={`flex max-w-[88%] gap-2.5 md:max-w-[72%] ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-                <div
-                  className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                    msg.role === "user"
-                      ? "bg-gradient-to-br from-accent to-violet-warm text-white shadow-md shadow-accent/20"
-                      : "border border-black/10 dark:border-white/10 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-200"
-                  }`}
+          ) : messages.flatMap((msg) => {
+            // User messages render as a single bubble.
+            if (msg.role === "user") {
+              return [
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex w-full justify-end"
                 >
-                  {msg.role === "user" ? <User size={16} /> : <span className="text-[11px]">{character.name.charAt(0)}</span>}
-                </div>
-                <div className={`min-w-0 space-y-1 ${msg.role === "user" ? "items-end" : "items-start"} flex flex-col`}>
-                    <div
-                      className={`max-w-full px-4 py-3 text-[15px] leading-relaxed ${
-                        msg.role === "user"
-                          ? "rounded-2xl rounded-tr-sm bg-gradient-to-br from-accent to-accent-deep text-white shadow-sm"
-                          : "rounded-2xl rounded-tl-sm border border-black/[0.07] dark:border-white/[0.07] bg-stone-200 dark:bg-stone-800/90 text-stone-800 dark:text-stone-100 shadow-sm backdrop-blur-sm"
-                      }`}
-                    >
-                    {msg.content}
+                  <div className="flex max-w-[88%] flex-row-reverse gap-2.5 md:max-w-[72%]">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-violet-warm text-xs font-semibold text-white shadow-md shadow-accent/20">
+                      <User size={16} />
                     </div>
-                    <p className={`text-[10px] font-medium tabular-nums text-stone-900 dark:text-stone-500 ${msg.role === "user" ? "pr-1 text-right" : "pl-1 text-left"}`}>
-                        Just now
-                    </p>
-                </div>
-              </div>
-            </motion.div>
-          ))}
+                    <div className="flex min-w-0 flex-col items-end space-y-1">
+                      <div className="max-w-full rounded-2xl rounded-tr-sm bg-gradient-to-br from-accent to-accent-deep px-4 py-3 text-[15px] leading-relaxed text-white shadow-sm">
+                        {msg.content}
+                      </div>
+                      <p className="pr-1 text-right text-[10px] font-medium tabular-nums text-stone-900 dark:text-stone-500">Just now</p>
+                    </div>
+                  </div>
+                </motion.div>,
+              ];
+            }
+            // Assistant messages: render *stage directions* as centered narrator
+            // lines and spoken text as bubbles, for a dramatic narration balance.
+            return splitNarration(msg.content).map((seg, i) =>
+              seg.type === "narration" ? (
+                <motion.div
+                  key={`${msg.id}-n${i}`}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex w-full justify-center px-2 py-0.5"
+                >
+                  <p className="max-w-[82%] text-center text-[13px] italic leading-relaxed text-stone-500 dark:text-stone-400">
+                    {seg.text}
+                  </p>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key={`${msg.id}-s${i}`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex w-full justify-start"
+                >
+                  <div className="flex max-w-[88%] flex-row gap-2.5 md:max-w-[72%]">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-black/10 bg-stone-100 text-xs font-semibold text-stone-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-200">
+                      <span className="text-[11px]">{character.name.charAt(0)}</span>
+                    </div>
+                    <div className="flex min-w-0 flex-col items-start space-y-1">
+                      <div className="max-w-full rounded-2xl rounded-tl-sm border border-black/[0.07] bg-stone-200 px-4 py-3 text-[15px] leading-relaxed text-stone-800 shadow-sm backdrop-blur-sm dark:border-white/[0.07] dark:bg-stone-800/90 dark:text-stone-100">
+                        {seg.text}
+                      </div>
+                      <p className="pl-1 text-left text-[10px] font-medium tabular-nums text-stone-900 dark:text-stone-500">Just now</p>
+                    </div>
+                  </div>
+                </motion.div>
+              ),
+            );
+          })}
           {isLoading && !greetingLoading && (
             <motion.div 
                 initial={{ opacity: 0, y: 6 }}

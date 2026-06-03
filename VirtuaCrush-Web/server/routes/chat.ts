@@ -22,6 +22,7 @@ import {
 import { getCharacter, type CharacterId } from '../inworld/characters';
 import { getSituation } from '../db/state';
 import { formatSituationBlock } from '../db/scene_util';
+import { decideNarrationMode, formatNarrationDirective } from '../db/narration_util';
 import { detectPlanCue, shouldOfferDateChoice } from '../db/cue_util';
 import { maybeCreateChoice } from '../db/choices';
 
@@ -110,8 +111,13 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   const [situation, memories] = await Promise.all([situationPromise, memoriesPromise]);
   let displayName = characterId;
   try { displayName = getCharacter(characterId).displayName; } catch { /* unknown id */ }
+  // Narration director: decide (zero-latency) whether this turn should lean on a
+  // non-verbal beat, and condition the prompt accordingly.
+  const narrationDirective = formatNarrationDirective(decideNarrationMode(message), displayName);
   const memoryContext =
-    formatSituationBlock(situation.state, situation.scene, displayName) + formatMemoryBlock(memories);
+    formatSituationBlock(situation.state, situation.scene, displayName) +
+    narrationDirective +
+    formatMemoryBlock(memories);
 
   // --- SSE headers ---
   res.setHeader('Content-Type', 'text/event-stream');
