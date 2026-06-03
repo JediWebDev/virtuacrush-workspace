@@ -8,7 +8,7 @@
 --                   (the per-user DELETEs below use :uid when provided)
 
 -- Wipe all conversation data (default).
-TRUNCATE TABLE chat_messages, character_affinity, user_memory RESTART IDENTITY;
+TRUNCATE TABLE chat_messages, character_affinity, user_memory, character_state RESTART IDENTITY;
 
 -- --- Per-user alternative -------------------------------------------------
 -- Comment out the TRUNCATE above and uncomment these to clear only one user:

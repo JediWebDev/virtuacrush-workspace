@@ -37,3 +37,17 @@ export async function fetchGreeting(
   if (!res.ok) throw new Error('greet_failed');
   return res.json();
 }
+export interface CharacterState {
+  characterId: string;
+  activity: string;
+  mood: string;
+  headline: string;
+  goalProgress: number;
+  goal: string;
+}
+
+// Current story-engine state (what the character is "doing" today) for the
+// status strip above the chat. Lazily generated server-side on a new day.
+export async function fetchCharacterState(characterId: string): Promise<CharacterState> {
+  return api<CharacterState>(`/api/state/${encodeURIComponent(characterId)}`);
+}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
-import { fetchGreeting } from "../lib/api";
+import { fetchGreeting, fetchCharacterState, type CharacterState } from "../lib/api";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, Play, Lock, History, Search, Info } from "lucide-react";
@@ -141,6 +141,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
   const [feedOpen, setFeedOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [activeMessage, setActiveMessage] = useState<typeof DEMO_AUDIO_MESSAGE | null>(null);
+  const [storyState, setStoryState] = useState<CharacterState | null>(null);
   const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -188,6 +189,16 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
     initGreeting();
     return () => { cancelled = true; };
   }, [character.id, setMessages]);
+
+  // Fetch the character's current story-engine state for the status strip.
+  useEffect(() => {
+    let cancelled = false;
+    setStoryState(null);
+    fetchCharacterState(character.id)
+      .then((s) => { if (!cancelled) setStoryState(s); })
+      .catch((err) => console.error('[state] fetch failed:', err));
+    return () => { cancelled = true; };
+  }, [character.id]);
 
   const characterWithAffinity: Character = { ...character, currentAffinity: affinity };
 
@@ -405,6 +416,25 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
           </div>
         ) : (
           <>
+        {storyState?.activity ? (
+          <div className="shrink-0 border-b border-black/[0.06] dark:border-white/[0.06] bg-accent/[0.04] px-4 py-2 md:px-8">
+            <div className="mx-auto flex max-w-3xl items-center gap-2 text-[12px]">
+              <span className="relative flex h-2 w-2 shrink-0" aria-hidden>
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent/60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
+              </span>
+              <span className="min-w-0 truncate text-stone-600 dark:text-stone-300">
+                <span className="font-semibold text-stone-800 dark:text-stone-100">{character.name}</span>{" "}
+                is {storyState.activity}
+              </span>
+              {storyState.mood ? (
+                <span className="ml-auto hidden shrink-0 rounded-full border border-accent/20 bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent sm:inline">
+                  {storyState.mood}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
         <div
             ref={scrollRef}
             className="no-scrollbar flex-1 space-y-4 overflow-y-auto p-4 md:space-y-5 md:p-8"

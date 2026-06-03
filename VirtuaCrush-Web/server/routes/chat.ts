@@ -20,6 +20,8 @@ import {
   extractAndStoreFacts,
 } from '../db/memory';
 import { getCharacter, type CharacterId } from '../inworld/characters';
+import { getOrGenerateDailyState } from '../db/state';
+import { formatStateBlock } from '../db/story_util';
 
 // Recent turns fed to the LLM for local coherence. Long-term recall comes from
 // RAG memory (db/memory.ts), not from replaying a long transcript.
@@ -96,10 +98,15 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     userId: req.user!.id,
     queryText: message,
   });
+  // Current story-engine state (what the character is doing today). Lazily
+  // generated if it's a new day; never throws.
+  const statePromise = getOrGenerateDailyState(req.user!.id, characterId);
   const hostilityPromise = classifyHostility(message);
 
-  // Memory retrieval gates the prompt, so await it before streaming.
-  const memoryContext = formatMemoryBlock(await memoriesPromise);
+  // Both gate the prompt, so await them before streaming. The system prompt
+  // gets the character's current situation followed by long-term memories.
+  const [state, memories] = await Promise.all([statePromise, memoriesPromise]);
+  const memoryContext = formatStateBlock(state) + formatMemoryBlock(memories);
 
   // --- SSE headers ---
   res.setHeader('Content-Type', 'text/event-stream');
