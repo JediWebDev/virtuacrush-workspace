@@ -154,6 +154,32 @@ export async function retrieveRelevantMemories(params: {
   }
 }
 
+/**
+ * Stores a one-off significant event (e.g. on-date chaos/crime) as a durable
+ * memory so the character remembers it later. Fire-and-forget; never throws.
+ */
+export async function storeSignificantEvent(
+  userId: string,
+  characterId: string,
+  text: string,
+): Promise<void> {
+  try {
+    const clean = text.trim().slice(0, 300);
+    if (!clean) return;
+    const vector = await embed(clean);
+    if (!vector) return;
+    await pool.query(
+      `INSERT INTO user_memory (user_id, source_character_id, fact, embedding)
+       VALUES ($1, $2, $3, $4::jsonb)
+       ON CONFLICT (user_id, fact) DO NOTHING`,
+      [userId, characterId, clean, JSON.stringify(vector)],
+    );
+    console.log(`[memory] stored significant event for user=${userId} character=${characterId}`);
+  } catch (err) {
+    console.warn('[memory] storeSignificantEvent failed:', err);
+  }
+}
+
 // --- Admin / debug helpers ---------------------------------------------------
 
 export interface StoredMemory {

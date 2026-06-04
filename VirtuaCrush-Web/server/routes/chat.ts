@@ -18,6 +18,7 @@ import {
   retrieveRelevantMemories,
   formatMemoryBlock,
   extractAndStoreFacts,
+  storeSignificantEvent,
 } from '../db/memory';
 import { getCharacter, type CharacterId } from '../inworld/characters';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
@@ -25,6 +26,8 @@ import { getSituation } from '../db/state';
 import { formatSituationBlock, scenePhase } from '../db/scene_util';
 import { decideNarrationMode, formatNarrationDirective } from '../db/narration_util';
 import { detectPlanCue, shouldOfferDateChoice } from '../db/cue_util';
+import { detectWorldEvent, formatWorldEventDirective } from '../db/world_util';
+import { getLocation } from '../inworld/scenes';
 import { maybeCreateChoice } from '../db/choices';
 
 // Recent turns fed to the LLM for local coherence. Long-term recall comes from
@@ -118,14 +121,36 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   try { displayName = getCharacter(characterId).displayName; } catch { /* unknown id */ }
 
   const scene = situation.scene;
+  const phase = scenePhase(scene);
 
   // Narration director: decide (zero-latency) whether this turn should lean on a
   // non-verbal beat, and condition the prompt accordingly.
   const narrationDirective = formatNarrationDirective(decideNarrationMode(message), displayName);
+
+  // World event: if the user does something disruptive/criminal ON a date, bring
+  // in the venue's authority (and responders for crimes) via the narrator, and
+  // remember the incident. (Arrest/jail is a later pass.)
+  let worldDirective = '';
+  if (phase === 'on_date') {
+    const event = detectWorldEvent(message);
+    if (event.kind !== 'none') {
+      const loc = getLocation(scene.location);
+      const authority = loc?.authority ?? 'a security guard';
+      const venueLabel = loc?.label ?? 'the venue';
+      worldDirective = formatWorldEventDirective(event, authority, displayName);
+      const memText =
+        event.kind === 'crime'
+          ? `User committed ${event.crimeType} during their date at ${venueLabel} and caused a major scene.`
+          : `User caused a disruptive scene during their date at ${venueLabel}.`;
+      void storeSignificantEvent(req.user!.id, characterId, memText);
+    }
+  }
+
   const memoryContext =
     formatSituationBlock(situation.state, scene, displayName, affinity) +
     formatCharacterFactsBlock(getLore(characterId)) +
     narrationDirective +
+    worldDirective +
     formatMemoryBlock(memories);
 
   // --- SSE headers ---
@@ -196,7 +221,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     // plans (cue-based, with a cooldown). Only when apart — during a date the
     // only prompt is the persistent "End date" bill flow. Sent as its own SSE
     // event AFTER `done` so the reply isn't delayed.
-    if (!abortController.signal.aborted && scenePhase(scene) === 'home') {
+    if (!abortController.signal.aborted && phase === 'home') {
       try {
         const { rows: cntRows } = await pool.query<{ n: number }>(
           `SELECT count(*)::int AS n FROM chat_messages
@@ -222,9 +247,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         }
 
         const cue = detectPlanCue(message, assistantFull);
-        const willOffer = shouldOfferDateChoice({ userMsgCount, msgsSinceLastChoice, hadPriorChoice, cue });
-        console.log(`[choice] offer? phase=home count=${userMsgCount} since=${msgsSinceLastChoice} cue=${cue} -> ${willOffer}`);
-        if (willOffer) {
+        if (shouldOfferDateChoice({ userMsgCount, msgsSinceLastChoice, hadPriorChoice, cue })) {
           const choice = await maybeCreateChoice(req.user!.id, characterId, userMsgCount);
           if (choice && !abortController.signal.aborted) send('choice', choice);
         }

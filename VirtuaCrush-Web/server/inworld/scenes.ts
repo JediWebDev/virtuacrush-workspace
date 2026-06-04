@@ -9,6 +9,7 @@ export interface SceneLocation {
   kind: LocationKind;  // 'paid' venues can trigger a bill choice
   description: string;  // injected into the prompt ("at a cozy coffee shop")
   cues: string;        // sensory details for the model to reference
+  authority: string;   // who steps in if the user causes trouble here
 }
 
 export const LOCATIONS: Record<string, SceneLocation> = {
@@ -18,6 +19,7 @@ export const LOCATIONS: Record<string, SceneLocation> = {
     kind: 'paid',
     description: 'at a cozy coffee shop',
     cues: 'the hiss of the espresso machine, warm mugs, low chatter, rain on the window',
+    authority: 'the café manager',
   },
   restaurant: {
     slug: 'restaurant',
@@ -25,6 +27,7 @@ export const LOCATIONS: Record<string, SceneLocation> = {
     kind: 'paid',
     description: 'at a restaurant over dinner',
     cues: 'candlelight, the clink of cutlery, the smell of the kitchen, a shared bottle of something',
+    authority: 'the restaurant manager',
   },
   movie_theater: {
     slug: 'movie_theater',
@@ -32,6 +35,7 @@ export const LOCATIONS: Record<string, SceneLocation> = {
     kind: 'outing',
     description: 'at the movies together',
     cues: 'the dim theater, the smell of popcorn, trailers rolling, shoulders almost touching',
+    authority: 'a theater usher',
   },
   mall: {
     slug: 'mall',
@@ -39,6 +43,7 @@ export const LOCATIONS: Record<string, SceneLocation> = {
     kind: 'outing',
     description: 'wandering the mall together',
     cues: 'bright storefronts, the food-court buzz, window shopping, an impulsive photo booth',
+    authority: 'a mall security guard',
   },
   park: {
     slug: 'park',
@@ -46,6 +51,7 @@ export const LOCATIONS: Record<string, SceneLocation> = {
     kind: 'outing',
     description: 'walking through the park',
     cues: 'fresh air, rustling trees, a bench in the sun, ducks on the pond',
+    authority: 'a park ranger',
   },
   concert: {
     slug: 'concert',
@@ -53,6 +59,7 @@ export const LOCATIONS: Record<string, SceneLocation> = {
     kind: 'paid',
     description: 'at a loud, packed concert',
     cues: 'stage lights, a wall of sound, the crowd pressing in, shouting to be heard over the band',
+    authority: 'a concert bouncer',
   },
   golf_course: {
     slug: 'golf_course',
@@ -60,6 +67,7 @@ export const LOCATIONS: Record<string, SceneLocation> = {
     kind: 'paid',
     description: 'out on the golf course',
     cues: 'open green fairways, the thwack of a clean drive, a shared cart, sun and a light breeze',
+    authority: 'the course marshal',
   },
   sports_game: {
     slug: 'sports_game',
@@ -67,6 +75,7 @@ export const LOCATIONS: Record<string, SceneLocation> = {
     kind: 'paid',
     description: 'at a live sports game',
     cues: 'the roar of the crowd, stadium lights, overpriced nachos, the wave rolling around the stands',
+    authority: 'stadium security',
   },
   arcade: {
     slug: 'arcade',
@@ -74,6 +83,7 @@ export const LOCATIONS: Record<string, SceneLocation> = {
     kind: 'outing',
     description: 'at a neon arcade',
     cues: 'blinking cabinets, the clatter of tokens, an air-hockey grudge match, a wall of redemption tickets',
+    authority: 'the arcade attendant',
   },
   amusement_park: {
     slug: 'amusement_park',
@@ -81,6 +91,7 @@ export const LOCATIONS: Record<string, SceneLocation> = {
     kind: 'paid',
     description: 'at an amusement park',
     cues: 'roller-coaster screams, cotton candy, the ferris wheel turning, long but happy lines',
+    authority: 'park security',
   },
   user_home: {
     slug: 'user_home',
@@ -88,6 +99,7 @@ export const LOCATIONS: Record<string, SceneLocation> = {
     kind: 'home',
     description: "back at the user's place",
     cues: 'quiet, comfortable, just the two of you, the world shut outside',
+    authority: 'a concerned neighbor',
   },
   character_home: {
     slug: 'character_home',
@@ -95,6 +107,7 @@ export const LOCATIONS: Record<string, SceneLocation> = {
     kind: 'home',
     description: "at the character's own place",
     cues: 'their personal space, their things, an intimate kind of trust',
+    authority: 'a concerned neighbor',
   },
 };
 

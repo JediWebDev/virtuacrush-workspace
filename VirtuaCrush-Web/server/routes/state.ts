@@ -16,7 +16,6 @@ router.get('/:characterId', requireAuth, async (req: Request, res: Response) => 
   try {
     const { state, scene } = await getSituation(req.user!.id, characterId);
     const phase = scenePhase(scene);
-    console.log(`[state] ${characterId} phase=${phase} mode=${scene.mode} planned=${scene.plannedLocation ?? "-"} loc=${scene.location ?? "-"}`);
     const venueSlug = phase === 'on_date' ? scene.location : phase === 'planning' ? scene.plannedLocation : null;
     res.json({
       characterId,
