@@ -12,7 +12,7 @@ import { streamChat, type ChatMessage } from '../inworld/chat';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
 import { pool } from '../db/pool';
-import { incrementAffinity, getAffinityDeltaFromUserMessage } from '../db/affinity';
+import { incrementAffinity, getAffinity, getAffinityDeltaFromUserMessage } from '../db/affinity';
 import { classifyHostility } from '../inworld/moderation';
 import {
   retrieveRelevantMemories,
@@ -20,10 +20,13 @@ import {
   extractAndStoreFacts,
 } from '../db/memory';
 import { getCharacter, type CharacterId } from '../inworld/characters';
-import { getSituation } from '../db/state';
+import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
+import { getSituation, setScene } from '../db/state';
 import { formatSituationBlock } from '../db/scene_util';
 import { decideNarrationMode, formatNarrationDirective } from '../db/narration_util';
 import { detectPlanCue, shouldOfferDateChoice } from '../db/cue_util';
+import { detectArrivalIntent } from '../db/arrival_util';
+import { isPaidLocation } from '../inworld/scenes';
 import { maybeCreateChoice } from '../db/choices';
 
 // Recent turns fed to the LLM for local coherence. Long-term recall comes from
@@ -104,18 +107,39 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   // Current situation = daily story state + dating scene (on a date or at home).
   // Lazily generated if it's a new day; never throws.
   const situationPromise = getSituation(req.user!.id, characterId);
+  const affinityPromise = getAffinity(req.user!.id, characterId);
   const hostilityPromise = classifyHostility(message);
 
-  // Both gate the prompt, so await them before streaming. The system prompt
-  // gets the character's current scene/situation followed by long-term memories.
-  const [situation, memories] = await Promise.all([situationPromise, memoriesPromise]);
+  // Gate the prompt on these before streaming.
+  const [situation, memories, affinity] = await Promise.all([
+    situationPromise,
+    memoriesPromise,
+    affinityPromise,
+  ]);
   let displayName = characterId;
   try { displayName = getCharacter(characterId).displayName; } catch { /* unknown id */ }
+
+  // Co-presence: if the user is roleplaying ARRIVING (showing up / pickup /
+  // meet-there) while apart, flip the scene to together so the prompt stops
+  // insisting they're remote. The date begins at the planned venue, or at the
+  // character's place if there was no plan.
+  let scene = situation.scene;
+  if (scene.mode === 'apart' && detectArrivalIntent(message)) {
+    const dest = scene.plannedLocation ?? 'character_home';
+    scene = await setScene(req.user!.id, characterId, {
+      mode: 'together',
+      location: dest,
+      billPending: isPaidLocation(dest),
+      plannedLocation: null,
+    });
+  }
+
   // Narration director: decide (zero-latency) whether this turn should lean on a
   // non-verbal beat, and condition the prompt accordingly.
   const narrationDirective = formatNarrationDirective(decideNarrationMode(message), displayName);
   const memoryContext =
-    formatSituationBlock(situation.state, situation.scene, displayName) +
+    formatSituationBlock(situation.state, scene, displayName, affinity) +
+    formatCharacterFactsBlock(getLore(characterId)) +
     narrationDirective +
     formatMemoryBlock(memories);
 
@@ -187,7 +211,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     // plans (cue-based, with a cooldown). Only when apart — during a date the
     // only prompt is the persistent "End date" bill flow. Sent as its own SSE
     // event AFTER `done` so the reply isn't delayed.
-    if (!abortController.signal.aborted && situation.scene.mode === 'apart') {
+    if (!abortController.signal.aborted && scene.mode === 'apart') {
       try {
         const { rows: cntRows } = await pool.query<{ n: number }>(
           `SELECT count(*)::int AS n FROM chat_messages

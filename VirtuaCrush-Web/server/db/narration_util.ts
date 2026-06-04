@@ -69,12 +69,14 @@ export function formatNarrationDirective(mode: NarrationMode, characterName: str
     return (
       convention +
       ` RIGHT NOW the user's message lands harder as a LOOK than as a line. ` +
-      `Lead with a vivid *non-verbal reaction* (a facial expression, a shift in posture) and use few or NO spoken words — let the reaction carry the moment.`
+      `Lead with a vivid *non-verbal reaction* (a facial expression, a shift in posture) that clearly responds to what they just did, and use few spoken words.`
     );
   }
   // blend
   return (
     convention +
-    ` RIGHT NOW blend ONE brief *non-verbal beat* with a short spoken line.`
+    ` RIGHT NOW react DIRECTLY to what the user just did or said — acknowledge their specific action and respond to it. ` +
+    `Blend one brief *non-verbal beat* with a real spoken reply of a sentence or two. ` +
+    `Do NOT give a one-word or evasive non-answer like "Huh." or "Yeah." — engage with the moment.`
   );
 }

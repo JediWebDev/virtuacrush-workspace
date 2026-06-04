@@ -219,14 +219,16 @@ export async function selectChoice(
     [row.id, optionIndex],
   );
 
-  // --- date: move the scene to the chosen venue ---
+  // --- date: agree on a plan; the couple is still apart sorting logistics
+  // (meet there vs pickup). Arrival flips them to 'together' (see chat route). ---
   if (row.kind === 'date') {
     const location = coerceDateLocation(option.location);
     const affinityScore = await incrementAffinity(userId, characterId, CHOICE_DATE_AFFINITY);
     await setScene(userId, characterId, {
-      mode: 'together',
-      location,
-      billPending: isPaidLocation(location),
+      mode: 'apart',
+      location: null,
+      billPending: false,
+      plannedLocation: location,
     });
     await persistChoiceTurns(userId, characterId, option.label, option.reaction);
     return { ok: true, reaction: option.reaction, affinityScore, sceneChanged: true };

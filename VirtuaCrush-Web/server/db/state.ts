@@ -18,10 +18,11 @@ interface StateRow {
   scene_mode: SceneMode;
   scene_location: string | null;
   bill_pending: boolean;
+  planned_location: string | null;
 }
 
 const COLS = `character_id, state_date, activity, mood, headline, goal_progress,
-              scene_mode, scene_location, bill_pending`;
+              scene_mode, scene_location, bill_pending, planned_location`;
 
 export interface Situation {
   state: DailyState;
@@ -42,6 +43,7 @@ function rowToScene(r: StateRow): SceneState {
     mode: r.scene_mode === 'together' ? 'together' : 'apart',
     location: r.scene_location ?? null,
     billPending: !!r.bill_pending,
+    plannedLocation: r.planned_location ?? null,
   };
 }
 
@@ -74,8 +76,8 @@ async function generateAndStore(
   const { rows } = await pool.query<StateRow>(
     `INSERT INTO character_state
        (user_id, character_id, state_date, activity, mood, headline, goal_progress,
-        scene_mode, scene_location, bill_pending, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'apart', NULL, false, NOW())
+        scene_mode, scene_location, bill_pending, planned_location, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'apart', NULL, false, NULL, NOW())
      ON CONFLICT (user_id, character_id) DO UPDATE
        SET state_date = EXCLUDED.state_date,
            activity = EXCLUDED.activity,
@@ -85,6 +87,7 @@ async function generateAndStore(
            scene_mode = 'apart',
            scene_location = NULL,
            bill_pending = false,
+           planned_location = NULL,
            updated_at = NOW()
      RETURNING ${COLS}`,
     [userId, characterId, today, generated.activity, generated.mood, generated.headline, goalProgress],
@@ -112,6 +115,7 @@ async function ensureFreshRow(userId: string, characterId: string): Promise<Stat
         scene_mode: 'apart',
         scene_location: null,
         bill_pending: false,
+        planned_location: null,
       }
     );
   }
@@ -145,10 +149,10 @@ export async function setScene(
 ): Promise<SceneState> {
   const { rows } = await pool.query<StateRow>(
     `UPDATE character_state
-       SET scene_mode = $3, scene_location = $4, bill_pending = $5, updated_at = NOW()
+       SET scene_mode = $3, scene_location = $4, bill_pending = $5, planned_location = $6, updated_at = NOW()
      WHERE user_id = $1 AND character_id = $2
      RETURNING ${COLS}`,
-    [userId, characterId, scene.mode, scene.location, scene.billPending],
+    [userId, characterId, scene.mode, scene.location, scene.billPending, scene.plannedLocation ?? null],
   );
   return rows[0] ? rowToScene(rows[0]) : scene;
 }

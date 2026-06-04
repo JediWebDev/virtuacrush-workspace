@@ -20,6 +20,19 @@ test('formatSituationBlock: on a date anchors in the venue', () => {
   assert.ok(!b.includes('grinding ranked')); // solo activity suppressed while together
 });
 
+test('formatSituationBlock: planned date -> logistics phase, still apart', () => {
+  const planned: SceneState = { mode: 'apart', location: null, billPending: false, plannedLocation: 'restaurant' };
+  const b = formatSituationBlock({ activity: 'x', mood: 'y' }, planned, 'Serena');
+  assert.ok(b.toLowerCase().includes('agreed to go'));
+  assert.ok(b.toLowerCase().includes('not there yet'));
+  assert.ok(b.toLowerCase().includes('picking you up'));
+});
+
+test('formatSituationBlock: affinity note included when provided', () => {
+  const b = formatSituationBlock({ activity: 'x', mood: 'y' }, { mode: 'apart', location: null, billPending: false }, 'Mina', 42);
+  assert.ok(b.includes('42/100'));
+});
+
 test('formatSituationBlock: apart places them at home, remote', () => {
   const b = formatSituationBlock({ activity: 'mixing a demo', mood: 'mellow' }, apart, 'Riot');
   assert.ok(b.includes('mixing a demo'));

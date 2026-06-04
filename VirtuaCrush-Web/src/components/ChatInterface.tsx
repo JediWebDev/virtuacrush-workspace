@@ -64,6 +64,11 @@ const SCENE_BG: Record<string, string> = {
   movie_theater: "linear-gradient(160deg, rgba(22,22,45,0.34), rgba(8,8,18,0.20))",
   mall: "linear-gradient(160deg, rgba(40,80,120,0.18), rgba(30,40,70,0.10))",
   park: "linear-gradient(160deg, rgba(40,110,60,0.18), rgba(30,70,50,0.10))",
+  concert: "linear-gradient(160deg, rgba(120,30,140,0.30), rgba(30,10,50,0.18))",
+  golf_course: "linear-gradient(160deg, rgba(50,130,70,0.20), rgba(30,80,50,0.10))",
+  sports_game: "linear-gradient(160deg, rgba(30,110,90,0.20), rgba(20,60,55,0.12))",
+  arcade: "linear-gradient(160deg, rgba(200,40,140,0.24), rgba(40,20,80,0.16))",
+  amusement_park: "linear-gradient(160deg, rgba(220,90,120,0.22), rgba(60,40,120,0.12))",
   user_home: "linear-gradient(160deg, rgba(120,90,140,0.18), rgba(40,30,50,0.10))",
   character_home: "linear-gradient(160deg, rgba(70,90,130,0.18), rgba(30,35,55,0.10))",
 };
@@ -148,6 +153,13 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
       onAffinityChange?.(character.id, score);
     },
     onChoice: (c: DialogueChoice) => setChoice(c),
+    onDone: () => {
+      // The scene can change mid-conversation (e.g. arrival flips apart->together),
+      // so refresh the status strip after each reply.
+      fetchCharacterState(character.id)
+        .then((st) => setStoryState(st))
+        .catch(() => { /* non-fatal */ });
+    },
   });
 
   const [input, setInput] = useState("");
@@ -656,6 +668,18 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
             </div>
         )}
 
+        {storyState?.scene?.mode === "apart" && !choice && !viralMoment && messages.length > 1 ? (
+          <div className="px-4 pt-2 md:px-8">
+            <button
+              type="button"
+              onClick={() => handleSend(`*I show up at ${character.name}'s place and knock on the door*`)}
+              disabled={isLoading}
+              className="mx-auto flex w-full max-w-3xl items-center justify-center gap-2 rounded-xl border border-black/10 bg-black/[0.03] px-4 py-2.5 text-sm font-medium text-stone-600 transition-all hover:border-accent/30 hover:text-stone-800 disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-stone-300 dark:hover:text-stone-100"
+            >
+              Show up at {character.name}&apos;s place 🚪
+            </button>
+          </div>
+        ) : null}
         {storyState?.scene?.mode === "together" && !choice && !viralMoment ? (
           <div className="px-4 pt-2 md:px-8">
             <button

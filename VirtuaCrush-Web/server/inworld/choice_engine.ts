@@ -88,21 +88,28 @@ export async function generateDateChoice(params: {
   mood: string;
 }): Promise<GeneratedChoice | null> {
   const lore = getLore(params.characterId);
-  const menu = DATE_LOCATION_SLUGS.map((s) => `${s} (${LOCATIONS[s].label})`).join(', ');
+  const allowed = (lore.preferredLocations.length ? lore.preferredLocations : DATE_LOCATION_SLUGS).filter(
+    (slug) => LOCATIONS[slug],
+  );
+  const menu = allowed.map((slug) => `${slug} (${LOCATIONS[slug].label})`).join(', ');
   const prompt = `You write a short, flirty date invitation for a companion-chat game.
 
 CHARACTER: ${params.displayName}
 - Personality: ${lore.personality}
+- The kinds of dates you actually like: ${lore.datePreference}
+- Transport: you ${lore.hasCar ? 'have a car' : 'do NOT have a car'} (${lore.transport})
 - Right now: ${params.activity || 'free for the evening'} (mood: ${params.mood || 'easy'})
 
-${params.displayName} suggests doing something together and offers the user TWO date ideas to pick from. Each idea must be one of these locations (use the exact slug): ${menu}. Pick two DIFFERENT locations.
+${params.displayName} suggests doing something together and offers the user TWO date ideas that fit ${params.displayName}'s taste. Each idea MUST be one of these locations (use the exact slug): ${menu}. Pick two DIFFERENT locations.
+
+IMPORTANT: each "reaction" must be excited about that place AND end by sorting out logistics — ask whether the user wants to meet there or if they're picking ${params.displayName} up (e.g. "...wanna meet there, or are you picking me up?").
 
 Respond with ONLY this JSON (no prose/fences):
 {
   "prompt": "<1-2 sentence in-character invite ending in a choice>",
   "options": [
-    {"label": "<short, fun button text>", "location": "<slug>", "advancesGoal": false, "reaction": "<their excited reply if chosen>"},
-    {"label": "<short, fun button text>", "location": "<slug>", "advancesGoal": false, "reaction": "<their excited reply if chosen>"}
+    {"label": "<short, fun button text>", "location": "<slug>", "advancesGoal": false, "reaction": "<excited reply that ends by asking: meet there or pick me up?>"},
+    {"label": "<short, fun button text>", "location": "<slug>", "advancesGoal": false, "reaction": "<excited reply that ends by asking: meet there or pick me up?>"}
   ],
   "timeoutReaction": "<a brief stage action if the user doesn't answer, e.g. *shrugs and looks away*>"
 }`;
@@ -111,9 +118,12 @@ Respond with ONLY this JSON (no prose/fences):
     const llm = await llmComplete();
     const parsed = parseGeneratedChoice(await llm.generateContentComplete({ prompt }));
     if (!parsed) return null;
-    // Coerce each option's location to a known date slug.
-    parsed.options[0].location = coerceDateLocation(parsed.options[0].location);
-    parsed.options[1].location = coerceDateLocation(parsed.options[1].location);
+    // Coerce each option's location: keep it if it's one the character prefers,
+    // otherwise fall back to a sensible dateable slug.
+    const pick = (loc: string | undefined) =>
+      loc && allowed.includes(loc) ? loc : coerceDateLocation(loc ?? allowed[0]);
+    parsed.options[0].location = pick(parsed.options[0].location);
+    parsed.options[1].location = pick(parsed.options[1].location);
     return parsed;
   } catch (err) {
     console.warn(`[choice] date generation failed for ${params.characterId}:`, err);

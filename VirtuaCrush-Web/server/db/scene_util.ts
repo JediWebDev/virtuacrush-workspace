@@ -8,8 +8,9 @@ export type ChoiceKind = 'date' | 'bill' | 'goal';
 
 export interface SceneState {
   mode: SceneMode;
-  location: string | null; // venue slug when together
+  location: string | null;        // venue slug when together
   billPending: boolean;
+  plannedLocation?: string | null; // agreed venue while still apart (logistics phase)
 }
 
 // Relationship-affinity effects for the dating choices (server-authoritative).
@@ -17,16 +18,33 @@ export const CHOICE_DATE_AFFINITY = 1.5; // picking a place to go together
 export const CHOICE_BILL_PAY_AFFINITY = 2; // user picks up the bill
 export const CHOICE_BILL_LETPAY_AFFINITY = 0.75; // user lets the character pay
 
+function closenessNote(affinity?: number): string {
+  if (typeof affinity !== 'number' || !Number.isFinite(affinity)) return '';
+  return (
+    `\nYour current closeness with the user is ${Math.round(affinity)}/100 — let it set how warm, ` +
+    `guarded, or flirty you are (low = still getting to know them; high = close and affectionate).`
+  );
+}
+
+const LOGISTICS_REALISM =
+  ` Be realistic about your own means and transport (see your ABOUT YOU facts). If the user proposes ` +
+  `something absurd, lazy, or one-sided — like making you do all the travelling or pay for everything — ` +
+  `react with mild, in-character annoyance instead of just going along with it.`;
+
 /**
- * Builds the situation block injected into the chat system prompt. When on a
- * date it anchors the character in the venue; when apart it places them at home,
- * reachable remotely.
+ * Builds the situation block injected into the chat system prompt. Three cases:
+ *  - together: anchored at the venue (authoritative),
+ *  - apart with a planned date: getting ready / sorting logistics,
+ *  - apart: at their own place, reachable remotely.
  */
 export function formatSituationBlock(
   state: Pick<DailyState, 'activity' | 'mood'>,
   scene: SceneState,
   characterName: string,
+  affinity?: number,
 ): string {
+  const closeness = closenessNote(affinity);
+
   if (scene.mode === 'together') {
     const loc = getLocation(scene.location);
     if (loc) {
@@ -36,16 +54,30 @@ export function formatSituationBlock(
         `This is your current location: ${loc.label}. You are NOT at home and you are NOT apart from the user.\n` +
         `If the user asks where you are, where you both are, or what you're doing, your answer is: here together at ${loc.label}. ` +
         `Never say you are at home or alone. Stay present and let the place color your words — you can reference ${loc.cues}. ` +
-        `You arrived here together earlier in this date; treat it as established.`
+        `React directly to what the user does; don't give one-word non-answers.${closeness}`
       );
     }
   }
+
+  if (scene.mode === 'apart' && scene.plannedLocation) {
+    const loc = getLocation(scene.plannedLocation);
+    const venue = loc ? loc.label : 'somewhere together';
+    return (
+      `\n\n=== CURRENT SETTING ===\n` +
+      `You and the user have JUST agreed to go to ${venue} together, but you are NOT there yet. ` +
+      `You're at your own place getting ready and sorting out logistics — are you meeting there, or is the user picking you up? ` +
+      `The user is texting you. React directly and substantively to what they say; never give a one-word non-answer.` +
+      LOGISTICS_REALISM +
+      closeness
+    );
+  }
+
   const activity = state.activity ? state.activity : 'taking it easy';
   return (
     `\n\n=== CURRENT SETTING ===\n` +
     `You are at your OWN place, ${activity} (mood: ${state.mood || 'easy'}). ` +
     `You and the user are NOT in the same room — you're texting from a distance. ` +
-    `If asked, you are at home doing your own thing, chatting with them remotely.`
+    `If asked, you are at home doing your own thing, chatting with them remotely.${closeness}`
   );
 }
 
@@ -72,8 +104,6 @@ export function chooseChoiceKind(params: {
 
 /** Rare goal-beat cadence given the running user-message count. */
 export function isGoalBeatDue(userMessageCount: number): boolean {
-  // Choices fire at counts 2, 6, 10, 14, ... (index k = (count-2)/4).
-  // Make every 3rd of those a goal beat: counts 10, 22, 34, ...
   if (userMessageCount < 6 || (userMessageCount - 2) % 4 !== 0) return false;
   const k = (userMessageCount - 2) / 4;
   return k % 3 === 2;

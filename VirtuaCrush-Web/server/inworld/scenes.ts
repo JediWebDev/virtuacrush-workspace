@@ -47,6 +47,41 @@ export const LOCATIONS: Record<string, SceneLocation> = {
     description: 'walking through the park',
     cues: 'fresh air, rustling trees, a bench in the sun, ducks on the pond',
   },
+  concert: {
+    slug: 'concert',
+    label: 'A concert',
+    kind: 'paid',
+    description: 'at a loud, packed concert',
+    cues: 'stage lights, a wall of sound, the crowd pressing in, shouting to be heard over the band',
+  },
+  golf_course: {
+    slug: 'golf_course',
+    label: 'The golf course',
+    kind: 'paid',
+    description: 'out on the golf course',
+    cues: 'open green fairways, the thwack of a clean drive, a shared cart, sun and a light breeze',
+  },
+  sports_game: {
+    slug: 'sports_game',
+    label: 'A sports game',
+    kind: 'paid',
+    description: 'at a live sports game',
+    cues: 'the roar of the crowd, stadium lights, overpriced nachos, the wave rolling around the stands',
+  },
+  arcade: {
+    slug: 'arcade',
+    label: 'The arcade',
+    kind: 'outing',
+    description: 'at a neon arcade',
+    cues: 'blinking cabinets, the clatter of tokens, an air-hockey grudge match, a wall of redemption tickets',
+  },
+  amusement_park: {
+    slug: 'amusement_park',
+    label: 'An amusement park',
+    kind: 'paid',
+    description: 'at an amusement park',
+    cues: 'roller-coaster screams, cotton candy, the ferris wheel turning, long but happy lines',
+  },
   user_home: {
     slug: 'user_home',
     label: 'Your place',
@@ -64,7 +99,10 @@ export const LOCATIONS: Record<string, SceneLocation> = {
 };
 
 /** Public date spots offered in "where should we go" choices. */
-export const DATE_LOCATION_SLUGS = ['coffee_shop', 'restaurant', 'movie_theater', 'mall', 'park'];
+export const DATE_LOCATION_SLUGS = [
+  'coffee_shop', 'restaurant', 'movie_theater', 'mall', 'park',
+  'concert', 'golf_course', 'sports_game', 'arcade', 'amusement_park',
+];
 
 export function getLocation(slug: string | null | undefined): SceneLocation | null {
   if (!slug) return null;
@@ -75,8 +113,13 @@ export function isPaidLocation(slug: string | null | undefined): boolean {
   return getLocation(slug)?.kind === 'paid';
 }
 
+/** Slugs that are valid date destinations (everything except the two homes). */
+export const DATEABLE_SLUGS = Object.values(LOCATIONS)
+  .filter((l) => l.kind !== 'home')
+  .map((l) => l.slug);
+
 /** Coerces an arbitrary string to a known date-location slug (fallback coffee_shop). */
 export function coerceDateLocation(slug: string | null | undefined): string {
-  if (slug && DATE_LOCATION_SLUGS.includes(slug)) return slug;
+  if (slug && DATEABLE_SLUGS.includes(slug)) return slug;
   return 'coffee_shop';
 }
