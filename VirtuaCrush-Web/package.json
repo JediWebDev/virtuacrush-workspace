@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently -n web,api -c blue,green \"npm:dev:web\" \"npm:dev:api\"",
     "dev:web": "vite",
-    "dev:api": "tsx server.ts",
+    "dev:api": "tsx watch server.ts",
     "build": "rm -rf dist && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "migrate": "tsx db/migrate.ts",
