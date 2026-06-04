@@ -222,7 +222,9 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         }
 
         const cue = detectPlanCue(message, assistantFull);
-        if (shouldOfferDateChoice({ userMsgCount, msgsSinceLastChoice, hadPriorChoice, cue })) {
+        const willOffer = shouldOfferDateChoice({ userMsgCount, msgsSinceLastChoice, hadPriorChoice, cue });
+        console.log(`[choice] offer? phase=home count=${userMsgCount} since=${msgsSinceLastChoice} cue=${cue} -> ${willOffer}`);
+        if (willOffer) {
           const choice = await maybeCreateChoice(req.user!.id, characterId, userMsgCount);
           if (choice && !abortController.signal.aborted) send('choice', choice);
         }

@@ -208,6 +208,7 @@ export async function selectChoice(
   if (row.status !== 'pending') return { ok: false, error: 'already_resolved' };
 
   const characterId = row.character_id;
+  console.log(`[choice] select id=${choiceId} kind=${row.kind} opt=${optionIndex} status=${row.status}`);
 
   if (isExpired(new Date(row.expires_at).getTime())) {
     await markTimedOut(row.id);
@@ -229,6 +230,7 @@ export async function selectChoice(
   // (meet there vs pickup). Arrival flips them to 'together' (see chat route). ---
   if (row.kind === 'date') {
     const location = coerceDateLocation(option.location);
+    console.log(`[choice] DATE -> planning at ${location}`);
     const affinityScore = await incrementAffinity(userId, characterId, CHOICE_DATE_AFFINITY);
     await setScene(userId, characterId, {
       mode: 'apart',
