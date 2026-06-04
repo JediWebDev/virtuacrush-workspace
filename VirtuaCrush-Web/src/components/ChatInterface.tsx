@@ -623,41 +623,55 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
                 </motion.div>,
               ];
             }
-            // Assistant messages: render *stage directions* as centered narrator
-            // lines and spoken text as bubbles, for a dramatic narration balance.
-            return splitNarration(msg.content).map((seg, i) =>
-              seg.type === "narration" ? (
+            // Assistant messages: a PURE stage direction renders as a centered
+            // narrator line; a message that MIXES dialogue + stage directions
+            // renders as ONE cohesive bubble with the narration italic inline
+            // (avoids the jarring speech / narrator-line / speech split).
+            const segs = splitNarration(msg.content);
+            const hasSpeech = segs.some((seg) => seg.type === "speech");
+            if (!hasSpeech) {
+              return [
                 <motion.div
-                  key={`${msg.id}-n${i}`}
+                  key={`${msg.id}-n`}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="flex w-full justify-center px-2 py-0.5"
                 >
                   <p className="max-w-[82%] text-center text-[13px] italic leading-relaxed text-stone-500 dark:text-stone-400">
-                    {seg.text}
+                    {segs.map((seg) => seg.text).join(" ")}
                   </p>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key={`${msg.id}-s${i}`}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex w-full justify-start"
-                >
-                  <div className="flex max-w-[88%] flex-row gap-2.5 md:max-w-[72%]">
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-black/10 bg-stone-100 text-xs font-semibold text-stone-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-200">
-                      <span className="text-[11px]">{character.name.charAt(0)}</span>
-                    </div>
-                    <div className="flex min-w-0 flex-col items-start space-y-1">
-                      <div className="max-w-full rounded-2xl rounded-tl-sm border border-black/[0.07] bg-stone-200 px-4 py-3 text-[15px] leading-relaxed text-stone-800 shadow-sm backdrop-blur-sm dark:border-white/[0.07] dark:bg-stone-800/90 dark:text-stone-100">
-                        {seg.text}
-                      </div>
-                      <p className="pl-1 text-left text-[10px] font-medium tabular-nums text-stone-900 dark:text-stone-500">Just now</p>
-                    </div>
+                </motion.div>,
+              ];
+            }
+            return [
+              <motion.div
+                key={msg.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex w-full justify-start"
+              >
+                <div className="flex max-w-[88%] flex-row gap-2.5 md:max-w-[72%]">
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-black/10 bg-stone-100 text-xs font-semibold text-stone-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-200">
+                    <span className="text-[11px]">{character.name.charAt(0)}</span>
                   </div>
-                </motion.div>
-              ),
-            );
+                  <div className="flex min-w-0 flex-col items-start space-y-1">
+                    <div className="max-w-full rounded-2xl rounded-tl-sm border border-black/[0.07] bg-stone-200 px-4 py-3 text-[15px] leading-relaxed text-stone-800 shadow-sm backdrop-blur-sm dark:border-white/[0.07] dark:bg-stone-800/90 dark:text-stone-100">
+                      {segs.map((seg, i) => (
+                        <span key={i}>
+                          {i > 0 ? " " : ""}
+                          {seg.type === "narration" ? (
+                            <em className="italic text-stone-500 dark:text-stone-400">{seg.text}</em>
+                          ) : (
+                            seg.text
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="pl-1 text-left text-[10px] font-medium tabular-nums text-stone-900 dark:text-stone-500">Just now</p>
+                  </div>
+                </div>
+              </motion.div>,
+            ];
           })}
           {isLoading && !greetingLoading && (
             <motion.div 
@@ -720,7 +734,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
           <div className="px-4 pt-2 md:px-8">
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-xl border border-rose-400/40 bg-rose-500/[0.07] px-4 py-3 sm:flex-row sm:items-center">
               <span className="min-w-0 flex-1 text-sm text-stone-700 dark:text-stone-200">
-                💢 {character.name} is fuming about the bill — this is going viral.
+                💢 {character.name} is fuming about the bill.
               </span>
               <button
                 type="button"
