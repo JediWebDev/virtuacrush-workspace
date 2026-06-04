@@ -37,10 +37,13 @@ export async function fetchGreeting(
   if (!res.ok) throw new Error('greet_failed');
   return res.json();
 }
+export type ScenePhase = "home" | "planning" | "on_date";
+
 export interface SceneInfo {
   mode: "apart" | "together";
   location: string | null;
   billPending: boolean;
+  plannedLocation?: string | null;
 }
 
 export interface CharacterState {
@@ -51,6 +54,7 @@ export interface CharacterState {
   goalProgress: number;
   goal: string;
   scene?: SceneInfo;
+  phase?: ScenePhase;
   sceneLabel?: string | null;
 }
 
@@ -116,6 +120,13 @@ export async function endDate(characterId: string): Promise<DialogueChoice> {
     { method: 'POST' },
   );
   return res.choice;
+}
+
+/** Begins a planned date (planning -> on_date). Returns the arrival greeting. */
+export async function beginDate(characterId: string): Promise<{ reaction: string }> {
+  return api<{ reaction: string }>(`/api/date/${encodeURIComponent(characterId)}/begin`, {
+    method: 'POST',
+  });
 }
 
 /** Shares a viral moment (a character's vent) to their feed. */

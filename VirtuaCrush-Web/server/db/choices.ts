@@ -5,7 +5,13 @@
 // Server is authoritative on the deadline and all effects. Everything fails soft.
 import { pool } from './pool';
 import { getCharacter } from '../inworld/characters';
-import { generateDateChoice, generateBillChoice, generateChoice, generateItemizedBill } from '../inworld/choice_engine';
+import {
+  generateDateChoice,
+  generateBillChoice,
+  generateChoice,
+  generateItemizedBill,
+  generateArrivalGreeting,
+} from '../inworld/choice_engine';
 import { getSituation, getScene, setScene, bumpGoalProgress } from './state';
 import { incrementAffinity } from './affinity';
 import { createPost } from './posts';
@@ -336,4 +342,36 @@ export async function createEndDateBill(
     [userId, characterId, gen.prompt, JSON.stringify(options), gen.timeoutReaction, expiresAt, JSON.stringify(gen.bill)],
   );
   return toDTO(rows[0]);
+}
+
+/**
+ * Begins a planned date: flips the scene from 'planning' to 'on_date' at the
+ * agreed venue and returns the character's arrival greeting (persisted to the
+ * chat). Returns null if the user isn't in the planning phase.
+ */
+export async function beginDate(
+  userId: string,
+  characterId: string,
+): Promise<{ reaction: string } | null> {
+  const scene = await getScene(userId, characterId);
+  if (scene.mode !== 'apart' || !scene.plannedLocation) return null; // not planning
+
+  let displayName: string;
+  try {
+    displayName = getCharacter(characterId).displayName;
+  } catch {
+    return null;
+  }
+
+  const dest = scene.plannedLocation;
+  await setScene(userId, characterId, {
+    mode: 'together',
+    location: dest,
+    billPending: isPaidLocation(dest),
+    plannedLocation: null,
+  });
+
+  const reaction = await generateArrivalGreeting({ characterId, displayName, locationSlug: dest });
+  await persistChoiceTurns(userId, characterId, null, reaction);
+  return { reaction };
 }

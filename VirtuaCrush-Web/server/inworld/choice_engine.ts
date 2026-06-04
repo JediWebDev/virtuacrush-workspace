@@ -102,14 +102,14 @@ CHARACTER: ${params.displayName}
 
 ${params.displayName} suggests doing something together and offers the user TWO date ideas that fit ${params.displayName}'s taste. Each idea MUST be one of these locations (use the exact slug): ${menu}. Pick two DIFFERENT locations.
 
-IMPORTANT: each "reaction" must be excited about that place AND end by sorting out logistics — ask whether the user wants to meet there or if they're picking ${params.displayName} up (e.g. "...wanna meet there, or are you picking me up?").
+IMPORTANT: each "reaction" is excited about that place and warmly tells the user to come find/meet you there when they're ready (they'll head over to start the date).
 
 Respond with ONLY this JSON (no prose/fences):
 {
   "prompt": "<1-2 sentence in-character invite ending in a choice>",
   "options": [
-    {"label": "<short, fun button text>", "location": "<slug>", "advancesGoal": false, "reaction": "<excited reply that ends by asking: meet there or pick me up?>"},
-    {"label": "<short, fun button text>", "location": "<slug>", "advancesGoal": false, "reaction": "<excited reply that ends by asking: meet there or pick me up?>"}
+    {"label": "<short, fun button text>", "location": "<slug>", "advancesGoal": false, "reaction": "<excited reply telling them to come meet you there when ready>"},
+    {"label": "<short, fun button text>", "location": "<slug>", "advancesGoal": false, "reaction": "<excited reply telling them to come meet you there when ready>"}
   ],
   "timeoutReaction": "<a brief stage action if the user doesn't answer, e.g. *shrugs and looks away*>"
 }`;
@@ -282,6 +282,39 @@ Respond with ONLY this JSON (no prose/fences). Amounts are plain USD numbers:
     };
   } catch (err) {
     console.warn(`[choice] bill generation failed for ${params.characterId}:`, err);
+    return fallback;
+  }
+}
+
+// --- Arrival greeting (planning -> on_date) ----------------------------------
+
+/**
+ * A short in-character greeting for when the user shows up and the date begins.
+ * Returns a plain line (may contain *stage directions*). Fails soft.
+ */
+export async function generateArrivalGreeting(params: {
+  characterId: string;
+  displayName: string;
+  locationSlug: string;
+}): Promise<string> {
+  const loc = getLocation(params.locationSlug);
+  const venue = loc ? loc.description : 'together';
+  const lore = getLore(params.characterId);
+  const fallback = `*${params.displayName} looks up and brightens* Oh — you made it! Hi.`;
+
+  const prompt = `You are ${params.displayName}. Personality: ${lore.personality}.
+The user has just shown up and your date is beginning — you are now together ${venue}.
+Greet them warmly, in character, in 1-2 sentences, reacting to them arriving. You may include a brief *stage direction* in asterisks.
+Output ONLY the line, nothing else.`;
+
+  try {
+    const llm = await llmComplete();
+    const raw = await llm.generateContentComplete({ prompt });
+    const text = typeof raw === 'string' ? raw : (raw?.content ?? raw?.text ?? '');
+    const line = text.trim().replace(/^["']|["']$/g, '').slice(0, 400);
+    return line || fallback;
+  } catch (err) {
+    console.warn(`[choice] arrival greeting failed for ${params.characterId}:`, err);
     return fallback;
   }
 }

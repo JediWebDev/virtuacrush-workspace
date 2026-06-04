@@ -21,12 +21,10 @@ import {
 } from '../db/memory';
 import { getCharacter, type CharacterId } from '../inworld/characters';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
-import { getSituation, setScene } from '../db/state';
-import { formatSituationBlock } from '../db/scene_util';
+import { getSituation } from '../db/state';
+import { formatSituationBlock, scenePhase } from '../db/scene_util';
 import { decideNarrationMode, formatNarrationDirective } from '../db/narration_util';
 import { detectPlanCue, shouldOfferDateChoice } from '../db/cue_util';
-import { detectArrivalIntent } from '../db/arrival_util';
-import { isPaidLocation } from '../inworld/scenes';
 import { maybeCreateChoice } from '../db/choices';
 
 // Recent turns fed to the LLM for local coherence. Long-term recall comes from
@@ -119,20 +117,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let displayName = characterId;
   try { displayName = getCharacter(characterId).displayName; } catch { /* unknown id */ }
 
-  // Co-presence: if the user is roleplaying ARRIVING (showing up / pickup /
-  // meet-there) while apart, flip the scene to together so the prompt stops
-  // insisting they're remote. The date begins at the planned venue, or at the
-  // character's place if there was no plan.
-  let scene = situation.scene;
-  if (scene.mode === 'apart' && detectArrivalIntent(message)) {
-    const dest = scene.plannedLocation ?? 'character_home';
-    scene = await setScene(req.user!.id, characterId, {
-      mode: 'together',
-      location: dest,
-      billPending: isPaidLocation(dest),
-      plannedLocation: null,
-    });
-  }
+  const scene = situation.scene;
 
   // Narration director: decide (zero-latency) whether this turn should lean on a
   // non-verbal beat, and condition the prompt accordingly.
@@ -211,7 +196,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     // plans (cue-based, with a cooldown). Only when apart — during a date the
     // only prompt is the persistent "End date" bill flow. Sent as its own SSE
     // event AFTER `done` so the reply isn't delayed.
-    if (!abortController.signal.aborted && scene.mode === 'apart') {
+    if (!abortController.signal.aborted && scenePhase(scene) === 'home') {
       try {
         const { rows: cntRows } = await pool.query<{ n: number }>(
           `SELECT count(*)::int AS n FROM chat_messages

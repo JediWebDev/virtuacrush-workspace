@@ -4,6 +4,7 @@ import { getLocation, type LocationKind } from '../inworld/scenes';
 import type { DailyState } from './story_util';
 
 export type SceneMode = 'apart' | 'together';
+export type ScenePhase = 'home' | 'planning' | 'on_date';
 export type ChoiceKind = 'date' | 'bill' | 'goal';
 
 export interface SceneState {
@@ -11,6 +12,19 @@ export interface SceneState {
   location: string | null;        // venue slug when together
   billPending: boolean;
   plannedLocation?: string | null; // agreed venue while still apart (logistics phase)
+}
+
+/**
+ * The authoritative phase of the dating loop, derived from the scene:
+ *  - 'on_date'  : physically together at a venue,
+ *  - 'planning' : a date is agreed but they're still apart (sorting logistics),
+ *  - 'home'     : no date in progress; solo, reachable remotely.
+ * Every system (UI gating, status strip, auto-spawn, prompt) keys off this.
+ */
+export function scenePhase(scene: SceneState): ScenePhase {
+  if (scene.mode === 'together') return 'on_date';
+  if (scene.plannedLocation) return 'planning';
+  return 'home';
 }
 
 // Relationship-affinity effects for the dating choices (server-authoritative).
@@ -65,8 +79,8 @@ export function formatSituationBlock(
     return (
       `\n\n=== CURRENT SETTING ===\n` +
       `You and the user have JUST agreed to go to ${venue} together, but you are NOT there yet. ` +
-      `You're at your own place getting ready and sorting out logistics — are you meeting there, or is the user picking you up? ` +
-      `The user is texting you. React directly and substantively to what they say; never give a one-word non-answer.` +
+      `You're at your own place getting ready; the user will head over and meet you there shortly. ` +
+      `You're texting while you wait. React directly and substantively to what they say; never give a one-word non-answer.` +
       LOGISTICS_REALISM +
       closeness
     );

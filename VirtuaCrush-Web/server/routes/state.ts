@@ -6,6 +6,7 @@ import { requireAuth } from '../middleware/auth';
 import { getSituation } from '../db/state';
 import { getLore } from '../inworld/lore';
 import { getLocation } from '../inworld/scenes';
+import { scenePhase } from '../db/scene_util';
 
 const router = Router();
 
@@ -14,6 +15,8 @@ router.get('/:characterId', requireAuth, async (req: Request, res: Response) => 
   const { characterId } = req.params;
   try {
     const { state, scene } = await getSituation(req.user!.id, characterId);
+    const phase = scenePhase(scene);
+    const venueSlug = phase === 'on_date' ? scene.location : phase === 'planning' ? scene.plannedLocation : null;
     res.json({
       characterId,
       activity: state.activity,
@@ -22,7 +25,8 @@ router.get('/:characterId', requireAuth, async (req: Request, res: Response) => 
       goalProgress: state.goalProgress,
       goal: getLore(characterId).goal,
       scene,
-      sceneLabel: scene.mode === 'together' ? (getLocation(scene.location)?.label ?? null) : null,
+      phase,
+      sceneLabel: getLocation(venueSlug)?.label ?? null,
     });
   } catch (err) {
     console.error('[state] get failed:', err);

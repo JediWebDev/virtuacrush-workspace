@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
 import { fetchGreeting, fetchCharacterState, fetchActiveChoice, type CharacterState, type DialogueChoice, type ChoiceResolution } from "../lib/api";
 import ChoiceCard from "./ChoiceCard";
-import { endDate, shareViralMoment } from "../lib/api";
+import { endDate, beginDate, shareViralMoment } from "../lib/api";
 import { splitNarration } from "../lib/narration";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
@@ -174,6 +174,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
   const [viralMoment, setViralMoment] = useState<string | null>(null);
   const [endingDate, setEndingDate] = useState(false);
+  const [beginningDate, setBeginningDate] = useState(false);
   const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -262,6 +263,23 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
     fetchCharacterState(character.id)
       .then((st) => setStoryState(st))
       .catch(() => { /* non-fatal */ });
+  };
+
+  const handleBeginDate = async () => {
+    if (beginningDate) return;
+    setBeginningDate(true);
+    try {
+      const res = await beginDate(character.id);
+      if (res.reaction) {
+        setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: res.reaction }]);
+      }
+      const st = await fetchCharacterState(character.id);
+      setStoryState(st);
+    } catch (err) {
+      console.error('[date] begin failed:', err);
+    } finally {
+      setBeginningDate(false);
+    }
   };
 
   const handleEndDate = async () => {
@@ -505,7 +523,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
           </div>
         ) : (
           <>
-        {storyState?.activity ? (
+        {storyState ? (
           <div className="shrink-0 border-b border-black/[0.06] dark:border-white/[0.06] bg-accent/[0.04] px-4 py-2 md:px-8">
             <div className="mx-auto flex max-w-3xl items-center gap-2 text-[12px]">
               <span className="relative flex h-2 w-2 shrink-0" aria-hidden>
@@ -514,13 +532,19 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
               </span>
               <span className="min-w-0 truncate text-stone-600 dark:text-stone-300">
                 <span className="font-semibold text-stone-800 dark:text-stone-100">{character.name}</span>{" "}
-                {storyState.scene?.mode === "together" && storyState.sceneLabel
+                {storyState.phase === "on_date" && storyState.sceneLabel
                   ? `· on a date at the ${storyState.sceneLabel.toLowerCase()}`
-                  : `is ${storyState.activity}`}
+                  : storyState.phase === "planning" && storyState.sceneLabel
+                    ? `· planning a date at the ${storyState.sceneLabel.toLowerCase()}`
+                    : `is ${storyState.activity || "around"}`}
               </span>
-              {storyState.scene?.mode === "together" ? (
+              {storyState.phase === "on_date" ? (
                 <span className="ml-auto hidden shrink-0 rounded-full border border-accent/30 bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent sm:inline">
                   On a date 💞
+                </span>
+              ) : storyState.phase === "planning" ? (
+                <span className="ml-auto hidden shrink-0 rounded-full border border-accent/30 bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent sm:inline">
+                  Planning a date 🗓️
                 </span>
               ) : storyState.mood ? (
                 <span className="ml-auto hidden shrink-0 rounded-full border border-accent/20 bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent sm:inline">
@@ -668,19 +692,19 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
             </div>
         )}
 
-        {storyState?.scene?.mode === "apart" && !choice && !viralMoment && messages.length > 1 ? (
+        {storyState?.phase === "planning" && !choice && !viralMoment ? (
           <div className="px-4 pt-2 md:px-8">
             <button
               type="button"
-              onClick={() => handleSend(`*I show up at ${character.name}'s place and knock on the door*`)}
-              disabled={isLoading}
-              className="mx-auto flex w-full max-w-3xl items-center justify-center gap-2 rounded-xl border border-black/10 bg-black/[0.03] px-4 py-2.5 text-sm font-medium text-stone-600 transition-all hover:border-accent/30 hover:text-stone-800 disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-stone-300 dark:hover:text-stone-100"
+              onClick={handleBeginDate}
+              disabled={beginningDate}
+              className="mx-auto flex w-full max-w-3xl items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent/[0.06] px-4 py-2.5 text-sm font-semibold text-accent transition-all hover:bg-accent/10 disabled:opacity-50"
             >
-              Show up at {character.name}&apos;s place 🚪
+              {beginningDate ? "On your way…" : "Show up for your date 🚪"}
             </button>
           </div>
         ) : null}
-        {storyState?.scene?.mode === "together" && !choice && !viralMoment ? (
+        {storyState?.phase === "on_date" && !choice && !viralMoment ? (
           <div className="px-4 pt-2 md:px-8">
             <button
               type="button"

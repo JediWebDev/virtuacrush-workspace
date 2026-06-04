@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   formatSituationBlock,
+  scenePhase,
   chooseChoiceKind,
   isGoalBeatDue,
   billAffinity,
@@ -25,7 +26,7 @@ test('formatSituationBlock: planned date -> logistics phase, still apart', () =>
   const b = formatSituationBlock({ activity: 'x', mood: 'y' }, planned, 'Serena');
   assert.ok(b.toLowerCase().includes('agreed to go'));
   assert.ok(b.toLowerCase().includes('not there yet'));
-  assert.ok(b.toLowerCase().includes('picking you up'));
+  assert.ok(b.toLowerCase().includes('meet you there'));
 });
 
 test('formatSituationBlock: affinity note included when provided', () => {
@@ -42,6 +43,12 @@ test('formatSituationBlock: apart places them at home, remote', () => {
 test('formatSituationBlock: together but unknown location falls back to apart text', () => {
   const b = formatSituationBlock({ activity: 'x', mood: 'y' }, { mode: 'together', location: 'void', billPending: false }, 'A');
   assert.ok(b.includes('CURRENT SETTING'));
+});
+
+test('scenePhase: home / planning / on_date', () => {
+  assert.equal(scenePhase({ mode: 'apart', location: null, billPending: false }), 'home');
+  assert.equal(scenePhase({ mode: 'apart', location: null, billPending: false, plannedLocation: 'restaurant' }), 'planning');
+  assert.equal(scenePhase({ mode: 'together', location: 'restaurant', billPending: true }), 'on_date');
 });
 
 test('chooseChoiceKind: bill at a paid venue with pending bill', () => {
