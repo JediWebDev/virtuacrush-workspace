@@ -18,6 +18,7 @@ test('formatSituationBlock: on a date anchors in the venue', () => {
   const b = formatSituationBlock({ activity: 'grinding ranked', mood: 'wired' }, atCoffee, 'Mina');
   assert.ok(b.includes('ON A DATE'));
   assert.ok(b.toLowerCase().includes('coffee shop'));
+  assert.ok(b.toLowerCase().includes('café manager') || b.toLowerCase().includes('manager')); // authority present
   assert.ok(!b.includes('grinding ranked')); // solo activity suppressed while together
 });
 

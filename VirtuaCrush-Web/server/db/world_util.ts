@@ -64,6 +64,7 @@ const MISCHIEF: RegExp[] = [
   /\bcut\s+(?:in\s+)?line\b/i,
   /\btrespass\w*\b/i,
   /\bsneak\s+(?:in|into|backstage|past)\b/i,
+  /\b(dump|dumping|pour|pouring|empty|tip)\b[^.!?]{0,25}\b(fountain|pool|punch ?bowl|drink|tank|aquarium|toilet|sink|machine|popcorn|vat)\b/i,
   /\b(rude|yell)\s+(?:to|at)\s+(?:the|a)\s+(?:waiter|barista|manager|staff|cashier|usher|guard|security|employee|attendant|marshal)\b/i,
 ];
 

@@ -33,6 +33,8 @@ test('detectWorldEvent: mischief (warnable, not crime)', () => {
   assert.equal(detectWorldEvent("I make a scene").kind, 'mischief');
   assert.equal(detectWorldEvent('I climb on the table and dance').kind, 'mischief');
   assert.equal(detectWorldEvent('I cut in line').kind, 'mischief');
+  assert.equal(detectWorldEvent('I dump detergent into the mall fountain').kind, 'mischief');
+  assert.equal(detectWorldEvent('I pour soap into the fountain').kind, 'mischief');
 });
 
 test('detectWorldEvent: slang / benign phrasing is NOT an event (false-positive guards)', () => {

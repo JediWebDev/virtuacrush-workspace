@@ -68,7 +68,12 @@ export function formatSituationBlock(
         `This is your current location: ${loc.label}. You are NOT at home and you are NOT apart from the user.\n` +
         `If the user asks where you are, where you both are, or what you're doing, your answer is: here together at ${loc.label}. ` +
         `Never say you are at home or alone. Stay present and let the place color your words — you can reference ${loc.cues}. ` +
-        `React directly to what the user does; don't give one-word non-answers.${closeness}`
+        `React directly to what the user does; don't give one-word non-answers.
+` +
+        `THE WORLD IS REAL AND HAS CONSEQUENCES: this is a public place with other people and staff around, including ${loc.authority}. ` +
+        `If the user does ANYTHING disruptive, reckless, messy, destructive, embarrassing, or against the rules (even creative or unexpected things), ` +
+        `have ${loc.authority} and/or bystanders step in and react believably — describe it in *stage directions* — and react in character yourself. ` +
+        `Never ignore disruptive behavior or just play along with something that would clearly cause a scene.${closeness}`
       );
     }
   }
