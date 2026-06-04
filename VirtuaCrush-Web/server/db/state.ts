@@ -21,7 +21,7 @@ interface StateRow {
   planned_location: string | null;
 }
 
-const COLS = `character_id, state_date, activity, mood, headline, goal_progress,
+const COLS = `character_id, state_date::text AS state_date, activity, mood, headline, goal_progress,
               scene_mode, scene_location, bill_pending, planned_location`;
 
 export interface Situation {

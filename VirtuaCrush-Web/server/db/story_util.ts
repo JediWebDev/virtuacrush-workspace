@@ -37,10 +37,15 @@ export function utcDateString(d: Date = new Date()): string {
  * A stored row's state_date is "stale" when it's not today's UTC date — meaning
  * the day rolled over and the storyline should advance.
  */
-export function isStale(stateDate: string | null | undefined, today: string = utcDateString()): boolean {
+export function isStale(
+  stateDate: string | Date | null | undefined,
+  today: string = utcDateString(),
+): boolean {
   if (!stateDate) return true;
-  // Normalize possible timestamp/Date string to YYYY-MM-DD.
-  const d = String(stateDate).slice(0, 10);
+  // node-postgres returns DATE columns as JS Date objects; normalize both a Date
+  // and a "YYYY-MM-DD..." string down to a YYYY-MM-DD day for comparison.
+  const d =
+    stateDate instanceof Date ? stateDate.toISOString().slice(0, 10) : String(stateDate).slice(0, 10);
   return d !== today;
 }
 

@@ -19,6 +19,14 @@ test('clamp bounds values and handles NaN', () => {
   assert.equal(clamp(NaN, 0, 10, 7), 7);
 });
 
+test('isStale: handles pg Date objects (regression — scene was being reset every read)', () => {
+  // node-postgres returns DATE columns as Date objects; isStale must NOT treat
+  // a Date for "today" as stale (that bug regenerated state on every read).
+  const today = new Date('2026-06-02T00:00:00.000Z');
+  assert.equal(isStale(today, '2026-06-02'), false);
+  assert.equal(isStale(new Date('2026-06-01T00:00:00.000Z'), '2026-06-02'), true);
+});
+
 test('isStale: missing or past date is stale; today is fresh', () => {
   assert.equal(isStale(null), true);
   assert.equal(isStale(undefined), true);
