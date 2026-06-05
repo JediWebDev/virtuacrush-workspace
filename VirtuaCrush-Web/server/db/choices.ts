@@ -11,18 +11,21 @@ import {
   generateChoice,
   generateItemizedBill,
   generateArrivalGreeting,
+  generateBailResponse,
 } from '../inworld/choice_engine';
-import { getSituation, getScene, setScene, bumpGoalProgress } from './state';
-import { incrementAffinity } from './affinity';
+import { getSituation, getScene, setScene, bumpGoalProgress, markBailCallUsed, releaseUser } from './state';
+import { incrementAffinity, getAffinity } from './affinity';
 import { createPost } from './posts';
 import { getLocation, isPaidLocation, coerceDateLocation } from '../inworld/scenes';
 import {
   chooseChoiceKind,
   isGoalBeatDue,
   billAffinity,
+  scenePhase,
   CHOICE_DATE_AFFINITY,
   type ChoiceKind,
 } from './scene_util';
+import { BAIL_THRESHOLD } from './jail_util';
 import {
   effectsForOption,
   isExpired,
@@ -374,4 +377,37 @@ export async function beginDate(
   const reaction = await generateArrivalGreeting({ characterId, displayName, locationSlug: dest });
   await persistChoiceTurns(userId, characterId, null, reaction);
   return { reaction };
+}
+
+export interface BailResult {
+  ok: boolean;
+  error?: 'not_jailed' | 'call_used';
+  accepted?: boolean;
+  reaction?: string;
+}
+
+/**
+ * The user's ONE phone call from jail: ask the date to bail them out. They
+ * accept if affinity is high enough, otherwise refuse. Either way the call is
+ * spent. On acceptance the user is released. Returns the date's reaction.
+ */
+export async function requestBail(userId: string, characterId: string): Promise<BailResult> {
+  const scene = await getScene(userId, characterId);
+  if (scenePhase(scene) !== 'jailed') return { ok: false, error: 'not_jailed' };
+  if (scene.bailCallUsed) return { ok: false, error: 'call_used' };
+
+  await markBailCallUsed(userId, characterId);
+
+  let displayName = characterId;
+  try {
+    displayName = getCharacter(characterId).displayName;
+  } catch {
+    /* unknown id */
+  }
+  const affinity = await getAffinity(userId, characterId);
+  const accepted = affinity >= BAIL_THRESHOLD;
+  const reaction = await generateBailResponse(characterId, displayName, accepted);
+  if (accepted) await releaseUser(userId, characterId);
+  await persistChoiceTurns(userId, characterId, null, reaction);
+  return { ok: true, accepted, reaction };
 }

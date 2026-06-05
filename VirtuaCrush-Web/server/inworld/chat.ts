@@ -14,6 +14,7 @@ export interface StreamChatParams {
   history: ChatMessage[];   // Prior turns, oldest first. Last item is NOT the current user message.
   userMessage: string;
   memoryContext?: string;   // Long-term memory block injected into the system prompt (RAG).
+  systemOverride?: string;  // Replaces the character persona (e.g. the jail narrator).
 }
 
 export interface StreamChatChunk {
@@ -84,7 +85,7 @@ export async function* streamChat(params: StreamChatParams): AsyncGenerator<Stre
 
   const trimmedHistory = params.history.slice(-MAX_HISTORY_TURNS);
   const prompt = buildPrompt(
-    character.systemPrompt,
+    params.systemOverride ?? character.systemPrompt,
     trimmedHistory,
     params.userMessage,
     params.memoryContext,

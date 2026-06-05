@@ -6,6 +6,7 @@ import { getLLM } from './client';
 import { getLore } from './lore';
 import { parseGeneratedChoice, DEFAULT_TIMEOUT_REACTION, type GeneratedChoice, type BillData } from '../db/choice_util';
 import { DATE_LOCATION_SLUGS, LOCATIONS, getLocation, coerceDateLocation } from './scenes';
+import { fallbackBailResponse } from '../db/jail_util';
 
 function buildChoicePrompt(params: {
   displayName: string;
@@ -315,6 +316,32 @@ Output ONLY the line, nothing else.`;
     return line || fallback;
   } catch (err) {
     console.warn(`[choice] arrival greeting failed for ${params.characterId}:`, err);
+    return fallback;
+  }
+}
+
+// --- Bail response (jail one-call) -------------------------------------------
+
+/** The date's reaction to the user's one phone call from jail. Fails soft. */
+export async function generateBailResponse(
+  characterId: string,
+  displayName: string,
+  accepted: boolean,
+): Promise<string> {
+  const lore = getLore(characterId);
+  const prompt = `You are ${displayName}. Personality: ${lore.personality}.
+The user just used their ONE phone call from jail to beg you for bail — they got themselves ARRESTED and ruined your date.
+You ${accepted ? 'reluctantly AGREE to come bail them out (annoyed, but you care enough to do it)' : 'REFUSE and hang up on them'}.
+Write your 1-2 sentence reaction in character. You may include a brief *stage direction*. Output ONLY the line.`;
+  const fallback = fallbackBailResponse(displayName, accepted);
+  try {
+    const llm = await llmComplete();
+    const raw = await llm.generateContentComplete({ prompt });
+    const text = typeof raw === 'string' ? raw : (raw?.content ?? raw?.text ?? '');
+    const line = text.trim().replace(/^["']|["']$/g, '').slice(0, 400);
+    return line || fallback;
+  } catch (err) {
+    console.warn(`[choice] bail response failed for ${characterId}:`, err);
     return fallback;
   }
 }

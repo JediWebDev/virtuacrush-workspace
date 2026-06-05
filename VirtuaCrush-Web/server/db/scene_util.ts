@@ -4,7 +4,7 @@ import { getLocation, type LocationKind } from '../inworld/scenes';
 import type { DailyState } from './story_util';
 
 export type SceneMode = 'apart' | 'together';
-export type ScenePhase = 'home' | 'planning' | 'on_date';
+export type ScenePhase = 'home' | 'planning' | 'on_date' | 'jailed';
 export type ChoiceKind = 'date' | 'bill' | 'goal';
 
 export interface SceneState {
@@ -12,6 +12,8 @@ export interface SceneState {
   location: string | null;        // venue slug when together
   billPending: boolean;
   plannedLocation?: string | null; // agreed venue while still apart (logistics phase)
+  jailedUntil?: string | null;     // ISO timestamp; user is jailed until then
+  bailCallUsed?: boolean;          // whether the one phone call was spent
 }
 
 /**
@@ -21,7 +23,8 @@ export interface SceneState {
  *  - 'home'     : no date in progress; solo, reachable remotely.
  * Every system (UI gating, status strip, auto-spawn, prompt) keys off this.
  */
-export function scenePhase(scene: SceneState): ScenePhase {
+export function scenePhase(scene: SceneState, now: number = Date.now()): ScenePhase {
+  if (scene.jailedUntil && new Date(scene.jailedUntil).getTime() > now) return 'jailed';
   if (scene.mode === 'together') return 'on_date';
   if (scene.plannedLocation) return 'planning';
   return 'home';

@@ -37,13 +37,15 @@ export async function fetchGreeting(
   if (!res.ok) throw new Error('greet_failed');
   return res.json();
 }
-export type ScenePhase = "home" | "planning" | "on_date";
+export type ScenePhase = "home" | "planning" | "on_date" | "jailed";
 
 export interface SceneInfo {
   mode: "apart" | "together";
   location: string | null;
   billPending: boolean;
   plannedLocation?: string | null;
+  jailedUntil?: string | null;
+  bailCallUsed?: boolean;
 }
 
 export interface CharacterState {
@@ -127,6 +129,18 @@ export async function beginDate(characterId: string): Promise<{ reaction: string
   return api<{ reaction: string }>(`/api/date/${encodeURIComponent(characterId)}/begin`, {
     method: 'POST',
   });
+}
+
+export interface BailResult {
+  ok: boolean;
+  accepted?: boolean;
+  reaction?: string;
+  error?: string;
+}
+
+/** Spends the user's one phone call from jail to ask the date for bail. */
+export async function requestBail(characterId: string): Promise<BailResult> {
+  return api<BailResult>(`/api/jail/${encodeURIComponent(characterId)}/bail`, { method: 'POST' });
 }
 
 /** Shares a viral moment (a character's vent) to their feed. */

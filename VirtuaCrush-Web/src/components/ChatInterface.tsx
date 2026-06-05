@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
 import { fetchGreeting, fetchCharacterState, fetchActiveChoice, type CharacterState, type DialogueChoice, type ChoiceResolution } from "../lib/api";
 import ChoiceCard from "./ChoiceCard";
-import { endDate, beginDate, shareViralMoment } from "../lib/api";
+import { endDate, beginDate, shareViralMoment, requestBail } from "../lib/api";
 import { splitNarration } from "../lib/narration";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
@@ -175,6 +175,8 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
   const [viralMoment, setViralMoment] = useState<string | null>(null);
   const [endingDate, setEndingDate] = useState(false);
   const [beginningDate, setBeginningDate] = useState(false);
+  const [bailing, setBailing] = useState(false);
+  const [nowTick, setNowTick] = useState(Date.now());
   const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -239,6 +241,22 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
     return () => { cancelled = true; };
   }, [character.id]);
 
+  // While jailed, tick a release countdown and auto-release when it elapses.
+  useEffect(() => {
+    if (storyState?.phase !== "jailed" || !storyState.scene?.jailedUntil) return;
+    const until = new Date(storyState.scene.jailedUntil).getTime();
+    const id = setInterval(() => {
+      if (Date.now() >= until) {
+        clearInterval(id);
+        fetchCharacterState(character.id).then(setStoryState).catch(() => {});
+      } else {
+        setNowTick(Date.now());
+      }
+    }, 1000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storyState?.phase, storyState?.scene?.jailedUntil, character.id]);
+
   // Resolve a timed choice: append the user's pick + the character's reaction,
   // update affinity, refresh the feed if a social post was created.
   const handleChoiceResolved = (result: ChoiceResolution, chosenLabel?: string) => {
@@ -264,6 +282,29 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
       .then((st) => setStoryState(st))
       .catch(() => { /* non-fatal */ });
   };
+
+  const handleBail = async () => {
+    if (bailing) return;
+    setBailing(true);
+    try {
+      const res = await requestBail(character.id);
+      if (res.reaction) {
+        setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", content: res.reaction! }]);
+      }
+      const st = await fetchCharacterState(character.id);
+      setStoryState(st);
+    } catch (err) {
+      console.error("[bail] failed:", err);
+    } finally {
+      setBailing(false);
+    }
+  };
+
+  const jailMsLeft =
+    storyState?.phase === "jailed" && storyState.scene?.jailedUntil
+      ? Math.max(0, new Date(storyState.scene.jailedUntil).getTime() - nowTick)
+      : 0;
+  const jailMmss = `${Math.floor(jailMsLeft / 60000)}:${String(Math.floor((jailMsLeft % 60000) / 1000)).padStart(2, "0")}`;
 
   const handleBeginDate = async () => {
     if (beginningDate) return;
@@ -532,13 +573,19 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
               </span>
               <span className="min-w-0 truncate text-stone-600 dark:text-stone-300">
                 <span className="font-semibold text-stone-800 dark:text-stone-100">{character.name}</span>{" "}
-                {storyState.phase === "on_date" && storyState.sceneLabel
-                  ? `· on a date at the ${storyState.sceneLabel.toLowerCase()}`
-                  : storyState.phase === "planning" && storyState.sceneLabel
-                    ? `· planning a date at the ${storyState.sceneLabel.toLowerCase()}`
-                    : `is ${storyState.activity || "around"}`}
+                {storyState.phase === "jailed"
+                  ? "· in a holding cell 🚔"
+                  : storyState.phase === "on_date" && storyState.sceneLabel
+                    ? `· on a date at the ${storyState.sceneLabel.toLowerCase()}`
+                    : storyState.phase === "planning" && storyState.sceneLabel
+                      ? `· planning a date at the ${storyState.sceneLabel.toLowerCase()}`
+                      : `is ${storyState.activity || "around"}`}
               </span>
-              {storyState.phase === "on_date" ? (
+              {storyState.phase === "jailed" ? (
+                <span className="ml-auto hidden shrink-0 rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 sm:inline">
+                  ⏳ {jailMmss}
+                </span>
+              ) : storyState.phase === "on_date" ? (
                 <span className="ml-auto hidden shrink-0 rounded-full border border-accent/30 bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent sm:inline">
                   On a date 💞
                 </span>
@@ -706,6 +753,27 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
             </div>
         )}
 
+        {storyState?.phase === "jailed" && !choice ? (
+          <div className="px-4 pt-2 md:px-8">
+            <div className="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-xl border border-amber-500/40 bg-amber-500/[0.07] px-4 py-3 sm:flex-row sm:items-center">
+              <span className="min-w-0 flex-1 text-sm text-stone-700 dark:text-stone-200">
+                🚔 You&apos;re in a holding cell.{" "}
+                {storyState.scene?.bailCallUsed ? "Your one call is used — sit tight." : "You get one phone call."}{" "}
+                Released in {jailMmss}.
+              </span>
+              {!storyState.scene?.bailCallUsed ? (
+                <button
+                  type="button"
+                  onClick={handleBail}
+                  disabled={bailing}
+                  className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-50"
+                >
+                  {bailing ? "Dialing…" : `📞 Call ${character.name} for bail`}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
         {storyState?.phase === "planning" && !choice && !viralMoment ? (
           <div className="px-4 pt-2 md:px-8">
             <button

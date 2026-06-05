@@ -22,11 +22,18 @@ import {
 } from '../db/memory';
 import { getCharacter, type CharacterId } from '../inworld/characters';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
-import { getSituation } from '../db/state';
+import { getSituation, arrestUser } from '../db/state';
 import { formatSituationBlock, scenePhase } from '../db/scene_util';
 import { decideNarrationMode, formatNarrationDirective } from '../db/narration_util';
 import { detectPlanCue, shouldOfferDateChoice } from '../db/cue_util';
 import { detectWorldEvent, formatWorldEventDirective } from '../db/world_util';
+import {
+  jailNarratorPrompt,
+  jailContextBlock,
+  formatArrestDirective,
+  jailEndFrom,
+  JAIL_ARREST_AFFINITY,
+} from '../db/jail_util';
 import { getLocation } from '../inworld/scenes';
 import { maybeCreateChoice } from '../db/choices';
 
@@ -123,35 +130,54 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   const scene = situation.scene;
   const phase = scenePhase(scene);
 
-  // Narration director: decide (zero-latency) whether this turn should lean on a
-  // non-verbal beat, and condition the prompt accordingly.
-  const narrationDirective = formatNarrationDirective(decideNarrationMode(message), displayName);
+  let systemOverride: string | undefined;
+  let memoryContext: string;
+  let arrested = false;
+  let arrestAffinity: number | null = null;
 
-  // World event: if the user does something disruptive/criminal ON a date, bring
-  // in the venue's authority (and responders for crimes) via the narrator, and
-  // remember the incident. (Arrest/jail is a later pass.)
-  let worldDirective = '';
-  if (phase === 'on_date') {
-    const event = detectWorldEvent(message);
-    if (event.kind !== 'none') {
+  if (phase === 'jailed') {
+    // The user is in a holding cell. A strict jail NARRATOR takes over (the date
+    // character is not present) and imposes realism on what the user can do.
+    systemOverride = jailNarratorPrompt(displayName);
+    memoryContext = jailContextBlock();
+  } else {
+    const narrationDirective = formatNarrationDirective(decideNarrationMode(message), displayName);
+
+    // World event: disruptive/criminal acts ON a date trigger authority/responders.
+    // A CRIME escalates to an arrest (date ends, jail, big affinity hit).
+    let eventDirective = '';
+    if (phase === 'on_date') {
+      const event = detectWorldEvent(message);
       const loc = getLocation(scene.location);
       const authority = loc?.authority ?? 'a security guard';
       const venueLabel = loc?.label ?? 'the venue';
-      worldDirective = formatWorldEventDirective(event, authority, displayName);
-      const memText =
-        event.kind === 'crime'
-          ? `User committed ${event.crimeType} during their date at ${venueLabel} and caused a major scene.`
-          : `User caused a disruptive scene during their date at ${venueLabel}.`;
-      void storeSignificantEvent(req.user!.id, characterId, memText);
+      if (event.kind === 'crime' && event.crimeType) {
+        arrested = true;
+        await arrestUser(req.user!.id, characterId, jailEndFrom());
+        arrestAffinity = await incrementAffinity(req.user!.id, characterId, JAIL_ARREST_AFFINITY);
+        void storeSignificantEvent(
+          req.user!.id,
+          characterId,
+          `User was ARRESTED for ${event.crimeType} on their date at ${venueLabel}; the date ended in total disaster.`,
+        );
+        eventDirective = formatArrestDirective(event.crimeType, venueLabel, authority, displayName);
+      } else if (event.kind !== 'none') {
+        eventDirective = formatWorldEventDirective(event, authority, displayName);
+        void storeSignificantEvent(
+          req.user!.id,
+          characterId,
+          `User caused a disruptive scene during their date at ${venueLabel}.`,
+        );
+      }
     }
-  }
 
-  const memoryContext =
-    formatSituationBlock(situation.state, scene, displayName, affinity) +
-    formatCharacterFactsBlock(getLore(characterId)) +
-    narrationDirective +
-    worldDirective +
-    formatMemoryBlock(memories);
+    memoryContext =
+      formatSituationBlock(situation.state, scene, displayName, affinity) +
+      formatCharacterFactsBlock(getLore(characterId)) +
+      narrationDirective +
+      eventDirective +
+      formatMemoryBlock(memories);
+  }
 
   // --- SSE headers ---
   res.setHeader('Content-Type', 'text/event-stream');
@@ -175,6 +201,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       history: turns,
       userMessage: message,
       memoryContext,
+      systemOverride,
     })) {
       if (abortController.signal.aborted) break;
       if (chunk.text) {
@@ -192,21 +219,29 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       assistantMessage: assistantFull,
     });
 
-    // Update long-term memory from this exchange. Fire-and-forget: extraction +
-    // embedding are slow and must not delay the response or break chat on error.
-    void extractAndStoreFacts({
-      userId: req.user!.id,
-      characterId,
-      userMessage: message,
-      assistantMessage: assistantFull,
-    });
+    // Update long-term memory from this exchange (not while jailed — those aren't
+    // durable user facts). Fire-and-forget so it never delays the response.
+    if (phase !== 'jailed') {
+      void extractAndStoreFacts({
+        userId: req.user!.id,
+        characterId,
+        userMessage: message,
+        assistantMessage: assistantFull,
+      });
+    }
 
-    // Affinity is scored from the USER's message: a small increment for normal
-    // engagement, a penalty for hostile/abusive messages. Hybrid signal =
-    // synchronous heuristic combined with the parallel LLM classifier.
-    const classifierHostility = await hostilityPromise;
-    const affinityDelta = getAffinityDeltaFromUserMessage(message, classifierHostility);
-    const newAffinityScore = await incrementAffinity(req.user!.id, characterId, affinityDelta);
+    // Affinity: an arrest already applied its big hit; while jailed nothing
+    // changes (the character isn't present); otherwise score the user's message.
+    let newAffinityScore: number;
+    if (arrested) {
+      newAffinityScore = arrestAffinity ?? affinity;
+    } else if (phase === 'jailed') {
+      newAffinityScore = affinity;
+    } else {
+      const classifierHostility = await hostilityPromise;
+      const affinityDelta = getAffinityDeltaFromUserMessage(message, classifierHostility);
+      newAffinityScore = await incrementAffinity(req.user!.id, characterId, affinityDelta);
+    }
 
     // Bump usage only for free users so paid users have a clean 0/null state.
     let remaining: number | null = null;
