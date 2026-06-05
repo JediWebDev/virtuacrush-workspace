@@ -15,6 +15,7 @@ import {
 } from '../inworld/choice_engine';
 import { getSituation, getScene, setScene, bumpGoalProgress, markBailCallUsed, releaseUser } from './state';
 import { incrementAffinity, getAffinity } from './affinity';
+import { storeSignificantEvent } from './memory';
 import { createPost } from './posts';
 import { getLocation, isPaidLocation, coerceDateLocation } from '../inworld/scenes';
 import {
@@ -376,6 +377,16 @@ export async function beginDate(
 
   const reaction = await generateArrivalGreeting({ characterId, displayName, locationSlug: dest });
   await persistChoiceTurns(userId, characterId, null, reaction);
+
+  // Record the date as a durable memory so the character recalls having met in
+  // person next time (prevents "nice to finally meet you" on a second date).
+  const venueLabel = getLocation(dest)?.label ?? 'a date';
+  void storeSignificantEvent(
+    userId,
+    characterId,
+    `User and ${displayName} have already met in person and gone on a date at ${venueLabel}.`,
+  );
+
   return { reaction };
 }
 

@@ -305,6 +305,7 @@ export async function generateArrivalGreeting(params: {
 
   const prompt = `You are ${params.displayName}. Personality: ${lore.personality}.
 The user has just shown up and your date is beginning — you are now together ${venue}.
+IMPORTANT: You already know this user well — you have been talking with them and you planned this date together. This is NOT a first meeting. Do NOT say things like "nice to finally meet you" or act like you're meeting a stranger; greet them like someone you already know and were looking forward to seeing.
 Greet them warmly, in character, in 1-2 sentences, reacting to them arriving. You may include a brief *stage direction* in asterisks.
 Output ONLY the line, nothing else.`;
 

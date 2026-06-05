@@ -139,7 +139,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   if (phase === 'jailed') {
     // The user is in a holding cell. A strict jail NARRATOR takes over (the date
     // character is not present) and imposes realism on what the user can do.
-    systemOverride = jailNarratorPrompt(displayName);
+    systemOverride = jailNarratorPrompt(displayName, !!scene.bailCallUsed);
     memoryContext = jailContextBlock();
   } else {
     const narrationDirective = formatNarrationDirective(decideNarrationMode(message), displayName);

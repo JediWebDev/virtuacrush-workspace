@@ -27,12 +27,26 @@ test('formatArrestDirective mentions responders + character + ruin', () => {
   assert.ok(d.toLowerCase().includes('fire department'));
 });
 
-test('jailNarratorPrompt enforces realism limits', () => {
+test('jailNarratorPrompt enforces realism limits and third-person-only narration', () => {
   const p = jailNarratorPrompt('Serena');
   assert.ok(p.toLowerCase().includes('narrator'));
   assert.ok(p.toLowerCase().includes('asterisks'));
-  assert.ok(p.toLowerCase().includes('dynamite') || p.toLowerCase().includes('refuse'));
+  assert.ok(p.toLowerCase().includes('first person'));
+  assert.ok(p.toLowerCase().includes('confiscated'));
   assert.ok(p.includes('Serena'));
+});
+
+test('jailNarratorPrompt: unused call offers exactly the one call to the character; no other calls', () => {
+  const p = jailNarratorPrompt('Serena', false);
+  assert.ok(p.includes('ONE phone call'));
+  assert.ok(p.toLowerCase().includes('president'));
+  assert.ok(p.toLowerCase().includes('call for bail'));
+});
+
+test('jailNarratorPrompt: used call means no calls remain', () => {
+  const p = jailNarratorPrompt('Serena', true);
+  assert.ok(p.includes('ALREADY used'));
+  assert.ok(p.toLowerCase().includes('no more calls'));
 });
 
 test('fallbackBailResponse: accept vs refuse', () => {
