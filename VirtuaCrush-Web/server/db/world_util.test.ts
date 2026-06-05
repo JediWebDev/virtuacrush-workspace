@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detectWorldEvent, formatWorldEventDirective, respondersFor } from './world_util';
+import { detectWorldEvent, formatWorldEventDirective, respondersFor, incidentForEvent, MISCHIEF_FEE, CRIME_FEES } from './world_util';
 
 test('detectWorldEvent: fire', () => {
   assert.deepEqual(detectWorldEvent('I set the curtains on fire'), { kind: 'crime', crimeType: 'fire' });
@@ -59,3 +59,26 @@ test('respondersFor + directive content', () => {
   const m = formatWorldEventDirective({ kind: 'mischief' }, 'the café manager', 'Avery');
   assert.ok(m.includes('the café manager') && m.includes('warning'));
 });
+
+test('incidentForEvent: mischief -> flat cleanup fee, crime -> damages, none -> null', () => {
+  const m = incidentForEvent({ kind: 'mischief' });
+  assert.equal(m?.kind, 'mischief');
+  assert.equal(m?.amount, MISCHIEF_FEE);
+
+  const c = incidentForEvent({ kind: 'crime', crimeType: 'destruction' });
+  assert.equal(c?.kind, 'crime');
+  assert.equal(c?.amount, CRIME_FEES.destruction);
+  assert.ok((c?.label ?? '').toLowerCase().includes('destruction'));
+
+  assert.equal(incidentForEvent({ kind: 'none' }), null);
+});
+
+test('formatWorldEventDirective: off-date uses remote wording (no in-venue "thrown out")', () => {
+  const off = formatWorldEventDirective({ kind: 'mischief' }, 'the authorities', 'Mina', false);
+  assert.ok(off.includes('the authorities'));
+  assert.ok(off.includes('Mina'));
+  assert.ok(!off.includes('thrown out'));
+  // engine-authoritative framing present
+  assert.ok(off.toLowerCase().includes('decided by the simulation'));
+});
+

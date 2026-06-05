@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseGeneratedChoice,
+  buildBill,
   isChoiceDue,
   effectsForOption,
   isExpired,
@@ -76,3 +77,20 @@ test('expiry/isExpired', () => {
   assert.equal(isExpired(exp, created + 59_999), false);
   assert.equal(isExpired(exp, created + 60_000), true);
 });
+
+test('buildBill: base price + incident line items, deterministic total', () => {
+  const bill = buildBill('Restaurant', 64, [
+    { kind: 'mischief', label: 'Disturbance / cleanup fee', amount: 45 },
+  ]);
+  assert.equal(bill.items.length, 2);
+  assert.equal(bill.items[0].amount, 64);
+  assert.equal(bill.items[1].amount, 45);
+  assert.equal(bill.total, 109);
+});
+
+test('buildBill: no base price and no incidents still yields a single line', () => {
+  const bill = buildBill('The park', 0, []);
+  assert.equal(bill.items.length, 1);
+  assert.equal(bill.total, 0);
+});
+

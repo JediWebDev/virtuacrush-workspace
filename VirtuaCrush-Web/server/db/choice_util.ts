@@ -2,6 +2,8 @@
 // the LLM-generated choice, deciding when one is due, and computing the
 // server-authoritative effects of each option. No DB or runtime imports.
 
+import type { Incident } from './world_util';
+
 /** How long the user has to respond, in seconds (the hourglass duration). */
 export const CHOICE_TTL_SECONDS = 60;
 
@@ -112,3 +114,24 @@ export function expiryFrom(createdAtMs: number, ttlSeconds = CHOICE_TTL_SECONDS)
 export function isExpired(expiresAtMs: number, nowMs: number = Date.now()): boolean {
   return nowMs >= expiresAtMs;
 }
+
+/**
+ * Engine-authoritative end-date bill: a base venue price plus a deterministic
+ * line item for each recorded incident. The LLM never decides these numbers.
+ */
+export function buildBill(
+  venueLabel: string,
+  basePrice: number,
+  incidents: Incident[] = [],
+): BillData {
+  const round = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 100) / 100;
+  const items: BillItem[] = [];
+  if (basePrice > 0) items.push({ label: `${venueLabel} for two`, amount: round(basePrice) });
+  for (const inc of incidents) {
+    if (inc && inc.amount > 0) items.push({ label: inc.label, amount: round(inc.amount) });
+  }
+  if (items.length === 0) items.push({ label: venueLabel, amount: round(basePrice) });
+  const total = round(items.reduce((sum, it) => sum + it.amount, 0));
+  return { items, total };
+}
+

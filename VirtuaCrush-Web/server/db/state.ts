@@ -7,6 +7,7 @@ import { getCharacter } from '../inworld/characters';
 import { generateDailyState } from '../inworld/story_engine';
 import { utcDateString, isStale, advanceProgress, type DailyState } from './story_util';
 import type { SceneState, SceneMode } from './scene_util';
+import type { Incident } from './world_util';
 
 interface StateRow {
   character_id: string;
@@ -21,11 +22,12 @@ interface StateRow {
   planned_location: string | null;
   jailed_until: string | Date | null;
   bail_call_used: boolean;
+  scene_incidents: Incident[] | null;
 }
 
 const COLS = `character_id, state_date::text AS state_date, activity, mood, headline, goal_progress,
               scene_mode, scene_location, bill_pending, planned_location,
-              jailed_until, bail_call_used`;
+              jailed_until, bail_call_used, scene_incidents`;
 
 export interface Situation {
   state: DailyState;
@@ -49,6 +51,7 @@ function rowToScene(r: StateRow): SceneState {
     plannedLocation: r.planned_location ?? null,
     jailedUntil: r.jailed_until ? new Date(r.jailed_until).toISOString() : null,
     bailCallUsed: !!r.bail_call_used,
+    incidents: Array.isArray(r.scene_incidents) ? r.scene_incidents : [],
   };
 }
 
@@ -82,8 +85,8 @@ async function generateAndStore(
     `INSERT INTO character_state
        (user_id, character_id, state_date, activity, mood, headline, goal_progress,
         scene_mode, scene_location, bill_pending, planned_location,
-        jailed_until, bail_call_used, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'apart', NULL, false, NULL, NULL, false, NOW())
+        jailed_until, bail_call_used, scene_incidents, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'apart', NULL, false, NULL, NULL, false, '[]'::jsonb, NOW())
      ON CONFLICT (user_id, character_id) DO UPDATE
        SET state_date = EXCLUDED.state_date,
            activity = EXCLUDED.activity,
@@ -96,6 +99,7 @@ async function generateAndStore(
            planned_location = NULL,
            jailed_until = NULL,
            bail_call_used = false,
+           scene_incidents = '[]'::jsonb,
            updated_at = NOW()
      RETURNING ${COLS}`,
     [userId, characterId, today, generated.activity, generated.mood, generated.headline, goalProgress],
@@ -126,6 +130,7 @@ async function ensureFreshRow(userId: string, characterId: string): Promise<Stat
         planned_location: null,
         jailed_until: null,
         bail_call_used: false,
+        scene_incidents: [],
       }
     );
   }
@@ -173,7 +178,7 @@ export async function setScene(
 ): Promise<SceneState> {
   const { rows } = await pool.query<StateRow>(
     `UPDATE character_state
-       SET scene_mode = $3, scene_location = $4, bill_pending = $5, planned_location = $6, updated_at = NOW()
+       SET scene_mode = $3, scene_location = $4, bill_pending = $5, planned_location = $6, scene_incidents = '[]'::jsonb, updated_at = NOW()
      WHERE user_id = $1 AND character_id = $2
      RETURNING ${COLS}`,
     [userId, characterId, scene.mode, scene.location, scene.billPending, scene.plannedLocation ?? null],
@@ -191,6 +196,7 @@ export async function arrestUser(
     `UPDATE character_state
        SET jailed_until = $3, bail_call_used = false,
            scene_mode = 'apart', scene_location = NULL, planned_location = NULL, bill_pending = false,
+           scene_incidents = '[]'::jsonb,
            updated_at = NOW()
      WHERE user_id = $1 AND character_id = $2`,
     [userId, characterId, until],
@@ -203,6 +209,20 @@ export async function releaseUser(userId: string, characterId: string): Promise<
     `UPDATE character_state SET jailed_until = NULL, bail_call_used = false, updated_at = NOW()
      WHERE user_id = $1 AND character_id = $2`,
     [userId, characterId],
+  );
+}
+
+/** Records a priced mischief incident on the current date (engine-decided bill line). */
+export async function appendIncident(
+  userId: string,
+  characterId: string,
+  incident: Incident,
+): Promise<void> {
+  await pool.query(
+    `UPDATE character_state
+       SET scene_incidents = COALESCE(scene_incidents, '[]'::jsonb) || $3::jsonb, updated_at = NOW()
+     WHERE user_id = $1 AND character_id = $2`,
+    [userId, characterId, JSON.stringify([incident])],
   );
 }
 

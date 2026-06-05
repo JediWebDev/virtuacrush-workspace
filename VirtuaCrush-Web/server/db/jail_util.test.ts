@@ -54,3 +54,12 @@ test('fallbackBailResponse: accept vs refuse', () => {
   assert.ok(fallbackBailResponse('Mina', false).toLowerCase().includes('no'));
   assert.ok(BAIL_THRESHOLD > 0 && BAIL_THRESHOLD < 100);
 });
+
+test('formatArrestDirective: off-date variant drops the date-ruined framing', () => {
+  const off = formatArrestDirective('theft', 'where they are', 'the authorities', 'Mina', false);
+  assert.ok(off.includes('Mina'));
+  assert.ok(off.toUpperCase().includes('ARREST'));
+  assert.ok(!off.includes('RUINED'));
+  assert.ok(off.toLowerCase().includes('apart'));
+});
+

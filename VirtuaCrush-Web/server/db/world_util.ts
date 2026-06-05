@@ -1,12 +1,13 @@
-// World-event detector: reads a user's on-date message and decides whether they
-// just did something that the world should react to — minor mischief (a warning
-// from staff/security) or an outright crime (responders escalate). Drives a
-// narrator directive so authority figures and the date character react.
+// World-event detector: reads a user's message and decides whether they just did
+// something the simulated world should react to — minor mischief (a warning from
+// staff/security/a neighbor) or an outright crime (responders escalate, leading
+// to an arrest). This is the AUTHORITATIVE adjudicator: the LLM never decides
+// whether/how the world reacts; it only narrates the event the engine hands it.
 //
 // Heuristic + word-boundary matched, tuned to avoid slang false positives
 // ("this place is fire", "steal the show", "break the ice", "smash" = great).
-// Pure + testable. Crime detection is conservative on purpose — a false
-// positive here will (in the next pass) get the user wrongly "arrested".
+// Pure + testable. Crime detection is conservative on purpose — a false positive
+// here gets the user wrongly arrested.
 
 export type WorldEventKind = 'none' | 'mischief' | 'crime';
 export type CrimeType = 'fire' | 'theft' | 'destruction' | 'violence';
@@ -98,34 +99,84 @@ export function respondersFor(crimeType: CrimeType): string {
   }
 }
 
+// --- Deterministic incident pricing (engine-decided bill line items) ----------
+//
+// When mischief happens on a date, the engine records a priced Incident so the
+// end-date bill can be computed deterministically (the LLM never invents money).
+// Crimes lead to arrest rather than a bill, but their costs are defined here too
+// for completeness / testing.
+
+export interface Incident {
+  kind: 'mischief' | 'crime';
+  crimeType?: CrimeType;
+  label: string;
+  amount: number; // USD surcharge added to the end-date bill
+}
+
+/** Flat disturbance/cleanup surcharge for on-date mischief. */
+export const MISCHIEF_FEE = 45;
+
+/** Deterministic restitution/damages per crime type. */
+export const CRIME_FEES: Record<CrimeType, number> = {
+  fire: 1500,
+  theft: 250,
+  destruction: 600,
+  violence: 400,
+};
+
+/** Maps a detected world event to a priced bill incident (null for 'none'). */
+export function incidentForEvent(event: WorldEvent): Incident | null {
+  if (event.kind === 'mischief') {
+    return { kind: 'mischief', label: 'Disturbance / cleanup fee', amount: MISCHIEF_FEE };
+  }
+  if (event.kind === 'crime' && event.crimeType) {
+    return {
+      kind: 'crime',
+      crimeType: event.crimeType,
+      label: `Damages (${event.crimeType})`,
+      amount: CRIME_FEES[event.crimeType],
+    };
+  }
+  return null;
+}
+
 /**
- * Builds the narrator directive for a world event. `authority` is the venue's
- * authority figure (e.g. "a mall security guard"). No state change here — this
- * pass is narration only; the arrest/jail transition comes next.
+ * Builds the narrator directive for a world event the engine has decided to
+ * raise. `authority` is the figure who steps in (venue staff on a date, the
+ * authorities/a neighbor off a date). The LLM only narrates this — it does not
+ * decide whether the event happens. `onDate` toggles in-venue vs remote wording.
  */
 export function formatWorldEventDirective(
   event: WorldEvent,
   authority: string,
   characterName: string,
+  onDate: boolean = true,
 ): string {
   if (event.kind === 'none') return '';
 
   if (event.kind === 'mischief') {
-    return (
-      `\n\nWORLD EVENT — the user just did something disruptive in public. ` +
-      `${authority} notices and steps in (a stern warning, telling them to knock it off or they'll be thrown out). ` +
-      `Narrate ${authority}'s reaction in *stage directions*, and have ${characterName} react in character — ` +
-      `mortified, amused, or scolding depending on their personality. Keep it grounded and in-scene.`
-    );
+    return onDate
+      ? `\n\nWORLD EVENT (decided by the simulation — narrate it, do not change it): the user just did ` +
+          `something disruptive in public. ${authority} notices and steps in (a stern warning to knock it off ` +
+          `or be thrown out). Narrate ${authority}'s reaction in *stage directions*, and have ${characterName} ` +
+          `react in character — mortified, amused, or scolding depending on their personality. Keep it grounded and in-scene.`
+      : `\n\nWORLD EVENT (decided by the simulation — narrate it, do not change it): the user just described ` +
+          `doing something disruptive/reckless where they are. ${authority} take notice and respond believably ` +
+          `(a complaint, a warning, someone intervening). Narrate that reaction briefly in *stage directions*, and ` +
+          `have ${characterName} react in character over text — concerned, exasperated, or amused. Keep it grounded.`;
   }
 
-  // crime
+  // crime (note: in the normal flow a crime triggers an arrest directive instead;
+  // this branch is a fallback for any non-arresting crime narration).
   const responders = event.crimeType ? respondersFor(event.crimeType) : 'the police';
-  return (
-    `\n\nWORLD EVENT — the user just did something seriously dangerous/criminal (${event.crimeType}). ` +
-    `${authority} and bystanders react with alarm, and ${responders} are being called and are on the way. ` +
-    `Narrate the escalating chaos in vivid *stage directions* (the authority intervening, the panic, sirens approaching), ` +
-    `and have ${characterName} react with genuine shock/horror in character. This is a major, unforgettable incident — ` +
-    `do NOT brush it off or treat it as a joke.`
-  );
+  return onDate
+    ? `\n\nWORLD EVENT (decided by the simulation — narrate it, do not change it): the user just did something ` +
+        `seriously dangerous/criminal (${event.crimeType}). ${authority} and bystanders react with alarm, and ` +
+        `${responders} are being called and are on the way. Narrate the escalating chaos in vivid *stage directions* ` +
+        `(the authority intervening, the panic, sirens approaching), and have ${characterName} react with genuine ` +
+        `shock/horror in character. This is a major, unforgettable incident — do NOT brush it off or treat it as a joke.`
+    : `\n\nWORLD EVENT (decided by the simulation — narrate it, do not change it): the user just described doing ` +
+        `something seriously dangerous/criminal (${event.crimeType}). Alarm spreads where they are and ${responders} ` +
+        `are on the way. Narrate the escalating chaos briefly in *stage directions*, and have ${characterName} react ` +
+        `with genuine shock/horror in character over text. This is a major, unforgettable incident — do NOT treat it as a joke.`;
 }

@@ -31,20 +31,25 @@ export function formatArrestDirective(
   venueLabel: string,
   authority: string,
   characterName: string,
+  onDate: boolean = true,
 ): string {
+  if (onDate) {
+    return (
+      `\n\n>>> ARREST EVENT (decided by the simulation — narrate it, do not change it): The user just committed ${crimeType} at ${venueLabel}. ` +
+      `${authority} restrains them and ${respondersFor(crimeType)} arrive. The user is being ARRESTED, handcuffed, and hauled away. ` +
+      `Narrate the bust vividly in *stage directions* (the sirens, the cuffs, the crowd staring), and have ${characterName} react with ` +
+      `utter mortification — they are humiliated, the date is RUINED, and they distance themselves as the user is taken to jail. ` +
+      `End the moment with the user being driven off to a holding cell. Do NOT make light of it.`
+    );
+  }
   return (
-    `\n\n>>> ARREST EVENT (this is happening NOW): The user just committed ${crimeType} at ${venueLabel}. ` +
-    `${authority} restrains them and ${respondersFor(crimeType)} arrive. The user is being ARRESTED, handcuffed, and hauled away. ` +
-    `Narrate the bust vividly in *stage directions* (the sirens, the cuffs, the crowd staring), and have ${characterName} react with ` +
-    `utter mortification — they are humiliated, the date is RUINED, and they distance themselves as the user is taken to jail. ` +
-    `End the moment with the user being driven off to a holding cell. Do NOT make light of it.`
+    `\n\n>>> ARREST EVENT (decided by the simulation — narrate it, do not change it): The user just committed ${crimeType}. ` +
+    `${respondersFor(crimeType)} arrive and the user is being ARRESTED, handcuffed, and hauled away to a holding cell. ` +
+    `You (${characterName}) are NOT physically there — you're apart, texting — but as you realize what they've done, react with genuine ` +
+    `shock and alarm in character. Narrate the arrest plainly in *stage directions*. This is serious; do NOT make light of it.`
   );
 }
 
-/**
- * The system persona used WHILE the user is jailed: a strict jail narrator, not
- * the date character (who is not present). Enforces realism on jail actions.
- */
 export function jailNarratorPrompt(characterName: string, callUsed: boolean = false): string {
   const callRule = callUsed
     ? `The user has ALREADY used their single phone call. They get NO more calls — not to ${characterName}, ` +

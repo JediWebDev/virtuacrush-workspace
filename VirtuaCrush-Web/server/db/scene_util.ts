@@ -2,6 +2,7 @@
 // of choice to offer, and per-option effects. No DB / runtime imports.
 import { getLocation, type LocationKind } from '../inworld/scenes';
 import type { DailyState } from './story_util';
+import type { Incident } from './world_util';
 
 export type SceneMode = 'apart' | 'together';
 export type ScenePhase = 'home' | 'planning' | 'on_date' | 'jailed';
@@ -14,6 +15,7 @@ export interface SceneState {
   plannedLocation?: string | null; // agreed venue while still apart (logistics phase)
   jailedUntil?: string | null;     // ISO timestamp; user is jailed until then
   bailCallUsed?: boolean;          // whether the one phone call was spent
+  incidents?: Incident[];          // priced mischief incidents recorded during the current date
 }
 
 /**
@@ -73,10 +75,9 @@ export function formatSituationBlock(
         `Never say you are at home or alone. Stay present and let the place color your words — you can reference ${loc.cues}. ` +
         `React directly to what the user does; don't give one-word non-answers.
 ` +
-        `THE WORLD IS REAL AND HAS CONSEQUENCES: this is a public place with other people and staff around, including ${loc.authority}. ` +
-        `If the user does ANYTHING disruptive, reckless, messy, destructive, embarrassing, or against the rules (even creative or unexpected things), ` +
-        `have ${loc.authority} and/or bystanders step in and react believably — describe it in *stage directions* — and react in character yourself. ` +
-        `Never ignore disruptive behavior or just play along with something that would clearly cause a scene.${closeness}`
+        `This is a real public place with other people and staff around (including ${loc.authority}). Stay grounded in that reality and play only your own part as ${characterName}. ` +
+        `Do NOT invent or narrate consequences of your own — do not summon ${loc.authority}, security, police, sirens, arrests, or any outside intervention, and do not decide the user has been caught, removed, or punished. ` +
+        `Those events are decided by the simulation and will be handed to you explicitly when they happen; until then, just react in character to what the user says and does.${closeness}`
       );
     }
   }

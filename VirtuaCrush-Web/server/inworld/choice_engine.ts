@@ -4,7 +4,8 @@
 // Fails soft: returns null so the caller simply doesn't offer a choice.
 import { getLLM } from './client';
 import { getLore } from './lore';
-import { parseGeneratedChoice, DEFAULT_TIMEOUT_REACTION, type GeneratedChoice, type BillData } from '../db/choice_util';
+import { parseGeneratedChoice, buildBill, DEFAULT_TIMEOUT_REACTION, type GeneratedChoice, type BillData } from '../db/choice_util';
+import type { Incident } from '../db/world_util';
 import { DATE_LOCATION_SLUGS, LOCATIONS, getLocation, coerceDateLocation } from './scenes';
 import { fallbackBailResponse } from '../db/jail_util';
 
@@ -220,32 +221,39 @@ export async function generateItemizedBill(params: {
   displayName: string;
   locationSlug: string;
   recentText: string;
+  basePrice: number;
+  incidents: Incident[];
 }): Promise<GeneratedBill> {
   const loc = getLocation(params.locationSlug);
   const venue = loc ? loc.label : 'the date';
   const venueDesc = loc ? loc.description : 'out together';
 
+  // ENGINE-AUTHORITATIVE: the bill amounts are computed deterministically from
+  // the venue base price + recorded incidents. The LLM only writes flavor text;
+  // it never decides or changes any number.
+  const bill = buildBill(venue, params.basePrice, params.incidents);
+  const billSummary =
+    bill.items.map((it) => `${it.label}: $${it.amount}`).join(', ') + ` (total $${bill.total})`;
+
   const fallback: GeneratedBill = {
-    prompt: `The bill for ${venue} lands on the table...`,
-    bill: { items: [{ label: `${venue} for two`, amount: 46 }], total: 46 },
+    prompt: `The bill for ${venue} lands on the table — $${bill.total}.`,
+    bill,
     payReaction: "Oh — you're getting this? Look at you. I'm impressed, honestly.",
     ventReaction: `Wait, I'm paying? Again? Unbelievable. I'm putting this on my story, everyone needs to know.`,
     timeoutReaction: '*awkwardly slides the bill back and forth across the table*',
   };
 
-  const prompt = `Itemize the final bill for a date that is ending. ${params.displayName} and the user were ${venueDesc}.
+  const prompt = `Write the in-character beat for the end-of-date bill arriving. ${params.displayName} and the user were ${venueDesc}.
+The bill total and line items are FIXED by the venue and what happened — do NOT invent or change any amounts. The bill is: ${billSummary}.
 
-Base it on a realistic ${venue} outing, PLUS anything notable or chaotic that happened in the recent conversation below — if the user caused damage or mayhem (e.g. broke a bathroom fixture, knocked over a display, ordered absurdly), add a pricey, funny line item for it.
-
-RECENT CONVERSATION:
+RECENT CONVERSATION (for tone only):
 """
-${params.recentText.slice(0, 2500)}
+${params.recentText.slice(0, 1500)}
 """
 
-Respond with ONLY this JSON (no prose/fences). Amounts are plain USD numbers:
+Respond with ONLY this JSON (no prose/fences). Do NOT state any dollar amount that contradicts the bill above:
 {
   "prompt": "<1 sentence, in-character, the bill arrives>",
-  "items": [ {"label": "<line item>", "amount": <number>}, ... 2 to 5 items ],
   "payReaction": "<${params.displayName}, grateful/teasing, when the USER pays>",
   "ventReaction": "<${params.displayName}, genuinely annoyed and venting in a funny, shareable way, when THEY get stuck with the bill>",
   "timeoutReaction": "<brief stage action if the user freezes>"
@@ -258,31 +266,17 @@ Respond with ONLY this JSON (no prose/fences). Amounts are plain USD numbers:
     const m = text.match(/\{[\s\S]*\}/);
     if (!m) return fallback;
     const obj = JSON.parse(m[0]);
-
-    const items = Array.isArray(obj?.items)
-      ? obj.items
-          .map((it: any) => ({
-            label: typeof it?.label === 'string' ? it.label.trim().slice(0, 80) : '',
-            amount: roundMoney(Number(it?.amount)),
-          }))
-          .filter((it: { label: string; amount: number }) => it.label && it.amount > 0)
-          .slice(0, 6)
-      : [];
-    if (items.length === 0) return fallback;
-
-    const total = roundMoney(items.reduce((s: number, it: { amount: number }) => s + it.amount, 0));
     const str = (v: unknown, fb: string) =>
       typeof v === 'string' && v.trim() ? v.trim().slice(0, 400) : fb;
-
     return {
       prompt: str(obj?.prompt, fallback.prompt),
-      bill: { items, total },
+      bill, // engine-computed, never from the LLM
       payReaction: str(obj?.payReaction, fallback.payReaction),
       ventReaction: str(obj?.ventReaction, fallback.ventReaction),
       timeoutReaction: str(obj?.timeoutReaction, fallback.timeoutReaction).slice(0, 200),
     };
   } catch (err) {
-    console.warn(`[choice] bill generation failed for ${params.characterId}:`, err);
+    console.warn(`[choice] bill flavor generation failed for ${params.characterId}:`, err);
     return fallback;
   }
 }

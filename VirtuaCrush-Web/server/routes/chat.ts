@@ -22,12 +22,12 @@ import {
 } from '../db/memory';
 import { getCharacter, type CharacterId } from '../inworld/characters';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
-import { getSituation, arrestUser } from '../db/state';
+import { getSituation, arrestUser, appendIncident } from '../db/state';
 import { formatSituationBlock, scenePhase } from '../db/scene_util';
 import { decideNarrationMode, formatNarrationDirective } from '../db/narration_util';
 import { formatRoleplayDirectives } from '../db/roleplay_util';
 import { detectPlanCue, shouldOfferDateChoice } from '../db/cue_util';
-import { detectWorldEvent, formatWorldEventDirective } from '../db/world_util';
+import { detectWorldEvent, formatWorldEventDirective, incidentForEvent } from '../db/world_util';
 import {
   jailNarratorPrompt,
   jailContextBlock,
@@ -144,31 +144,44 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   } else {
     const narrationDirective = formatNarrationDirective(decideNarrationMode(message), displayName);
 
-    // World event: disruptive/criminal acts ON a date trigger authority/responders.
-    // A CRIME escalates to an arrest (date ends, jail, big affinity hit).
+    // World event: the ENGINE (not the LLM) decides whether the user's input
+    // triggers a world reaction. Runs in every non-jailed phase; a CRIME always
+    // escalates to an arrest, mischief draws a warning. On a date the authority
+    // is the venue's; off a date it's the wider authorities reacting remotely.
     let eventDirective = '';
-    if (phase === 'on_date') {
-      const event = detectWorldEvent(message);
-      const loc = getLocation(scene.location);
-      const authority = loc?.authority ?? 'a security guard';
-      const venueLabel = loc?.label ?? 'the venue';
-      if (event.kind === 'crime' && event.crimeType) {
+    const event = detectWorldEvent(message);
+    if (event.kind !== 'none') {
+      const onDate = phase === 'on_date';
+      const loc = onDate ? getLocation(scene.location) : null;
+      const authority = onDate ? (loc?.authority ?? 'a security guard') : 'the authorities';
+      const venueLabel = onDate ? (loc?.label ?? 'the venue') : 'where they are';
+      if (event.crimeType) {
         arrested = true;
         await arrestUser(req.user!.id, characterId, jailEndFrom());
         arrestAffinity = await incrementAffinity(req.user!.id, characterId, JAIL_ARREST_AFFINITY);
         void storeSignificantEvent(
           req.user!.id,
           characterId,
-          `User was ARRESTED for ${event.crimeType} on their date at ${venueLabel}; the date ended in total disaster.`,
+          onDate
+            ? `User was ARRESTED for ${event.crimeType} on their date at ${venueLabel}; the date ended in total disaster.`
+            : `User was ARRESTED for ${event.crimeType}.`,
         );
-        eventDirective = formatArrestDirective(event.crimeType, venueLabel, authority, displayName);
-      } else if (event.kind !== 'none') {
-        eventDirective = formatWorldEventDirective(event, authority, displayName);
+        eventDirective = formatArrestDirective(event.crimeType, venueLabel, authority, displayName, onDate);
+      } else {
+        // mischief
+        eventDirective = formatWorldEventDirective(event, authority, displayName, onDate);
         void storeSignificantEvent(
           req.user!.id,
           characterId,
-          `User caused a disruptive scene during their date at ${venueLabel}.`,
+          onDate
+            ? `User caused a disruptive scene during their date at ${venueLabel}.`
+            : `User did something disruptive/reckless while apart.`,
         );
+        // Record a priced incident for the end-date bill (dates only).
+        if (onDate) {
+          const incident = incidentForEvent(event);
+          if (incident) void appendIncident(req.user!.id, characterId, incident);
+        }
       }
     }
 

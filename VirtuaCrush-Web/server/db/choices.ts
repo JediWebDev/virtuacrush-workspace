@@ -17,7 +17,7 @@ import { getSituation, getScene, setScene, bumpGoalProgress, markBailCallUsed, r
 import { incrementAffinity, getAffinity } from './affinity';
 import { storeSignificantEvent } from './memory';
 import { createPost } from './posts';
-import { getLocation, isPaidLocation, coerceDateLocation } from '../inworld/scenes';
+import { getLocation, isPaidLocation, coerceDateLocation, basePriceFor } from '../inworld/scenes';
 import {
   chooseChoiceKind,
   isGoalBeatDue,
@@ -330,6 +330,8 @@ export async function createEndDateBill(
     displayName,
     locationSlug: scene.location ?? 'restaurant',
     recentText,
+    basePrice: basePriceFor(scene.location),
+    incidents: scene.incidents ?? [],
   });
 
   const options: ChoiceOption[] = [
