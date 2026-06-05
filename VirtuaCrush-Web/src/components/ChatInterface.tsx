@@ -453,18 +453,16 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
           
           <div className="mb-6 w-full rounded-2xl border border-black/[0.06] dark:border-white/[0.06] bg-black/[0.03] dark:bg-white/[0.03] p-4 text-left">
             <h4 className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500">
-                Vibe
+                How to roleplay
             </h4>
-            <div className="flex flex-wrap gap-2">
-                {character.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-[11px] font-medium text-rose-100/95"
-                  >
-                    {tag}
-                  </span>
-                ))}
-            </div>
+            <ul className="space-y-2 text-[12px] leading-relaxed text-stone-600 dark:text-stone-300">
+              <li>
+                Wrap actions in <span className="font-mono text-accent">*asterisks*</span> — e.g.{" "}
+                <em>*I lean in and smile*</em>. Anything without asterisks is you speaking out loud.
+              </li>
+              <li>Actions are real. What you do has consequences — for the moment, the mood, and your relationship.</li>
+              <li>Push your luck and the world pushes back: staff, security, even the police can step in.</li>
+            </ul>
           </div>
 
           <PrivateMessagesInbox onPlayAudio={openAudioMessage} userTier={userTier} />
@@ -572,14 +570,21 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
               </span>
               <span className="min-w-0 truncate text-stone-600 dark:text-stone-300">
-                <span className="font-semibold text-stone-800 dark:text-stone-100">{character.name}</span>{" "}
-                {storyState.phase === "jailed"
-                  ? "· in a holding cell 🚔"
-                  : storyState.phase === "on_date" && storyState.sceneLabel
-                    ? `· on a date at the ${storyState.sceneLabel.toLowerCase()}`
-                    : storyState.phase === "planning" && storyState.sceneLabel
-                      ? `· planning a date at the ${storyState.sceneLabel.toLowerCase()}`
-                      : `is ${storyState.activity || "around"}`}
+                {storyState.phase === "jailed" ? (
+                  <>
+                    <span className="font-semibold text-stone-800 dark:text-stone-100">You&apos;re</span>{" "}
+                    in a holding cell 🚔 — {character.name} is your one call
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold text-stone-800 dark:text-stone-100">{character.name}</span>{" "}
+                    {storyState.phase === "on_date" && storyState.sceneLabel
+                      ? `· on a date at the ${storyState.sceneLabel.toLowerCase()}`
+                      : storyState.phase === "planning" && storyState.sceneLabel
+                        ? `· planning a date at the ${storyState.sceneLabel.toLowerCase()}`
+                        : `is ${storyState.activity || "around"}`}
+                  </>
+                )}
               </span>
               {storyState.phase === "jailed" ? (
                 <span className="ml-auto hidden shrink-0 rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 sm:inline">
@@ -925,17 +930,15 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
                     Affinity {affinity}%
                   </span>
                   <div className="w-full rounded-2xl border border-black/[0.06] bg-black/[0.03] p-4 text-left dark:border-white/[0.06] dark:bg-white/[0.03]">
-                    <h4 className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500">Vibe</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {character.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-[11px] font-medium text-rose-700 dark:text-rose-100/95"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
+                    <h4 className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500">How to roleplay</h4>
+                    <ul className="space-y-2 text-[12px] leading-relaxed text-stone-600 dark:text-stone-300">
+                      <li>
+                        Wrap actions in <span className="font-mono text-accent">*asterisks*</span> — e.g.{" "}
+                        <em>*I lean in and smile*</em>. Text without asterisks is you speaking out loud.
+                      </li>
+                      <li>Actions are real. What you do has consequences — for the moment, the mood, and your relationship.</li>
+                      <li>Push your luck and the world pushes back: staff, security, even the police can step in.</li>
+                    </ul>
                   </div>
                   <PrivateMessagesInbox
                     userTier={userTier}

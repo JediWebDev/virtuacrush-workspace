@@ -25,6 +25,7 @@ import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
 import { getSituation, arrestUser } from '../db/state';
 import { formatSituationBlock, scenePhase } from '../db/scene_util';
 import { decideNarrationMode, formatNarrationDirective } from '../db/narration_util';
+import { formatRoleplayDirectives } from '../db/roleplay_util';
 import { detectPlanCue, shouldOfferDateChoice } from '../db/cue_util';
 import { detectWorldEvent, formatWorldEventDirective } from '../db/world_util';
 import {
@@ -174,6 +175,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     memoryContext =
       formatSituationBlock(situation.state, scene, displayName, affinity) +
       formatCharacterFactsBlock(getLore(characterId)) +
+      formatRoleplayDirectives(displayName) +
       narrationDirective +
       eventDirective +
       formatMemoryBlock(memories);
