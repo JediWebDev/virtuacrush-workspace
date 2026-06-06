@@ -137,6 +137,18 @@ export const CRIME_FEES: Record<CrimeType, number> = {
 export const SPEND_AMOUNTS = { modest: 80, big: 300, lavish: 850 } as const;
 export type SpendTier = keyof typeof SPEND_AMOUNTS;
 
+/**
+ * The authority's "defined threshold": how many mischief strikes on one date
+ * before the next one escalates (security stops warning and calls the police).
+ */
+export const MISCHIEF_STRIKE_LIMIT = 3;
+
+/** Counts mischief strikes already recorded among the current date's incidents. */
+export function countMischief(incidents: Incident[] | null | undefined): number {
+  if (!Array.isArray(incidents)) return 0;
+  return incidents.filter((i) => i && i.kind === 'mischief').length;
+}
+
 /** Maps a detected world event to a priced bill incident (null for 'none'). */
 export function incidentForEvent(event: WorldEvent): Incident | null {
   if (event.kind === 'mischief') {

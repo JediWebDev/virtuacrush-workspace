@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detectWorldEvent, formatWorldEventDirective, respondersFor, incidentForEvent, detectSpending, MISCHIEF_FEE, CRIME_FEES, SPEND_AMOUNTS } from './world_util';
+import { detectWorldEvent, formatWorldEventDirective, respondersFor, incidentForEvent, detectSpending, MISCHIEF_FEE, CRIME_FEES, SPEND_AMOUNTS, MISCHIEF_STRIKE_LIMIT, countMischief } from './world_util';
 
 test('detectWorldEvent: fire', () => {
   assert.deepEqual(detectWorldEvent('I set the curtains on fire'), { kind: 'crime', crimeType: 'fire' });
@@ -107,5 +107,15 @@ test('detectSpending: tiers price deterministically; ordinary buys are ignored',
   assert.equal(detectSpending('I buy you a gift from the shop')?.amount, SPEND_AMOUNTS.modest);
   assert.equal(detectSpending('I buy you a coffee'), null);
   assert.equal(detectSpending('hey how are you'), null);
+});
+
+test('countMischief + strike limit: counts only mischief incidents', () => {
+  assert.ok(MISCHIEF_STRIKE_LIMIT >= 2);
+  assert.equal(countMischief(null), 0);
+  assert.equal(countMischief([
+    { kind: 'mischief', label: 'x', amount: 45 },
+    { kind: 'spend', label: 'y', amount: 80 },
+    { kind: 'mischief', label: 'z', amount: 45 },
+  ]), 2);
 });
 

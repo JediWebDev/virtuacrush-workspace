@@ -8,7 +8,9 @@
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { enforceMessageQuota } from '../middleware/rateLimit';
-import { streamChat, type ChatMessage } from '../inworld/chat';
+import { streamChat, streamPrompt, type ChatMessage } from '../inworld/chat';
+import { buildDirectorPrompt, companionTagFor, type Actor } from '../inworld/director';
+import { authorityActor } from '../inworld/npcs';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
 import { pool } from '../db/pool';
@@ -25,9 +27,17 @@ import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
 import { getSituation, arrestUser, appendIncident } from '../db/state';
 import { formatSituationBlock, scenePhase } from '../db/scene_util';
 import { decideNarrationMode, formatNarrationDirective } from '../db/narration_util';
-import { formatRoleplayDirectives } from '../db/roleplay_util';
+import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
 import { detectPlanCue, shouldOfferDateChoice } from '../db/cue_util';
-import { detectWorldEvent, formatWorldEventDirective, incidentForEvent, detectSpending } from '../db/world_util';
+import {
+  detectWorldEvent,
+  formatWorldEventDirective,
+  incidentForEvent,
+  detectSpending,
+  respondersFor,
+  countMischief,
+  MISCHIEF_STRIKE_LIMIT,
+} from '../db/world_util';
 import {
   jailNarratorPrompt,
   jailContextBlock,
@@ -132,7 +142,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   const phase = scenePhase(scene);
 
   let systemOverride: string | undefined;
-  let memoryContext: string;
+  let memoryContext = '';
+  let directorPrompt: string | undefined;
   let arrested = false;
   let arrestAffinity: number | null = null;
   let worldEventFired = false;
@@ -143,11 +154,17 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     systemOverride = jailNarratorPrompt(displayName, !!scene.bailCallUsed);
     memoryContext = jailContextBlock();
   } else {
-    const narrationDirective = formatNarrationDirective(decideNarrationMode(message), displayName);
+    const mode = decideNarrationMode(message);
+    const beatHint =
+      mode === 'dialogue'
+        ? ''
+        : `\n\nBEAT: this turn calls for a non-verbal beat — include a brief [NARRATOR] line describing it in the third person.`;
 
-    // World event: the ENGINE (not the LLM) decides whether the user's input
-    // triggers a world reaction. Runs in every non-jailed phase; a CRIME always
-    // escalates to an arrest, mischief draws a warning. On a date the authority
+    const npcs: Actor[] = [];
+
+    // World event: the ENGINE decides whether the user's input triggers a world
+    // reaction. Crime -> arrest; mischief -> a warning that escalates to police
+    // once the authority's strike threshold is crossed. On a date the authority
     // is the venue's; off a date it's the wider authorities reacting remotely.
     let eventDirective = '';
     const event = detectWorldEvent(message);
@@ -157,20 +174,40 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       const loc = onDate ? getLocation(scene.location) : null;
       const authority = onDate ? (loc?.authority ?? 'a security guard') : 'the authorities';
       const venueLabel = onDate ? (loc?.label ?? 'the venue') : 'where they are';
-      if (event.crimeType) {
+
+      // A mischief strike crosses the authority's threshold -> police are called.
+      const strikeEscalation =
+        event.kind === 'mischief' && countMischief(scene.incidents) + 1 >= MISCHIEF_STRIKE_LIMIT;
+
+      if (event.crimeType || strikeEscalation) {
         arrested = true;
         await arrestUser(req.user!.id, characterId, jailEndFrom());
         arrestAffinity = await incrementAffinity(req.user!.id, characterId, JAIL_ARREST_AFFINITY);
-        void storeSignificantEvent(
-          req.user!.id,
-          characterId,
-          onDate
-            ? `User was ARRESTED for ${event.crimeType} on their date at ${venueLabel}; the date ended in total disaster.`
-            : `User was ARRESTED for ${event.crimeType}.`,
-        );
-        eventDirective = formatArrestDirective(event.crimeType, venueLabel, authority, displayName, onDate);
+        if (event.crimeType) {
+          void storeSignificantEvent(
+            req.user!.id,
+            characterId,
+            onDate
+              ? `User was ARRESTED for ${event.crimeType} on their date at ${venueLabel}; the date ended in total disaster.`
+              : `User was ARRESTED for ${event.crimeType}.`,
+          );
+          eventDirective = formatArrestDirective(event.crimeType, venueLabel, authority, displayName, onDate);
+          npcs.push(authorityActor(authority, `Moves to restrain the user as ${respondersFor(event.crimeType)} arrive.`));
+        } else {
+          void storeSignificantEvent(
+            req.user!.id,
+            characterId,
+            `User was removed and arrested after repeated disturbances${onDate ? ` at ${venueLabel}` : ''}.`,
+          );
+          eventDirective =
+            `\n\n>>> ARREST EVENT (decided by the simulation — narrate it, do not change it): ${authority} has warned ` +
+            `the user repeatedly and has now had enough and calls the police. The user is being removed and ARRESTED for ` +
+            `repeated disturbances and hauled to a holding cell. Narrate it plainly in *stage directions* and have ` +
+            `${displayName} react in character. This is real; do NOT treat it as a joke.`;
+          npcs.push(authorityActor(authority, `Out of patience after repeated warnings — calls the police and has the user removed.`));
+        }
       } else {
-        // mischief
+        // mischief warning (still below the strike threshold)
         eventDirective = formatWorldEventDirective(event, authority, displayName, onDate);
         void storeSignificantEvent(
           req.user!.id,
@@ -179,11 +216,11 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
             ? `User caused a disruptive scene during their date at ${venueLabel}.`
             : `User did something disruptive/reckless while apart.`,
         );
-        // Record a priced incident for the end-date bill (dates only).
         if (onDate) {
           const incident = incidentForEvent(event);
           if (incident) void appendIncident(req.user!.id, characterId, incident);
         }
+        npcs.push(authorityActor(authority, `Steps in to warn the user to knock it off or be thrown out.`));
       }
     }
 
@@ -193,13 +230,24 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       if (spend) void appendIncident(req.user!.id, characterId, spend);
     }
 
-    memoryContext =
+    const directives =
       formatSituationBlock(situation.state, scene, displayName, affinity) +
       formatCharacterFactsBlock(getLore(characterId)) +
-      formatRoleplayDirectives(displayName) +
-      narrationDirective +
+      ROLEPLAY_INPUT_DIRECTIVE +
+      directorDisciplineDirective(displayName) +
+      beatHint +
       eventDirective +
       formatMemoryBlock(memories);
+
+    directorPrompt = buildDirectorPrompt({
+      companionSystem: getCharacter(characterId).systemPrompt,
+      companionTag: companionTagFor(displayName),
+      companionName: displayName,
+      npcs,
+      directives,
+      history: turns,
+      userMessage: message,
+    });
   }
 
   // --- SSE headers ---
@@ -219,13 +267,17 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   req.on('close', () => abortController.abort());
 
   try {
-    for await (const chunk of streamChat({
-      characterId,
-      history: turns,
-      userMessage: message,
-      memoryContext,
-      systemOverride,
-    })) {
+    if (phase === 'jailed') {
+      // Tag the jail narrator's output so the client renders it as a NARRATOR bubble.
+      const prefix = '[NARRATOR] ';
+      assistantFull += prefix;
+      send('chunk', { text: prefix });
+    }
+    const stream =
+      phase === 'jailed'
+        ? streamChat({ characterId, history: turns, userMessage: message, memoryContext, systemOverride })
+        : streamPrompt(directorPrompt!);
+    for await (const chunk of stream) {
       if (abortController.signal.aborted) break;
       if (chunk.text) {
         assistantFull += chunk.text;

@@ -36,3 +36,20 @@ export function characterDisciplineDirective(characterName: string): string {
 export function formatRoleplayDirectives(characterName: string): string {
   return ROLEPLAY_INPUT_DIRECTIVE + characterDisciplineDirective(characterName);
 }
+
+
+/**
+ * Voice discipline for the multi-actor director path. Unlike
+ * characterDisciplineDirective (single persona), this PERMITS the model to voice
+ * the narrator and NPCs via tags, while keeping the companion's own lines in
+ * first person and barring invented details.
+ */
+export function directorDisciplineDirective(characterName: string): string {
+  return (
+    `\n\nVOICE DISCIPLINE: In a [${characterName.toUpperCase()}] line, speak in FIRST person as ${characterName} ` +
+    `only — do not describe yourself in the third person there (use a [NARRATOR] line for third-person description). ` +
+    `Keep ${characterName} fully in character. Only reference people, pets, objects, and places that are actually ` +
+    `established in this conversation, your memory, or the current scene — never invent new ones (for example, do not ` +
+    `claim a pet, friend, or item is present unless it was actually established).`
+  );
+}

@@ -79,29 +79,23 @@ function extractText(chunk: unknown): string | undefined {
   return typeof text === 'string' && text.length > 0 ? text : undefined;
 }
 
-export async function* streamChat(params: StreamChatParams): AsyncGenerator<StreamChatChunk> {
-  const character = getCharacter(params.characterId);
+const emitChunk = function* (raw: unknown): Generator<StreamChatChunk> {
+  const text = extractText(raw);
+  const emotionEvent = extractEmotionEvent(raw);
+  if (text) yield { text };
+  if (emotionEvent) yield { emotionEvent };
+};
+
+/**
+ * Streams model output for an already-built prompt string. Shared by streamChat
+ * (single persona) and the scene director (multi-actor tagged transcript).
+ */
+export async function* streamPrompt(prompt: string): AsyncGenerator<StreamChatChunk> {
   const llm = await getLLM();
-
-  const trimmedHistory = params.history.slice(-MAX_HISTORY_TURNS);
-  const prompt = buildPrompt(
-    params.systemOverride ?? character.systemPrompt,
-    trimmedHistory,
-    params.userMessage,
-    params.memoryContext,
-  );
-
   const llmAny = llm as unknown as {
     generateContentStream?: (opts: { prompt: string }) => AsyncIterable<unknown>;
     generateContent?: (opts: { prompt: string }) => Promise<AsyncIterable<unknown>>;
     generateContentComplete: (opts: { prompt: string }) => Promise<string | { text?: string; content?: string }>;
-  };
-
-  const emitChunk = function* (raw: unknown): Generator<StreamChatChunk> {
-    const text = extractText(raw);
-    const emotionEvent = extractEmotionEvent(raw);
-    if (text) yield { text };
-    if (emotionEvent) yield { emotionEvent };
   };
 
   if (typeof llmAny.generateContentStream === 'function') {
@@ -122,4 +116,16 @@ export async function* streamChat(params: StreamChatParams): AsyncGenerator<Stre
   const result = await llmAny.generateContentComplete({ prompt });
   const text = typeof result === 'string' ? result : (result.content ?? result.text ?? '');
   if (text) yield { text };
+}
+
+export async function* streamChat(params: StreamChatParams): AsyncGenerator<StreamChatChunk> {
+  const character = getCharacter(params.characterId);
+  const trimmedHistory = params.history.slice(-MAX_HISTORY_TURNS);
+  const prompt = buildPrompt(
+    params.systemOverride ?? character.systemPrompt,
+    trimmedHistory,
+    params.userMessage,
+    params.memoryContext,
+  );
+  yield* streamPrompt(prompt);
 }
