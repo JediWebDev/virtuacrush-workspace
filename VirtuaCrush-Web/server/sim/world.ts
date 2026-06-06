@@ -31,6 +31,7 @@ export interface Belief { location?: string; activity?: string; withPlayer?: boo
 export interface Knowledge {
   knownLocations: string[];
   beliefs: Record<NpcId, Belief>; // knownNPCStates (partial, fallible)
+  knownPlayerFacts: string[];     // which player-profile facts this NPC has learned
   rumors: string[];
 }
 
@@ -65,9 +66,25 @@ export interface NpcEntity {
   economy: Economy;            // money, inventory, reputation by scope
 }
 
+/** The player's self-described identity — GROUND TRUTH. NPCs only ever see the
+ *  subset they have actually learned (see knownPlayerFacts + sim/player.ts), so
+ *  they neither invent your looks nor magically know your secrets. */
+export interface Appearance {
+  age?: string; height?: string; bodyType?: string; hair?: string;
+  eyes?: string; fashionStyle?: string; uniqueFeatures?: string;
+}
+export interface Biography {
+  interests: string[]; hobbies: string[]; goals: string[]; fears: string[]; values: string[];
+}
+export interface PlayerProfile {
+  displayName: string;
+  appearance: Appearance;
+  biography: Biography;
+}
+
 export interface WorldState {
   tick: number;
-  user: { location: string; status: UserStatus; jailedUntil?: string | null; money: number; inventory: string[] };
+  user: { location: string; status: UserStatus; jailedUntil?: string | null; money: number; inventory: string[]; profile: PlayerProfile };
   scene: { phase: 'home' | 'planning' | 'on_date' | 'jailed'; where: string; companionId: NpcId; presentNpcIds: NpcId[] };
   npcs: Record<NpcId, NpcEntity>;
 }
