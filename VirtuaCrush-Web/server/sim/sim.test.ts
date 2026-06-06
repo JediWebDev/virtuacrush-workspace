@@ -11,7 +11,7 @@ function npc(over: Partial<NpcEntity> & { id: string; name: string }): NpcEntity
   return {
     role: 'npc', location: 'mall', currentActivity: 'idling', mood: 'calm',
     needs: {}, goals: [], relationships: {}, knowledge: { knownLocations: [], beliefs: {}, rumors: [] },
-    memories: [], schedule: [], ...over,
+    memories: [], schedule: [], faction: null, economy: { money: 0, inventory: [], reputation: {} }, ...over,
   };
 }
 function world(over: Partial<WorldState> = {}): WorldState {
@@ -96,3 +96,12 @@ test('odds miss or rival already present -> no action', () => {
 test('behaviors are generic: registry-driven, threshold-gated', () => {
   assert.ok(ACTION_THRESHOLD > 0 && ACTION_THRESHOLD < 1);
 });
+
+test('deception boundary: social/lie is talk-only; crime/fraud is systemic (arrest)', () => {
+  const lie = consequencesFor({ type: 'social', subtype: 'lie' }, world());
+  assert.ok(!lie.some((c) => c.type === 'arrest'));
+  assert.ok(lie.some((c) => c.type === 'affinity' && c.delta < 0));
+  const fraud = consequencesFor({ type: 'crime', subtype: 'fraud' }, world());
+  assert.ok(fraud.some((c) => c.type === 'arrest'));
+});
+

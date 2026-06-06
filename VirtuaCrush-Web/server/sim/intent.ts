@@ -16,6 +16,15 @@ export const INTENT_CATEGORIES = [
   'observation',  // watching, inspecting, gathering info (no state change)
 ] as const;
 export type IntentCategory = (typeof INTENT_CATEGORIES)[number];
+
+// SOCIAL vs CRIME — the deception boundary (engine rule, not a morality call):
+// the dividing line is SYSTEMIC CONSEQUENCE, not how "bad" the act feels.
+//   - Verbal manipulation inside the interaction (a white lie, flattery, a bluff)
+//     stays in `social` (subtype 'lie' / 'manipulate') -> affinity/trust effects only.
+//   - Deception with systemic impact (fraud, scams, theft) is `crime` -> handled by
+//     the law system (arrest, restitution, responders).
+// Examples: "I lie about liking her dress" -> social/lie;
+//           "I scam her out of her money" -> crime/fraud.
 export type SpendTier = 'modest' | 'big' | 'lavish';
 
 export interface PlayerIntent {

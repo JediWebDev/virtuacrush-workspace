@@ -66,6 +66,8 @@ export function consequencesFor(intent: PlayerIntent, world: WorldState): Conseq
       return cs;
     }
 
+    // NB: social/lie is verbal-only (talk space). Deception with systemic impact
+    // (fraud/scam) is classified as `crime` and handled above — see intent.ts.
     case 'social':
       return [{ type: 'affinity', npc: target, delta: SOCIAL_AFFINITY[intent.subtype] ?? 0.2, reason: intent.subtype }];
 

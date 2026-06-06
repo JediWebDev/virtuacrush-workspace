@@ -34,6 +34,20 @@ export interface Knowledge {
   rumors: string[];
 }
 
+export interface Item { id: string; name: string; value?: number }
+
+/** Minimal but sufficient economic layer. Reputation is keyed by scope so it can
+ *  grow ('mall', 'public', 'security', ...) without a schema change. */
+export interface Economy {
+  money: number;
+  inventory: Item[];
+  reputation: Record<string, number>; // e.g. { mall: -30, public: 5 }
+}
+
+/** Shallow grouping for authority escalation + social clustering. Intentionally
+ *  small for now; expand only when behaviors need it. */
+export type Faction = 'mall_staff' | 'civilian' | 'security' | null;
+
 export interface NpcEntity {
   id: NpcId;
   name: string;
@@ -47,6 +61,8 @@ export interface NpcEntity {
   knowledge: Knowledge;         // perception model (NOT omniscient)
   memories: Memory[];
   schedule: ScheduleEntry[];
+  faction: Faction;            // mall_staff | civilian | security | null
+  economy: Economy;            // money, inventory, reputation by scope
 }
 
 export interface WorldState {
