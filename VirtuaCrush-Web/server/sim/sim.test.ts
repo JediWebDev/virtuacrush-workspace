@@ -11,14 +11,16 @@ const rel = (o: Partial<Relationship> = {}): Relationship => ({ affinity: 0, tru
 function npc(over: Partial<NpcEntity> & { id: string; name: string }): NpcEntity {
   return {
     role: 'npc', location: 'mall', currentActivity: 'idling', mood: 'calm',
-    needs: {}, goals: [], relationships: {}, knowledge: { knownLocations: [], beliefs: {}, knownPlayerFacts: [], rumors: [] },
-    memories: [], schedule: [], faction: null, economy: { money: 0, inventory: [], reputation: {} }, ...over,
+    appearance: {}, presentation: { wornItemIds: [], grooming: {} }, inventory: [], fashionPrefs: [],
+    needs: {}, goals: [], relationships: {},
+    knowledge: { knownLocations: [], beliefs: {}, knownPlayerFacts: [], lastSeenOutfit: {}, rumors: [] },
+    memories: [], schedule: [], faction: null, economy: { money: 0, reputation: {} }, ...over,
   };
 }
 function world(over: Partial<WorldState> = {}): WorldState {
   return {
     tick: 1,
-    user: { location: 'mall', status: 'free', money: 100, inventory: [], profile: emptyProfile('You') },
+    user: { location: 'mall', status: 'free', money: 100, profile: emptyProfile('You'), presentation: { wornItemIds: [], grooming: {} }, inventory: [] },
     scene: { phase: 'on_date', where: 'mall', companionId: 'serena', presentNpcIds: ['serena'] },
     npcs: {
       serena: npc({ id: 'serena', name: 'Serena', role: 'companion', relationships: { [PLAYER]: rel({ affinity: 70, love: 30 }) } }),
@@ -27,7 +29,7 @@ function world(over: Partial<WorldState> = {}): WorldState {
         goals: [{ id: 'outcompete_player', weight: 1, target: 'serena' }],
         relationships: { serena: rel({ affinity: 80, love: 80, tags: ['crush'] }) },
         // perception: Dereck BELIEVES Serena is out with the player.
-        knowledge: { knownLocations: ['mall'], beliefs: { serena: { withPlayer: true, location: 'mall' } }, knownPlayerFacts: [], rumors: [] },
+        knowledge: { knownLocations: ['mall'], beliefs: { serena: { withPlayer: true, location: 'mall' } }, knownPlayerFacts: [], lastSeenOutfit: {}, rumors: [] },
       }),
     },
     ...over,
@@ -62,7 +64,7 @@ test('parseRefereeOutput normalizes + fails soft', () => {
 test('crime -> arrest; reckless warns; jailed inert', () => {
   assert.ok(consequencesFor({ type: 'crime', subtype: 'armed_robbery' }, world()).some((c) => c.type === 'arrest'));
   assert.ok(!consequencesFor({ type: 'crime', subtype: 'reckless_endangerment' }, world()).some((c) => c.type === 'arrest'));
-  const jailed = world({ user: { location: 'jail', status: 'jailed', money: 0, inventory: [], profile: emptyProfile('You') } });
+  const jailed = world({ user: { location: 'jail', status: 'jailed', money: 0, profile: emptyProfile('You'), presentation: { wornItemIds: [], grooming: {} }, inventory: [] } });
   assert.deepEqual(consequencesFor({ type: 'crime', subtype: 'arson' }, jailed), []);
 });
 

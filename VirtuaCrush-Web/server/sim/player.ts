@@ -48,8 +48,8 @@ export function describeKnownPlayer(profile: PlayerProfile, npc: NpcEntity): str
   if (v.appearance) {
     const a = v.appearance;
     const bits = [
-      a.age && `age ${a.age}`, a.height, a.bodyType, a.hair && `${a.hair} hair`,
-      a.eyes && `${a.eyes} eyes`, a.fashionStyle, a.uniqueFeatures,
+      a.age && `age ${a.age}`, a.height, a.build, a.hair && `${a.hair} hair`,
+      a.eyes && `${a.eyes} eyes`, a.features,
     ].filter(Boolean);
     if (bits.length) parts.push(`appearance: ${bits.join(', ')}`);
   }

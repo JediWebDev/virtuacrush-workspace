@@ -6,14 +6,15 @@ import type { NpcEntity, PlayerProfile } from './world';
 function npc(knownPlayerFacts: string[]): NpcEntity {
   return {
     id: 'x', name: 'X', role: 'npc', location: 'mall', currentActivity: '', mood: 'calm',
+    appearance: {}, presentation: { wornItemIds: [], grooming: {} }, inventory: [], fashionPrefs: [],
     needs: {}, goals: [], relationships: {},
-    knowledge: { knownLocations: [], beliefs: {}, knownPlayerFacts, rumors: [] },
-    memories: [], schedule: [], faction: null, economy: { money: 0, inventory: [], reputation: {} },
+    knowledge: { knownLocations: [], beliefs: {}, knownPlayerFacts, lastSeenOutfit: {}, rumors: [] },
+    memories: [], schedule: [], faction: null, economy: { money: 0, reputation: {} },
   };
 }
 const profile: PlayerProfile = {
   displayName: 'Andrew',
-  appearance: { hair: 'silver', eyes: 'grey', fashionStyle: 'streetwear' },
+  appearance: { hair: 'silver', eyes: 'grey', build: 'lean' },
   biography: { interests: ['synthwave'], hobbies: ['skating'], goals: ['open a bar'], fears: ['heights'], values: ['loyalty'] },
 };
 
