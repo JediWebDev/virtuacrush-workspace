@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Sparkles, User, Mail, Menu, X, Sun, Moon } from "lucide-react";
+import { Sparkles, User, Mail, Menu, X, Sun, Moon, Shirt } from "lucide-react";
 
 interface NavProps {
   onLogoClick: () => void;
@@ -26,6 +26,7 @@ export default function Nav({ onLogoClick }: NavProps) {
 
   const browseActive = pathname === "/characters";
   const howItWorksActive = pathname === "/how-it-works";
+  const avatarActive = pathname === "/avatar";
 
   const toggleNotifications = () => {
     setIsNotificationsOpen((open) => {
@@ -104,6 +105,9 @@ export default function Nav({ onLogoClick }: NavProps) {
             </Link>
             <Link to="/how-it-works" className={navLinkClass(howItWorksActive)}>
               How It Works
+            </Link>
+            <Link to="/avatar" className={navLinkClass(avatarActive)}>
+              Avatar
             </Link>
           </nav>
 
@@ -192,6 +196,13 @@ export default function Nav({ onLogoClick }: NavProps) {
             className={`rounded-xl px-4 py-3 transition-all duration-200 hover:scale-[1.01] hover:bg-black/[0.04] dark:bg-white/[0.04] active:scale-[0.99] ${navLinkClass(howItWorksActive)}`}
           >
             How It Works
+          </Link>
+          <Link
+            to="/avatar"
+            onClick={closeMobileMenu}
+            className={`flex items-center gap-2 rounded-xl px-4 py-3 transition-all duration-200 hover:scale-[1.01] hover:bg-black/[0.04] dark:bg-white/[0.04] active:scale-[0.99] ${navLinkClass(avatarActive)}`}
+          >
+            <Shirt size={16} /> Avatar
           </Link>
         </nav>
       ) : null}

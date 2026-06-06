@@ -11,6 +11,7 @@ import HomePage from "./pages/HomePage";
 import BrowseCharactersPage from "./pages/BrowseCharactersPage";
 import AccountPage from "./pages/AccountPage";
 import HowItWorksPage from "./pages/HowItWorksPage";
+import AvatarPage from "./components/AvatarPage";
 import { useSession, signOut } from './lib/auth-client';
 
 type AppLocationState = {
@@ -94,6 +95,7 @@ export default function App() {
                 element={<BrowseCharactersPage onSelect={handleSelect} userTier={userTier} />}
               />
               <Route path="/account" element={<AccountPage />} />
+              <Route path="/avatar" element={<AvatarPage />} />
               <Route path="/how-it-works" element={<HowItWorksPage />} />
               <Route path="/chat/:characterId" element={<ChatDeepLink onSelect={handleSelect} />} />
             </Routes>

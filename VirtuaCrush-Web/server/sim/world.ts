@@ -44,6 +44,9 @@ export interface PresentationState {
   grooming: Grooming;
 }
 
+/** A saved outfit the player can re-apply in one tap (worn changes constantly). */
+export interface OutfitPreset { name: string; wornItemIds: string[] }
+
 // --- Wardrobe / owned items --------------------------------------------------
 export type ItemCategory = 'top' | 'bottom' | 'outerwear' | 'dress' | 'shoes' | 'accessory' | 'other';
 export interface InventoryItem {

@@ -30,6 +30,7 @@ import choiceRouter from './server/routes/choice';
 import postsRouter from './server/routes/posts';
 import dateRouter from './server/routes/date';
 import jailRouter from './server/routes/jail';
+import profileRouter from './server/routes/profile';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
@@ -70,6 +71,7 @@ app.use('/api/choice', choiceRouter);
 app.use('/api/posts', postsRouter);
 app.use('/api/date', dateRouter);
 app.use('/api/jail', jailRouter);
+app.use('/api/profile', profileRouter);
 
 // --- Health check -----------------------------------------------------------
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
