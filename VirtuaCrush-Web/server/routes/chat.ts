@@ -8,8 +8,8 @@
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { enforceMessageQuota } from '../middleware/rateLimit';
-import { streamChat, streamPrompt, type ChatMessage } from '../inworld/chat';
-import { buildDirectorPrompt, companionTagFor, type Actor } from '../inworld/director';
+import { streamChat, completePrompt, type ChatMessage } from '../inworld/chat';
+import { buildDirectorPrompt, companionTagFor, parseDirectorTurns, turnsToTranscript, type Actor } from '../inworld/director';
 import { authorityActor } from '../inworld/npcs';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
@@ -268,21 +268,33 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
   try {
     if (phase === 'jailed') {
-      // Tag the jail narrator's output so the client renders it as a NARRATOR bubble.
+      // Jail narrator streams; tag it so the client renders a NARRATOR bubble.
       const prefix = '[NARRATOR] ';
       assistantFull += prefix;
       send('chunk', { text: prefix });
-    }
-    const stream =
-      phase === 'jailed'
-        ? streamChat({ characterId, history: turns, userMessage: message, memoryContext, systemOverride })
-        : streamPrompt(directorPrompt!);
-    for await (const chunk of stream) {
-      if (abortController.signal.aborted) break;
-      if (chunk.text) {
-        assistantFull += chunk.text;
-        send('chunk', { text: chunk.text });
+      for await (const chunk of streamChat({
+        characterId,
+        history: turns,
+        userMessage: message,
+        memoryContext,
+        systemOverride,
+      })) {
+        if (abortController.signal.aborted) break;
+        if (chunk.text) {
+          assistantFull += chunk.text;
+          send('chunk', { text: chunk.text });
+        }
       }
+    } else {
+      // Director Stage 1: one JSON completion (meaning only). Stage 2: deterministic
+      // parse -> transcript. Fail-soft guarantees a non-empty turn (no blank replies).
+      const rawDirector = await completePrompt(directorPrompt!);
+      let dturns = parseDirectorTurns(rawDirector, displayName);
+      if (dturns.length === 0) {
+        dturns = [{ speaker: displayName, text: 'Sorry — I lost my train of thought there. What were you saying?' }];
+      }
+      assistantFull = turnsToTranscript(dturns);
+      if (!abortController.signal.aborted) send('chunk', { text: assistantFull });
     }
 
     // Persist both user + assistant turns. Done after streaming so we never

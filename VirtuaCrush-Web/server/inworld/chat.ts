@@ -118,6 +118,16 @@ export async function* streamPrompt(prompt: string): AsyncGenerator<StreamChatCh
   if (text) yield { text };
 }
 
+/** One-shot completion for a fully-built prompt (used by the JSON director). */
+export async function completePrompt(prompt: string): Promise<string> {
+  const llm = await getLLM();
+  const llmAny = llm as unknown as {
+    generateContentComplete: (opts: { prompt: string }) => Promise<string | { text?: string; content?: string }>;
+  };
+  const result = await llmAny.generateContentComplete({ prompt });
+  return typeof result === 'string' ? result : (result?.content ?? result?.text ?? '');
+}
+
 export async function* streamChat(params: StreamChatParams): AsyncGenerator<StreamChatChunk> {
   const character = getCharacter(params.characterId);
   const trimmedHistory = params.history.slice(-MAX_HISTORY_TURNS);

@@ -1,64 +1,124 @@
-// The "scene director": builds the prompt that turns one LLM call into a short,
-// multi-actor tagged transcript. The ENGINE decides which actors are present and
-// what just happened (passed in via the stage); the director only decides how it
-// is voiced. Parsing of the result lives in script_util.ts.
+// The scene director, split into two stages so the model never owns output
+// STRUCTURE — only meaning:
+//   Stage 1 (LLM): buildDirectorPrompt asks for a JSON array of {speaker, text}
+//                  lines. No tags, no formatting rules.
+//   Stage 2 (code): parseDirectorTurns turns that JSON into ordered turns
+//                  (fail-soft: malformed/prose/empty never yields a blank turn),
+//                  and turnsToTranscript renders them to the canonical tagged
+//                  string the UI parser already consumes.
 import type { ChatMessage } from './chat';
 
 export type ActorKind = 'companion' | 'narrator' | 'npc';
-export interface Actor {
-  tag: string;    // uppercase token used in [TAG]
-  name: string;   // display name
-  kind: ActorKind;
-  brief?: string; // who they are / why present / what they do this turn
-}
+export interface Actor { tag: string; name: string; kind: ActorKind; brief?: string }
 
 export interface DirectorStage {
-  companionSystem: string; // the companion persona system prompt
-  companionTag: string;    // e.g. "SERENA"
-  companionName: string;   // e.g. "Serena"
-  npcs: Actor[];           // engine-decided NPCs present this turn
-  directives: string;      // situation + facts + roleplay + narration + event + memory blocks
+  companionSystem: string;
+  companionTag: string;   // kept for compatibility; not used by the JSON prompt
+  companionName: string;
+  npcs: Actor[];
+  directives: string;
   history: ChatMessage[];
-  userMessage: string;     // the user's (action/speech) turn
+  userMessage: string;
 }
+
+export interface DirectorTurn { speaker: string; text: string }
 
 const MAX_HISTORY_TURNS = 30;
 
-/** Companion tag derived from a display name (single word, uppercased). */
 export function companionTagFor(displayName: string): string {
   return (displayName || 'YOU').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'YOU';
 }
 
+/** Stage 1 prompt: meaning only, JSON out. */
 export function buildDirectorPrompt(stage: DirectorStage): string {
   const turns = stage.history
     .slice(-MAX_HISTORY_TURNS)
     .map((m) => (m.role === 'user' ? `User: ${m.content}` : m.content))
     .join('\n');
 
-  const npcLines = stage.npcs
-    .map((n) => `- [${n.tag}] — ${n.name}.${n.brief ? ' ' + n.brief : ''} Speaks and acts only as themselves.`)
-    .join('\n');
-
-  const speakerList =
-    `- [${stage.companionTag}] — you, ${stage.companionName}, speaking and acting in FIRST person. This is your default voice.\n` +
-    `- [NARRATOR] — a neutral third-person narrator for non-verbal beats and what the world/others do. Third person ONLY, wrapped in *asterisks*, never first-person, never dialogue.` +
-    (npcLines ? `\n${npcLines}` : '');
+  const speakerLines = [
+    `- "${stage.companionName}" — you, speaking and acting in the FIRST person. Your default voice; usually the only speaker.`,
+    `- "narrator" — third-person narration of non-verbal beats and what the world or other people do. No first-person, no dialogue; wrap actions in *asterisks*.`,
+    ...stage.npcs.map((n) => `- "${n.name}" — ${n.brief ?? 'present in the scene'}. Speaks and acts only as themselves.`),
+  ].join('\n');
 
   return (
 `${stage.companionSystem}${stage.directives}
 
-=== SCENE FORMAT (follow exactly) ===
-This is a live scene that may include more than just you. Write the next moment as one or more TAGGED lines, each beginning with a speaker tag in brackets:
-${speakerList}
+=== HOW TO REPLY ===
+This is a live scene that may include more than just you. Reply as a JSON array of lines, in order. Each element is {"speaker": <name>, "text": <their words or *action*>}.
+Allowed speakers (use these names exactly):
+${speakerLines}
 
-RULES:
-- Every line MUST start with one of the tags above. Never use a tag that isn't listed, and never write a line for the User.
-- By DEFAULT only [${stage.companionTag}] speaks — keep ordinary conversation to a single [${stage.companionTag}] line.
-- Add a [NARRATOR] line only when there is a real non-verbal beat, action, or change in the scene to describe.
-- Bring in another listed speaker ONLY when they are present and have a clear reason to act this turn.
-- Keep the whole thing short (usually 1, up to 4 short lines). Stay strictly in each speaker's voice.
+Guidance: usually a single "${stage.companionName}" line. Add a "narrator" line or another speaker ONLY when something warrants it. Keep it short. Never write a line for the User.
+Output ONLY the JSON array — no preamble, no code fences, no commentary.
 
 ${turns ? turns + '\n' : ''}User: ${stage.userMessage}
-`
+
+JSON:`
   );
+}
+
+// --- Stage 2: deterministic parsing (no LLM) --------------------------------
+
+function asStr(v: unknown): string {
+  return typeof v === 'string' ? v.trim() : '';
+}
+
+/** Pulls all "text":"..." values out of malformed output as a salvage path. */
+function salvageTexts(raw: string): string[] {
+  const out: string[] = [];
+  const re = /"text"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw)) !== null) {
+    try {
+      out.push(JSON.parse(`"${m[1]}"`));
+    } catch {
+      out.push(m[1]);
+    }
+  }
+  return out.map((s) => s.trim()).filter(Boolean);
+}
+
+/**
+ * Parses the director's output into ordered {speaker, text} turns. Fail-soft, in
+ * priority order: a clean JSON array -> salvaged "text" values -> the raw text as
+ * a single companion line. Returns [] only when there is genuinely no content.
+ */
+export function parseDirectorTurns(raw: string, companionName: string): DirectorTurn[] {
+  const text = (raw ?? '').trim();
+  if (!text) return [];
+
+  const arr = text.match(/\[[\s\S]*\]/);
+  if (arr) {
+    try {
+      const parsed = JSON.parse(arr[0]);
+      if (Array.isArray(parsed)) {
+        const turns = parsed
+          .map((it) => {
+            const o = (it ?? {}) as Record<string, unknown>;
+            return { speaker: asStr(o.speaker) || companionName, text: asStr(o.text) };
+          })
+          .filter((t) => t.text);
+        if (turns.length) return turns;
+      }
+    } catch {
+      /* fall through to salvage */
+    }
+  }
+
+  const salvaged = salvageTexts(text);
+  if (salvaged.length) return salvaged.map((t) => ({ speaker: companionName, text: t }));
+
+  // Last resort: treat whatever came back as a plain companion line (never blank).
+  const cleaned = text.replace(/```[a-z]*|```/gi, '').replace(/^[\[{]+|[\]}]+$/g, '').trim();
+  return cleaned ? [{ speaker: companionName, text: cleaned }] : [];
+}
+
+/** Stage 2 render: ordered turns -> the canonical tagged transcript the UI reads. */
+export function turnsToTranscript(turns: DirectorTurn[]): string {
+  return turns
+    .filter((t) => t.text && t.text.trim())
+    .map((t) => `[${(t.speaker || 'NARRATOR').toUpperCase()}] ${t.text.trim()}`)
+    .join('\n');
 }
