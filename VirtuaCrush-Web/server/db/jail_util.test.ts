@@ -60,6 +60,6 @@ test('formatArrestDirective: off-date variant drops the date-ruined framing', ()
   assert.ok(off.includes('Mina'));
   assert.ok(off.toUpperCase().includes('ARREST'));
   assert.ok(!off.includes('RUINED'));
-  assert.ok(off.toLowerCase().includes('apart'));
+  assert.ok(off.toLowerCase().includes('shock') || off.toLowerCase().includes('alarm'));
 });
 

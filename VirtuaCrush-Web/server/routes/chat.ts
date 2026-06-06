@@ -27,7 +27,7 @@ import { formatSituationBlock, scenePhase } from '../db/scene_util';
 import { decideNarrationMode, formatNarrationDirective } from '../db/narration_util';
 import { formatRoleplayDirectives } from '../db/roleplay_util';
 import { detectPlanCue, shouldOfferDateChoice } from '../db/cue_util';
-import { detectWorldEvent, formatWorldEventDirective, incidentForEvent } from '../db/world_util';
+import { detectWorldEvent, formatWorldEventDirective, incidentForEvent, detectSpending } from '../db/world_util';
 import {
   jailNarratorPrompt,
   jailContextBlock,
@@ -135,6 +135,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let memoryContext: string;
   let arrested = false;
   let arrestAffinity: number | null = null;
+  let worldEventFired = false;
 
   if (phase === 'jailed') {
     // The user is in a holding cell. A strict jail NARRATOR takes over (the date
@@ -151,6 +152,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     let eventDirective = '';
     const event = detectWorldEvent(message);
     if (event.kind !== 'none') {
+      worldEventFired = true;
       const onDate = phase === 'on_date';
       const loc = onDate ? getLocation(scene.location) : null;
       const authority = onDate ? (loc?.authority ?? 'a security guard') : 'the authorities';
@@ -183,6 +185,12 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           if (incident) void appendIncident(req.user!.id, characterId, incident);
         }
       }
+    }
+
+    // Notable on-date spending becomes a deterministic bill line item.
+    if (phase === 'on_date' && !arrested) {
+      const spend = detectSpending(message);
+      if (spend) void appendIncident(req.user!.id, characterId, spend);
     }
 
     memoryContext =
@@ -271,7 +279,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     // plans (cue-based, with a cooldown). Only when apart — during a date the
     // only prompt is the persistent "End date" bill flow. Sent as its own SSE
     // event AFTER `done` so the reply isn't delayed.
-    if (!abortController.signal.aborted && phase === 'home') {
+    if (!abortController.signal.aborted && phase === 'home' && !arrested && !worldEventFired) {
       try {
         const { rows: cntRows } = await pool.query<{ n: number }>(
           `SELECT count(*)::int AS n FROM chat_messages

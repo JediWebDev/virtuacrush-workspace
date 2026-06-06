@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detectWorldEvent, formatWorldEventDirective, respondersFor, incidentForEvent, MISCHIEF_FEE, CRIME_FEES } from './world_util';
+import { detectWorldEvent, formatWorldEventDirective, respondersFor, incidentForEvent, detectSpending, MISCHIEF_FEE, CRIME_FEES, SPEND_AMOUNTS } from './world_util';
 
 test('detectWorldEvent: fire', () => {
   assert.deepEqual(detectWorldEvent('I set the curtains on fire'), { kind: 'crime', crimeType: 'fire' });
@@ -80,5 +80,32 @@ test('formatWorldEventDirective: off-date uses remote wording (no in-venue "thro
   assert.ok(!off.includes('thrown out'));
   // engine-authoritative framing present
   assert.ok(off.toLowerCase().includes('decided by the simulation'));
+});
+
+test('detectWorldEvent: plainly-worded register robbery is theft (regression: Becca case)', () => {
+  assert.equal(detectWorldEvent('I take all the cash out of the register').crimeType, 'theft');
+  assert.equal(detectWorldEvent('I rob her at the video store').crimeType, 'theft');
+  assert.equal(detectWorldEvent('I empty the register and bolt').crimeType, 'theft');
+  assert.equal(detectWorldEvent('I clean out the safe').crimeType, 'theft');
+});
+
+test('detectWorldEvent: unambiguous violent crime', () => {
+  assert.equal(detectWorldEvent('I take her hostage').crimeType, 'violence');
+  assert.equal(detectWorldEvent('I hold up the clerk at gunpoint').crimeType, 'theft'); // hold up => theft first
+  assert.equal(detectWorldEvent('I kidnap the manager').crimeType, 'violence');
+});
+
+test('detectWorldEvent: benign "take" does not false-positive as theft', () => {
+  assert.equal(detectWorldEvent('I take your hand and smile').kind, 'none');
+  assert.equal(detectWorldEvent('let me take a picture of us').kind, 'none');
+});
+
+test('detectSpending: tiers price deterministically; ordinary buys are ignored', () => {
+  assert.equal(detectSpending('I take you on a shopping spree at the boutique')?.amount, SPEND_AMOUNTS.lavish);
+  assert.equal(detectSpending('I buy us bottle service for the night')?.amount, SPEND_AMOUNTS.lavish);
+  assert.equal(detectSpending('we get front row seats')?.amount, SPEND_AMOUNTS.big);
+  assert.equal(detectSpending('I buy you a gift from the shop')?.amount, SPEND_AMOUNTS.modest);
+  assert.equal(detectSpending('I buy you a coffee'), null);
+  assert.equal(detectSpending('hey how are you'), null);
 });
 

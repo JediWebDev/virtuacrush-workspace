@@ -45,8 +45,8 @@ export function formatArrestDirective(
   return (
     `\n\n>>> ARREST EVENT (decided by the simulation — narrate it, do not change it): The user just committed ${crimeType}. ` +
     `${respondersFor(crimeType)} arrive and the user is being ARRESTED, handcuffed, and hauled away to a holding cell. ` +
-    `You (${characterName}) are NOT physically there — you're apart, texting — but as you realize what they've done, react with genuine ` +
-    `shock and alarm in character. Narrate the arrest plainly in *stage directions*. This is serious; do NOT make light of it.`
+    `As you (${characterName}) realize what the user has just done, react with genuine shock and alarm in character. ` +
+    `Narrate the arrest plainly in *stage directions*. This is a serious crime — do NOT make light of it, and do NOT treat it as flirty, casual, or a joke.`
   );
 }
 

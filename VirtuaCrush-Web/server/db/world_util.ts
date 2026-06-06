@@ -1,13 +1,13 @@
 // World-event detector: reads a user's message and decides whether they just did
-// something the simulated world should react to — minor mischief (a warning from
-// staff/security/a neighbor) or an outright crime (responders escalate, leading
-// to an arrest). This is the AUTHORITATIVE adjudicator: the LLM never decides
+// something the simulated world should react to — minor mischief (a warning),
+// an outright crime (responders escalate → arrest), or notable spending (a bill
+// line item). This is the AUTHORITATIVE adjudicator: the LLM never decides
 // whether/how the world reacts; it only narrates the event the engine hands it.
 //
 // Heuristic + word-boundary matched, tuned to avoid slang false positives
 // ("this place is fire", "steal the show", "break the ice", "smash" = great).
-// Pure + testable. Crime detection is conservative on purpose — a false positive
-// here gets the user wrongly arrested.
+// Pure + testable. Crime detection is conservative on purpose, but must catch
+// plainly-worded crimes ("take all the cash out of the register", "rob her").
 
 export type WorldEventKind = 'none' | 'mischief' | 'crime';
 export type CrimeType = 'fire' | 'theft' | 'destruction' | 'violence';
@@ -20,7 +20,6 @@ export interface WorldEvent {
 // --- Crime patterns (require a real action + a concrete target) ---------------
 
 const FIRE: RegExp[] = [
-  // "set/light ... on fire" with a small gap (catches "set the curtains on fire")
   /\b(set|setting|light|lighting|lit)\b[^.!?]{0,30}\b(on fire|ablaze|aflame|up in flames)\b/i,
   /\bset\s+fire\s+to\b/i,
   /\bburn\b[^.!?]{0,25}\bdown\b/i,
@@ -30,9 +29,13 @@ const FIRE: RegExp[] = [
 
 const THEFT: RegExp[] = [
   /\bshoplift\w*\b/i,
-  /\b(rob|robbing|robbed)\s+(?:the|this|that|a|an|them)\b/i,
+  /\b(rob|robbing|robbed|mug|mugged|mugging)\s+(?:the|this|that|a|an|them|her|him|you|us|everyone|someone|people)\b/i,
+  /\b(hold|held|holding)\s+up\s+(?:the|this|that|a|an|them|her|him|the\s+\w+)\b/i,
   /\bsteal\s+(?:the|a|an|some|that|those|their|his|her|its)\s+(?!show\b|kiss\b|glance\b|heart\b|spotlight\b|thunder\b)\w+/i,
   /\b(swipe|snatch|pocket|grab|nick|lift|loot)\s+(?:the\s+)?(?:cash|money|register|till|merch|merchandise|jewelry|wallet|purse|goods|stock|some\s+stuff)\b/i,
+  // plainly-worded register/safe emptying ("take all the cash out of the register")
+  /\b(take|takes|taking|took|empty|emptied|emptying|empties|raid|raided|raiding|grab|grabbed|scoop)\b[^.!?]{0,20}\b(?:cash|money|register|registers|till|drawer|safe|valuables|jewelry|jewellery)\b/i,
+  /\b(clean|cleaned|clear|cleared)\s+out\b[^.!?]{0,20}\b(?:register|till|safe|drawer|cash|store|shop|place)\b/i,
   /\bwithout\s+paying\b/i,
   /\bdine\s+and\s+dash\b/i,
   /\bskip\s+(?:out\s+on\s+)?the\s+(?:bill|check|tab)\b/i,
@@ -50,6 +53,12 @@ const VIOLENCE: RegExp[] = [
   /\b(punch|attack|assault|beat\s+up|stab|kick|tackle|strangle|choke|slap|headbutt|sucker[\s-]?punch)\s+(?:the|a|an|that|those|him|her|them|some|the\s+guard|the\s+security|the\s+bouncer|the\s+cop|the\s+manager|the\s+waiter|the\s+staff|people|everyone|someone)\b/i,
   /\bstart\s+a\s+(?:fight|brawl)\b/i,
   /\b(shoot|shooting)\s+(?:the|a|an|him|her|them|people|someone|up\s+the)\b/i,
+  // unambiguous violent crime (kept clear of flirty/BDSM "tie you up" roleplay)
+  /\b(kidnap|kidnapp?ed|kidnapping|abduct|abducted|abducting)\b/i,
+  /\b(take|taking|took|hold|holding|held)\s+(?:\w+\s+){0,2}hostage\b/i,
+  /\bat\s+(?:gun|knife)\s?point\b/i,
+  /\b(pull|pulled|point|pointed|brandish|brandished|whip\s+out|pulled\s+out)\s+(?:a|my|the)\s+(?:gun|knife|weapon|pistol|blade|firearm)\b/i,
+  /\bthreaten(?:ed|ing)?\b[^.!?]{0,30}\b(?:with\s+(?:a\s+)?(?:gun|knife|weapon|bat|pistol|blade)|to\s+(?:kill|shoot|stab|hurt))\b/i,
 ];
 
 // --- Mischief patterns (warnable, not criminal) ------------------------------
@@ -101,16 +110,16 @@ export function respondersFor(crimeType: CrimeType): string {
 
 // --- Deterministic incident pricing (engine-decided bill line items) ----------
 //
-// When mischief happens on a date, the engine records a priced Incident so the
-// end-date bill can be computed deterministically (the LLM never invents money).
+// On a date, mischief and notable spending are recorded as priced Incidents so
+// the end-date bill is computed deterministically (the LLM never invents money).
 // Crimes lead to arrest rather than a bill, but their costs are defined here too
 // for completeness / testing.
 
 export interface Incident {
-  kind: 'mischief' | 'crime';
+  kind: 'mischief' | 'crime' | 'spend';
   crimeType?: CrimeType;
   label: string;
-  amount: number; // USD surcharge added to the end-date bill
+  amount: number; // USD added to the end-date bill
 }
 
 /** Flat disturbance/cleanup surcharge for on-date mischief. */
@@ -123,6 +132,10 @@ export const CRIME_FEES: Record<CrimeType, number> = {
   destruction: 600,
   violence: 400,
 };
+
+/** Engine-fixed cost added to the bill for each spending tier. */
+export const SPEND_AMOUNTS = { modest: 80, big: 300, lavish: 850 } as const;
+export type SpendTier = keyof typeof SPEND_AMOUNTS;
 
 /** Maps a detected world event to a priced bill incident (null for 'none'). */
 export function incidentForEvent(event: WorldEvent): Incident | null {
@@ -137,6 +150,48 @@ export function incidentForEvent(event: WorldEvent): Incident | null {
       amount: CRIME_FEES[event.crimeType],
     };
   }
+  return null;
+}
+
+// --- Spending detector (drives a deterministic bill line item) ----------------
+//
+// Captures roleplayed purchases/splurges so the end-date bill reflects them.
+// Conservative: generic "buy a coffee" is covered by the venue base price and is
+// intentionally NOT matched here; only clear shopping/luxury/big-ticket signals.
+
+const SPEND_LAVISH: RegExp[] = [
+  /\bshopping\s+spree\b/i,
+  /\bbuy\s+(?:out|the\s+(?:whole\s+)?(?:store|place|boutique|mall))\b/i,
+  /\bbuy\s+everything\b/i,
+  /\b(designer|boutique|luxury|couture|high[\s-]?end)\b/i,
+  /\bsplurg\w*\b/i,
+  /\bspare\s+no\s+expense\b/i,
+  /\bmost\s+expensive\b/i,
+  /\b(diamond|diamonds|rolex|jewel(?:ry|lery)?)\b/i,
+  /\bbottle\s+service\b/i,
+  /\bchampagne\s+tower\b/i,
+  /\bgo\s+all\s+out\b/i,
+];
+const SPEND_BIG: RegExp[] = [
+  /\bexpensive\b/i,
+  /\b(front\s+row|court\s?side|floor\s+seats|vip)\b/i,
+  /\bbottle\s+of\s+(?:champagne|wine|dom|cristal|scotch|whiskey)\b/i,
+  /\b(?:a\s+)?round\s+of\s+(?:drinks|shots)\s+for\s+(?:everyone|the\s+(?:bar|table|house))\b/i,
+  /\bbuy\s+(?:drinks|a\s+round)\s+for\s+everyone\b/i,
+];
+const SPEND_MODEST: RegExp[] = [
+  /\bgo\s+shopping\b/i,
+  /\bbuy\s+(?:\w+\s+){0,3}(?:gift|gifts|present|presents|souvenir|souvenirs|merch|jewelry|clothes|shoes|bag|purse|outfit|dress|watch|perfume)\b/i,
+  /\border\s+(?:\w+\s+){0,3}(?:appetizers|dessert|desserts|a\s+bottle|lobster|steak|caviar|the\s+tasting\s+menu)\b/i,
+  /\b(?:another|a\s+second)\s+round\b/i,
+];
+
+/** Detects notable on-date spending and prices it deterministically (null = none). */
+export function detectSpending(message: string): Incident | null {
+  if (!message) return null;
+  if (anyMatch(SPEND_LAVISH, message)) return { kind: 'spend', label: 'Luxury shopping spree', amount: SPEND_AMOUNTS.lavish };
+  if (anyMatch(SPEND_BIG, message)) return { kind: 'spend', label: 'Big-ticket splurge', amount: SPEND_AMOUNTS.big };
+  if (anyMatch(SPEND_MODEST, message)) return { kind: 'spend', label: 'Extra purchases', amount: SPEND_AMOUNTS.modest };
   return null;
 }
 
@@ -178,5 +233,5 @@ export function formatWorldEventDirective(
     : `\n\nWORLD EVENT (decided by the simulation — narrate it, do not change it): the user just described doing ` +
         `something seriously dangerous/criminal (${event.crimeType}). Alarm spreads where they are and ${responders} ` +
         `are on the way. Narrate the escalating chaos briefly in *stage directions*, and have ${characterName} react ` +
-        `with genuine shock/horror in character over text. This is a major, unforgettable incident — do NOT treat it as a joke.`;
+        `with genuine shock/horror in character. This is a major, unforgettable incident — do NOT treat it as a joke.`;
 }
