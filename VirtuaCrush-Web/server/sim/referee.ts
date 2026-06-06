@@ -4,6 +4,7 @@
 // is pure-testable and carries no model-runtime dependency. Output is parsed by
 // the already-tested parseRefereeOutput (fail-soft).
 import { parseRefereeOutput, INTENT_CATEGORIES, type RefereeOutput } from './intent';
+import type { WorldState } from './world';
 
 export interface RefereeActor { id: string; name: string; role?: string }
 export interface RefereeInput {
@@ -73,3 +74,26 @@ export async function extractIntent(
     return { interpretation: '', intent: { type: 'observation', subtype: 'wait' }, affectedNpcs: [], npcIntentHints: [] };
   }
 }
+
+/** Builds a RefereeInput from a WorldState + the player's message. Pure. */
+export function refereeInputFromWorld(
+  world: WorldState,
+  message: string,
+  history?: { role: 'user' | 'assistant'; content: string }[],
+): RefereeInput {
+  const companion = world.npcs[world.scene.companionId];
+  const present = world.scene.presentNpcIds.map((id) => ({ id, name: world.npcs[id]?.name ?? id }));
+  const roster = Object.values(world.npcs).map((n) => ({ id: n.id, name: n.name, role: n.role }));
+  return {
+    message,
+    scene: {
+      phase: world.scene.phase,
+      where: world.scene.where,
+      companion: companion ? { id: companion.id, name: companion.name } : null,
+      present,
+    },
+    roster,
+    history,
+  };
+}
+

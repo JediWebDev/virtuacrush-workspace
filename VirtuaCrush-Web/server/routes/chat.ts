@@ -47,6 +47,14 @@ import {
 } from '../db/jail_util';
 import { getLocation } from '../inworld/scenes';
 import { maybeCreateChoice } from '../db/choices';
+import { assembleWorld } from '../db/sim_world';
+import { extractIntent, refereeInputFromWorld } from '../sim/referee';
+import { consequencesFor } from '../sim/rules';
+import { planEffects } from '../sim/effects';
+import { applyEffects } from '../db/sim_apply';
+import { advanceNpcs } from '../sim/agency';
+import { describeKnownPlayer } from '../sim/player';
+import { describeLastSeenOutfit, itemsById } from '../sim/wardrobe';
 
 // Recent turns fed to the LLM for local coherence. Long-term recall comes from
 // RAG memory (db/memory.ts), not from replaying a long transcript.
@@ -127,7 +135,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   // Lazily generated if it's a new day; never throws.
   const situationPromise = getSituation(req.user!.id, characterId);
   const affinityPromise = getAffinity(req.user!.id, characterId);
-  const hostilityPromise = classifyHostility(message);
 
   // Gate the prompt on these before streaming.
   const [situation, memories, affinity] = await Promise.all([
@@ -145,7 +152,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let memoryContext = '';
   let directorPrompt: string | undefined;
   let arrested = false;
-  let arrestAffinity: number | null = null;
+  let appliedAffinity: number | null = null;
   let worldEventFired = false;
 
   if (phase === 'jailed') {
@@ -154,89 +161,72 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     systemOverride = jailNarratorPrompt(displayName, !!scene.bailCallUsed);
     memoryContext = jailContextBlock();
   } else {
-    const mode = decideNarrationMode(message);
-    const beatHint =
-      mode === 'dialogue'
-        ? ''
-        : `\n\nBEAT: this turn calls for a non-verbal beat — include a brief [NARRATOR] line describing it in the third person.`;
+    // === The simulation loop: referee classifies intent -> engine decides
+    // consequences -> applier persists -> agency ticks NPCs -> director narrates.
+    // No regex detection; understanding comes from the referee.
+    const world = await assembleWorld(req.user!.id, characterId);
+    const referee = await extractIntent(refereeInputFromWorld(world, message, turns), completePrompt);
+    const plan = planEffects(consequencesFor(referee.intent, world));
+    const applied = await applyEffects(req.user!.id, characterId, plan);
+    arrested = applied.arrested;
+    appliedAffinity = applied.affinityScore;
+    worldEventFired = plan.arrest || plan.warnings.length > 0;
+
+    const onDate = phase === 'on_date';
+    const authority = onDate ? (getLocation(scene.location)?.authority ?? 'a security guard') : 'the authorities';
+    const venueLabel = onDate ? (getLocation(scene.location)?.label ?? 'the venue') : 'where they are';
 
     const npcs: Actor[] = [];
-
-    // World event: the ENGINE decides whether the user's input triggers a world
-    // reaction. Crime -> arrest; mischief -> a warning that escalates to police
-    // once the authority's strike threshold is crossed. On a date the authority
-    // is the venue's; off a date it's the wider authorities reacting remotely.
     let eventDirective = '';
-    const event = detectWorldEvent(message);
-    if (event.kind !== 'none') {
-      worldEventFired = true;
-      const onDate = phase === 'on_date';
-      const loc = onDate ? getLocation(scene.location) : null;
-      const authority = onDate ? (loc?.authority ?? 'a security guard') : 'the authorities';
-      const venueLabel = onDate ? (loc?.label ?? 'the venue') : 'where they are';
+    if (plan.arrest) {
+      const responders = plan.responders.length ? plan.responders.join(' and ') : 'the police';
+      const crimeLabel = referee.intent.subtype.replace(/_/g, ' ');
+      eventDirective =
+        `\n\n>>> ARREST EVENT (decided by the simulation — narrate it, do not change it): the user just committed ${crimeLabel}. ` +
+        `${responders} arrive and the user is being ARRESTED, handcuffed, and hauled to a holding cell. Have ${displayName} react ` +
+        `with genuine shock in character. Narrate the bust in *stage directions*. This is serious — do NOT treat it as flirty, casual, or a joke.`;
+      npcs.push(authorityActor(authority, `Moves in as ${responders} arrive to arrest the user.`));
+      void storeSignificantEvent(
+        req.user!.id,
+        characterId,
+        onDate ? `User was ARRESTED for ${crimeLabel} on their date at ${venueLabel}.` : `User was ARRESTED for ${crimeLabel}.`,
+      );
+    } else if (plan.warnings.length) {
+      eventDirective =
+        `\n\nWORLD EVENT (decided by the simulation — narrate it, do not change it): ${authority} steps in over the user's behavior ` +
+        `(${plan.warnings.join(', ')}). Narrate ${authority}'s reaction in *stage directions*; have ${displayName} react in character. Keep it grounded.`;
+      npcs.push(authorityActor(authority, `Steps in to warn the user over ${plan.warnings.join(', ')}.`));
+    }
 
-      // A mischief strike crosses the authority's threshold -> police are called.
-      const strikeEscalation =
-        event.kind === 'mischief' && countMischief(scene.incidents) + 1 >= MISCHIEF_STRIKE_LIMIT;
-
-      if (event.crimeType || strikeEscalation) {
-        arrested = true;
-        await arrestUser(req.user!.id, characterId, jailEndFrom());
-        arrestAffinity = await incrementAffinity(req.user!.id, characterId, JAIL_ARREST_AFFINITY);
-        if (event.crimeType) {
-          void storeSignificantEvent(
-            req.user!.id,
-            characterId,
-            onDate
-              ? `User was ARRESTED for ${event.crimeType} on their date at ${venueLabel}; the date ended in total disaster.`
-              : `User was ARRESTED for ${event.crimeType}.`,
-          );
-          eventDirective = formatArrestDirective(event.crimeType, venueLabel, authority, displayName, onDate);
-          npcs.push(authorityActor(authority, `Moves to restrain the user as ${respondersFor(event.crimeType)} arrive.`));
-        } else {
-          void storeSignificantEvent(
-            req.user!.id,
-            characterId,
-            `User was removed and arrested after repeated disturbances${onDate ? ` at ${venueLabel}` : ''}.`,
-          );
-          eventDirective =
-            `\n\n>>> ARREST EVENT (decided by the simulation — narrate it, do not change it): ${authority} has warned ` +
-            `the user repeatedly and has now had enough and calls the police. The user is being removed and ARRESTED for ` +
-            `repeated disturbances and hauled to a holding cell. Narrate it plainly in *stage directions* and have ` +
-            `${displayName} react in character. This is real; do NOT treat it as a joke.`;
-          npcs.push(authorityActor(authority, `Out of patience after repeated warnings — calls the police and has the user removed.`));
-        }
+    // NPC agency: autonomous, goal-driven actions this tick (not scripted).
+    const companionEntity = world.npcs[characterId];
+    let agencyHint = '';
+    for (const act of advanceNpcs(world, { next: () => Math.random() })) {
+      if (act.npc === characterId) {
+        agencyHint += `\n\nINNER DRIVE: ${displayName} feels inclined to ${act.action.replace(/_/g, ' ')} (${act.reason}) — let it color the reply, in character.`;
       } else {
-        // mischief warning (still below the strike threshold)
-        eventDirective = formatWorldEventDirective(event, authority, displayName, onDate);
-        void storeSignificantEvent(
-          req.user!.id,
-          characterId,
-          onDate
-            ? `User caused a disruptive scene during their date at ${venueLabel}.`
-            : `User did something disruptive/reckless while apart.`,
-        );
-        if (onDate) {
-          const incident = incidentForEvent(event);
-          if (incident) void appendIncident(req.user!.id, characterId, incident);
-        }
-        npcs.push(authorityActor(authority, `Steps in to warn the user to knock it off or be thrown out.`));
+        const other = world.npcs[act.npc];
+        npcs.push({ tag: (other?.name ?? act.npc).toUpperCase(), name: other?.name ?? act.npc, kind: 'npc', brief: `${act.action.replace(/_/g, ' ')} — ${act.reason}` });
       }
     }
 
-    // Notable on-date spending becomes a deterministic bill line item.
-    if (phase === 'on_date' && !arrested) {
-      const spend = detectSpending(message);
-      if (spend) void appendIncident(req.user!.id, characterId, spend);
-    }
+    // Perception-gated: what this companion actually knows about the player, and
+    // the outfit they last saw on them.
+    const playerKnown = companionEntity ? describeKnownPlayer(world.user.profile, companionEntity) : '';
+    const lastOutfit = companionEntity
+      ? describeLastSeenOutfit(companionEntity.knowledge.lastSeenOutfit, 'player', itemsById(world.user.inventory))
+      : '';
+    const outfitNote = lastOutfit ? `\n\nLAST TIME YOU SAW THE USER, they were wearing: ${lastOutfit}.` : '';
 
     const directives =
-      formatSituationBlock(situation.state, scene, displayName, affinity) +
+      formatSituationBlock(situation.state, scene, displayName, appliedAffinity ?? affinity) +
       formatCharacterFactsBlock(getLore(characterId)) +
       ROLEPLAY_INPUT_DIRECTIVE +
       directorDisciplineDirective(displayName) +
-      beatHint +
+      playerKnown +
+      outfitNote +
       eventDirective +
+      agencyHint +
       formatMemoryBlock(memories);
 
     directorPrompt = buildDirectorPrompt({
@@ -319,16 +309,9 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
     // Affinity: an arrest already applied its big hit; while jailed nothing
     // changes (the character isn't present); otherwise score the user's message.
-    let newAffinityScore: number;
-    if (arrested) {
-      newAffinityScore = arrestAffinity ?? affinity;
-    } else if (phase === 'jailed') {
-      newAffinityScore = affinity;
-    } else {
-      const classifierHostility = await hostilityPromise;
-      const affinityDelta = getAffinityDeltaFromUserMessage(message, classifierHostility);
-      newAffinityScore = await incrementAffinity(req.user!.id, characterId, affinityDelta);
-    }
+    // Affinity is now driven by the engine (consequencesFor -> applyEffects);
+    // jailed turns leave it unchanged (the companion isn't present).
+    const newAffinityScore: number = phase === 'jailed' ? affinity : (appliedAffinity ?? affinity);
 
     // Bump usage only for free users so paid users have a clean 0/null state.
     let remaining: number | null = null;
