@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyProfile, learnAboutPlayer, knownPlayerProfile, describeKnownPlayer } from './player';
+import { emptyProfile, learnAboutPlayer, knownPlayerProfile, describeKnownPlayer, detectSharedFacts, observePlayer } from './player';
 import type { NpcEntity, PlayerProfile } from './world';
 
 function npc(knownPlayerFacts: string[]): NpcEntity {
@@ -49,3 +49,25 @@ test('learning bio facts surfaces them; others stay hidden', () => {
   assert.deepEqual(view.biography?.values, []); // not learned
   assert.equal(view.appearance, undefined);     // hasn't met in person
 });
+
+test('detectSharedFacts: flags bio categories the message references', () => {
+  assert.deepEqual(detectSharedFacts('honestly synthwave is my whole personality', profile), ['interests']);
+  assert.deepEqual(detectSharedFacts('I want to open a bar someday', profile), ['goals']);
+  assert.deepEqual(detectSharedFacts('nice weather huh', profile), []);
+});
+
+test('observePlayer: name always learned; appearance only when co-present; bio on share', () => {
+  // texting (not co-present), shares an interest -> name + interests, NOT appearance
+  const texting = observePlayer({ coPresent: false, message: 'I love synthwave', profile, existingFacts: [] });
+  assert.ok(texting.includes('name'));
+  assert.ok(texting.includes('interests'));
+  assert.ok(!texting.includes('appearance'));
+  // on a date -> appearance becomes known
+  const onDate = observePlayer({ coPresent: true, message: 'hi', profile, existingFacts: [] });
+  assert.ok(onDate.includes('appearance'));
+  // merges with prior knowledge, no duplicates
+  const merged = observePlayer({ coPresent: false, message: 'I love skating on weekends', profile, existingFacts: ['name', 'appearance'] });
+  assert.equal(new Set(merged).size, merged.length);
+  assert.ok(merged.includes('hobbies'));
+});
+

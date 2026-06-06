@@ -64,3 +64,36 @@ export function describeKnownPlayer(profile: PlayerProfile, npc: NpcEntity): str
   if (parts.length === 0) return '';
   return `\n\nWHAT YOU KNOW ABOUT ${name.toUpperCase()}: ${parts.join('; ')}. Do not assume anything beyond this about their looks or background.`;
 }
+
+
+/** Which biography categories the player's message reveals (a fact is "shared"
+ *  when the message references something they listed). Pure. */
+export function detectSharedFacts(message: string, profile: PlayerProfile): PlayerFactKey[] {
+  const low = (message || '').toLowerCase();
+  if (!low.trim()) return [];
+  const out: PlayerFactKey[] = [];
+  const bio = profile.biography;
+  const mentions = (arr: string[]) => arr.some((v) => v && v.trim() && low.includes(v.toLowerCase()));
+  if (mentions(bio.interests)) out.push('interests');
+  if (mentions(bio.hobbies)) out.push('hobbies');
+  if (mentions(bio.goals)) out.push('goals');
+  if (mentions(bio.fears)) out.push('fears');
+  if (mentions(bio.values)) out.push('values');
+  return out;
+}
+
+/**
+ * Computes the player facts an NPC now knows after a turn. They always learn the
+ * player's name (you're talking) and any bio facts the message shares; they learn
+ * appearance only when CO-PRESENT (they can see you). Returns the merged fact set.
+ */
+export function observePlayer(opts: {
+  coPresent: boolean;
+  message: string;
+  profile: PlayerProfile;
+  existingFacts: string[];
+}): string[] {
+  const learned: PlayerFactKey[] = ['name', ...detectSharedFacts(opts.message, opts.profile)];
+  if (opts.coPresent) learned.push('appearance');
+  return learnAboutPlayer(opts.existingFacts, learned);
+}

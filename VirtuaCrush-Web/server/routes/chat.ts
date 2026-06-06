@@ -14,8 +14,7 @@ import { authorityActor } from '../inworld/npcs';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
 import { pool } from '../db/pool';
-import { incrementAffinity, getAffinity, getAffinityDeltaFromUserMessage } from '../db/affinity';
-import { classifyHostility } from '../inworld/moderation';
+import { getAffinity } from '../db/affinity';
 import {
   retrieveRelevantMemories,
   formatMemoryBlock,
@@ -24,27 +23,11 @@ import {
 } from '../db/memory';
 import { getCharacter, type CharacterId } from '../inworld/characters';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
-import { getSituation, arrestUser, appendIncident } from '../db/state';
+import { getSituation } from '../db/state';
 import { formatSituationBlock, scenePhase } from '../db/scene_util';
-import { decideNarrationMode, formatNarrationDirective } from '../db/narration_util';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
 import { detectPlanCue, shouldOfferDateChoice } from '../db/cue_util';
-import {
-  detectWorldEvent,
-  formatWorldEventDirective,
-  incidentForEvent,
-  detectSpending,
-  respondersFor,
-  countMischief,
-  MISCHIEF_STRIKE_LIMIT,
-} from '../db/world_util';
-import {
-  jailNarratorPrompt,
-  jailContextBlock,
-  formatArrestDirective,
-  jailEndFrom,
-  JAIL_ARREST_AFFINITY,
-} from '../db/jail_util';
+import { jailNarratorPrompt, jailContextBlock } from '../db/jail_util';
 import { getLocation } from '../inworld/scenes';
 import { maybeCreateChoice } from '../db/choices';
 import { assembleWorld } from '../db/sim_world';
@@ -53,8 +36,9 @@ import { consequencesFor } from '../sim/rules';
 import { planEffects } from '../sim/effects';
 import { applyEffects } from '../db/sim_apply';
 import { advanceNpcs } from '../sim/agency';
-import { describeKnownPlayer } from '../sim/player';
+import { describeKnownPlayer, observePlayer } from '../sim/player';
 import { describeLastSeenOutfit, itemsById } from '../sim/wardrobe';
+import { upsertNpcState } from '../db/npc_state';
 
 // Recent turns fed to the LLM for local coherence. Long-term recall comes from
 // RAG memory (db/memory.ts), not from replaying a long transcript.
@@ -238,6 +222,24 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       history: turns,
       userMessage: message,
     });
+
+    // Perception update (for NEXT turn): the companion learns the player's name +
+    // any bio they shared, and — when co-present — their appearance + current
+    // outfit. This is what makes the avatar/wardrobe land in conversation.
+    if (companionEntity) {
+      const learnedFacts = observePlayer({
+        coPresent: onDate,
+        message,
+        profile: world.user.profile,
+        existingFacts: companionEntity.knowledge.knownPlayerFacts,
+      });
+      const lastSeenOutfit = onDate
+        ? { ...companionEntity.knowledge.lastSeenOutfit, player: world.user.presentation.wornItemIds }
+        : companionEntity.knowledge.lastSeenOutfit;
+      void upsertNpcState(req.user!.id, characterId, {
+        knowledge: { ...companionEntity.knowledge, knownPlayerFacts: learnedFacts, lastSeenOutfit },
+      });
+    }
   }
 
   // --- SSE headers ---
