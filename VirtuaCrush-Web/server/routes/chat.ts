@@ -9,7 +9,7 @@ import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { enforceMessageQuota } from '../middleware/rateLimit';
 import { streamChat, completePrompt, type ChatMessage } from '../inworld/chat';
-import { buildDirectorPrompt, companionTagFor, parseDirectorTurns, turnsToTranscript, type Actor } from '../inworld/director';
+import { buildScenePrompt, parseScene, companionTagFor, turnsToTranscript, type Actor } from '../inworld/director';
 import { authorityActor } from '../inworld/npcs';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
@@ -32,7 +32,8 @@ import { getLocation } from '../inworld/scenes';
 import { maybeCreateChoice } from '../db/choices';
 import { runLightTick } from '../db/sim_world';
 import { assembleWorld } from '../db/sim_world';
-import { extractIntent, refereeInputFromWorld } from '../sim/referee';
+import type { PlayerIntent } from '../sim/intent';
+import type { WorldState, NpcEntity } from '../sim/world';
 import { consequencesFor } from '../sim/rules';
 import { planEffects } from '../sim/effects';
 import { applyEffects } from '../db/sim_apply';
@@ -136,6 +137,9 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let systemOverride: string | undefined;
   let memoryContext = '';
   let directorPrompt: string | undefined;
+  let world: WorldState | undefined;
+  let companionEntity: NpcEntity | undefined;
+  let onDate = false;
   let arrested = false;
   let appliedAffinity: number | null = null;
   let worldEventFired = false;
@@ -147,46 +151,20 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     systemOverride = jailNarratorPrompt(displayName, !!scene.bailCallUsed);
     memoryContext = jailContextBlock();
   } else {
-    // === The simulation loop: referee classifies intent -> engine decides
-    // consequences -> applier persists -> agency ticks NPCs -> director narrates.
-    // No regex detection; understanding comes from the referee.
-    const world = await assembleWorld(req.user!.id, characterId);
-    const referee = await extractIntent(refereeInputFromWorld(world, message, turns), completePrompt);
-    const plan = planEffects(consequencesFor(referee.intent, world));
-    const applied = await applyEffects(req.user!.id, characterId, plan);
-    arrested = applied.arrested;
-    appliedAffinity = applied.affinityScore;
-    worldEventFired = plan.arrest || plan.warnings.length > 0;
-
-    const onDate = phase === 'on_date';
+    // === Single merged call: classify the player's action AND narrate the scene
+    // in one LLM round (the consequences are applied below, from that
+    // classification — the engine stays authoritative on state). Halves calls.
+    world = await assembleWorld(req.user!.id, characterId);
+    companionEntity = world.npcs[characterId];
+    onDate = phase === 'on_date';
     const authority = onDate ? (getLocation(scene.location)?.authority ?? 'a security guard') : 'the authorities';
-    const venueLabel = onDate ? (getLocation(scene.location)?.label ?? 'the venue') : 'where they are';
 
     const npcs: Actor[] = [];
-    let eventDirective = '';
-    if (plan.arrest) {
-      const responders = plan.responders.length ? plan.responders.join(' and ') : 'the police';
-      const crimeLabel = referee.intent.subtype.replace(/_/g, ' ');
-      eventDirective =
-        `\n\n>>> ARREST EVENT (decided by the simulation — narrate it, do not change it): you just committed ${crimeLabel}. ` +
-        `${responders} arrive and you are being ARRESTED, handcuffed, and hauled to a holding cell. Have ${displayName} react ` +
-        `with genuine shock in character. Narrate the bust in *stage directions*. This is serious — do NOT treat it as flirty, casual, or a joke.`;
-      npcs.push(authorityActor(authority, `Moves in as ${responders} arrive to arrest the user.`));
-      rippleRumor = `the player got arrested for ${crimeLabel}`;
-      void storeSignificantEvent(
-        req.user!.id,
-        characterId,
-        onDate ? `User was ARRESTED for ${crimeLabel} on their date at ${venueLabel}.` : `User was ARRESTED for ${crimeLabel}.`,
-      );
-    } else if (plan.warnings.length) {
-      eventDirective =
-        `\n\nWORLD EVENT (decided by the simulation — narrate it, do not change it): ${authority} steps in over the user's behavior ` +
-        `(${plan.warnings.join(', ')}) — directed at you. Narrate ${authority}'s reaction in *stage directions*; have ${displayName} react in character. Keep it grounded.`;
-      npcs.push(authorityActor(authority, `Steps in to warn the user over ${plan.warnings.join(', ')}.`));
+    if (onDate) {
+      npcs.push(authorityActor(authority, 'venue staff/security — bring them in only if the player causes a scene or commits a crime'));
     }
 
     // NPC agency: autonomous, goal-driven actions this tick (not scripted).
-    const companionEntity = world.npcs[characterId];
     let agencyHint = '';
     for (const act of advanceNpcs(world, { next: () => Math.random() })) {
       if (act.npc === characterId) {
@@ -197,42 +175,35 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       }
     }
 
-    // What the companion knows about the player. CO-PRESENT: they can SEE the
-    // player's current appearance + outfit (ground truth) — never invent looks.
-    // APART: they only recall what they last saw (may be stale/empty).
+    // What the companion knows about the player (perception-gated).
     const playerKnown = companionEntity ? describeKnownPlayer(world.user.profile, companionEntity) : '';
     let lookNote = '';
     if (onDate) {
       const appearanceDesc = describeAppearance(world.user.profile.appearance);
       const outfitDesc = describeOutfit(wornItems(world.user.presentation, world.user.inventory));
       const groomingDesc = describeGrooming(world.user.presentation.grooming);
-      const bits = [
-        appearanceDesc && `appearance — ${appearanceDesc}`,
-        outfitDesc && `currently wearing ${outfitDesc}`,
-        groomingDesc || '',
-      ].filter(Boolean);
+      const bits = [appearanceDesc && `appearance — ${appearanceDesc}`, outfitDesc && `currently wearing ${outfitDesc}`, groomingDesc || ''].filter(Boolean);
       lookNote = bits.length
-        ? `\n\nYOU CAN SEE THE USER RIGHT NOW: ${bits.join('; ')}. Describe their looks ONLY as stated here — do NOT invent or change their clothing, hair, or features.`
-        : `\n\nYou can see the user, but their appearance and outfit are not defined — do NOT invent clothing or looks; avoid describing what they are wearing.`;
+        ? `\n\nYOU CAN SEE THE PLAYER RIGHT NOW: ${bits.join('; ')}. Describe their looks ONLY as stated here — do NOT invent or change their clothing, hair, or features.`
+        : `\n\nYou can see the player, but their appearance and outfit are not defined — do NOT invent clothing or looks.`;
     } else if (companionEntity) {
       const lastOutfit = describeLastSeenOutfit(companionEntity.knowledge.lastSeenOutfit, 'player', itemsById(world.user.inventory));
       lookNote = lastOutfit
-        ? `\n\nLAST TIME YOU SAW THE USER they were wearing ${lastOutfit}; you do not know if that has changed. Do NOT invent a different outfit.`
-        : `\n\nYou are apart and cannot see the user — do NOT invent or assume what they are wearing.`;
+        ? `\n\nLAST TIME YOU SAW THE PLAYER they were wearing ${lastOutfit}; you do not know if that has changed. Do NOT invent a different outfit.`
+        : `\n\nYou are apart and cannot see the player — do NOT invent what they are wearing.`;
     }
 
     const directives =
-      formatSituationBlock(situation.state, scene, displayName, appliedAffinity ?? affinity) +
+      formatSituationBlock(situation.state, scene, displayName, affinity) +
       formatCharacterFactsBlock(getLore(characterId)) +
       ROLEPLAY_INPUT_DIRECTIVE +
       directorDisciplineDirective(displayName) +
       playerKnown +
       lookNote +
-      eventDirective +
       agencyHint +
       formatMemoryBlock(memories);
 
-    directorPrompt = buildDirectorPrompt({
+    directorPrompt = buildScenePrompt({
       companionSystem: getCharacter(characterId).systemPrompt,
       companionTag: companionTagFor(displayName),
       companionName: displayName,
@@ -241,27 +212,9 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       history: turns,
       userMessage: message,
     });
-
-    // Perception update (for NEXT turn): the companion learns the player's name +
-    // any bio they shared, and — when co-present — their appearance + current
-    // outfit. This is what makes the avatar/wardrobe land in conversation.
-    if (companionEntity) {
-      const learnedFacts = observePlayer({
-        coPresent: onDate,
-        message,
-        profile: world.user.profile,
-        existingFacts: companionEntity.knowledge.knownPlayerFacts,
-      });
-      const lastSeenOutfit = onDate
-        ? { ...companionEntity.knowledge.lastSeenOutfit, player: world.user.presentation.wornItemIds }
-        : companionEntity.knowledge.lastSeenOutfit;
-      void upsertNpcState(req.user!.id, characterId, {
-        knowledge: { ...companionEntity.knowledge, knownPlayerFacts: learnedFacts, lastSeenOutfit },
-      }).catch((e) => console.warn('[chat] perception update failed:', e));
-    }
   }
 
-  // --- SSE headers ---
+    // --- SSE headers ---
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive');
@@ -297,18 +250,31 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         }
       }
     } else {
-      // Director Stage 1: one JSON completion (meaning only). Stage 2: deterministic
-      // parse -> transcript. Fail-soft guarantees a non-empty turn (no blank replies).
-      let dturns = parseDirectorTurns(await completePrompt(directorPrompt!), displayName);
-      if (dturns.length === 0) {
-        // Empty completions are usually transient — retry once before giving up.
-        dturns = parseDirectorTurns(await completePrompt(directorPrompt!), displayName);
+      // ONE call classifies the player's action AND narrates the scene.
+      let parsed = parseScene(await completePrompt(directorPrompt!), displayName);
+      if (parsed.turns.length === 0) parsed = parseScene(await completePrompt(directorPrompt!), displayName); // retry once
+      const effIntent: PlayerIntent = parsed.intent ?? { type: 'observation', subtype: 'wait' };
+      // Engine stays authoritative: apply consequences from the classification.
+      const plan = planEffects(consequencesFor(effIntent, world!));
+      const applied = await applyEffects(req.user!.id, characterId, plan);
+      arrested = applied.arrested;
+      appliedAffinity = applied.affinityScore;
+      worldEventFired = plan.arrest || plan.warnings.length > 0;
+      if (plan.arrest) {
+        const crimeLabel = effIntent.subtype.replace(/_/g, ' ');
+        rippleRumor = `the player got arrested for ${crimeLabel}`;
+        void storeSignificantEvent(req.user!.id, characterId, `Player was ARRESTED for ${crimeLabel}.`);
       }
-      if (dturns.length === 0) {
-        dturns = [{ speaker: displayName, text: 'Mm — say that again? You had me for a second there.' }];
-      }
+      const dturns = parsed.turns.length ? parsed.turns : [{ speaker: displayName, text: 'Mm — say that again? You had me for a second there.' }];
       assistantFull = turnsToTranscript(dturns);
       if (!abortController.signal.aborted) send('chunk', { text: assistantFull });
+
+      // Perception update for NEXT turn: companion learns name/bio, and outfit when co-present.
+      if (companionEntity) {
+        const learnedFacts = observePlayer({ coPresent: onDate, message, profile: world!.user.profile, existingFacts: companionEntity.knowledge.knownPlayerFacts });
+        const lastSeenOutfit = onDate ? { ...companionEntity.knowledge.lastSeenOutfit, player: world!.user.presentation.wornItemIds } : companionEntity.knowledge.lastSeenOutfit;
+        void upsertNpcState(req.user!.id, characterId, { knowledge: { ...companionEntity.knowledge, knownPlayerFacts: learnedFacts, lastSeenOutfit } }).catch((e) => console.warn('[chat] perception update failed:', e));
+      }
     }
 
     // Persist both user + assistant turns. Done after streaming so we never

@@ -34,9 +34,22 @@ export interface Situation {
   scene: SceneState;
 }
 
+/** Strips a leading "Name is/was/'s " from a generated activity so the UI/prompt
+ *  don't double it (e.g. "Becca is Becca is dusting"). */
+function stripLeadingName(activity: string, name: string): string {
+  if (!activity || !name) return activity;
+  if (activity.toLowerCase().startsWith(name.toLowerCase())) {
+    const rest = activity.slice(name.length).replace(/^\s*(?:'s|is|was)?\s*/i, '').trim();
+    return rest || activity;
+  }
+  return activity;
+}
+
 function rowToState(r: StateRow): DailyState {
+  let name = '';
+  try { name = getCharacter(r.character_id).displayName; } catch { /* unknown id */ }
   return {
-    activity: r.activity,
+    activity: stripLeadingName(r.activity, name),
     mood: r.mood,
     headline: r.headline,
     goalProgress: Number(r.goal_progress) || 0,
