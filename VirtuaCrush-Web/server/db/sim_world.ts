@@ -8,11 +8,11 @@ import { getNpcStates } from './npc_state';
 import { scenePhase } from './scene_util';
 import { getCharacter } from '../inworld/characters';
 import { composeWorld } from '../sim/compose';
-import { stepWorld, type TickResult } from '../sim/tick';
+import { stepWorld, simulateStep, simulateElapsed, type TickResult, type WorldEvent } from '../sim/tick';
 import { ROSTER_IDS, baseNpcEntity } from '../sim/roster';
-import { upsertNpcState } from './npc_state';
+import { upsertNpcState, seedRumor } from './npc_state';
 import { createPost } from './posts';
-import { insertWorldEvents, setWorldClock } from './world_sim';
+import { insertWorldEvents, setWorldClock, getWorldClock, type ActivityEvent } from './world_sim';
 import { PLAYER, type WorldState, type NpcEntity, type Relationship } from '../sim/world';
 
 export async function assembleWorld(userId: string, companionId: string): Promise<WorldState> {
@@ -106,5 +106,46 @@ export async function applyTick(userId: string, world: WorldState, result: TickR
   }
   await insertWorldEvents(userId, result.events);
   await setWorldClock(userId, newSimMinutes);
+}
+
+const makeRng = () => ({ next: () => Math.random() });
+export const MINUTES_PER_MESSAGE = 10;        // world time advanced per user message
+const MIN_IDLE_MINUTES = 15;                  // below this, no catch-up
+const MAX_CATCHUP_MINUTES = 3 * 24 * 60;      // cap a long absence (3 in-world days)
+
+export interface RippleSeed {
+  rumors?: { npcId: string; rumor: { text: string; credibility: number; virality: number; age: number; source?: string } }[];
+  events?: ActivityEvent[];
+}
+
+/** Lightweight per-message tick: advances the world ~10 min and runs one round.
+ *  Optional `seed` injects reactive ripples (rumors/log entries) from the
+ *  player's action so the world reacts to what they just did. Cheap (no LLM);
+ *  call fire-and-forget off the response path. */
+export async function runLightTick(userId: string, seed?: RippleSeed): Promise<void> {
+  const clock = await getWorldClock(userId);
+  const newMin = clock.simMinutes + MINUTES_PER_MESSAGE;
+  if (seed?.rumors) {
+    for (const { npcId, rumor } of seed.rumors) await seedRumor(userId, npcId, rumor);
+  }
+  const world = await assembleFullWorld(userId);
+  const result = simulateStep(world, newMin, makeRng(), 'macro');
+  if (seed?.events?.length) await insertWorldEvents(userId, seed.events.map((e) => ({ ...e, at: newMin })));
+  await applyTick(userId, world, result, newMin);
+}
+
+/** Idle catch-up: if enough real time has passed since the world last advanced,
+ *  run a capped, threaded simulation over the gap and return the digest of what
+ *  happened while the player was away (also persisted + logged). */
+export async function runCatchUp(userId: string): Promise<WorldEvent[]> {
+  const clock = await getWorldClock(userId);
+  const realElapsedMin = (Date.now() - clock.updatedAt.getTime()) / 60000;
+  if (realElapsedMin < MIN_IDLE_MINUTES) return [];
+  const elapsed = Math.min(realElapsedMin, MAX_CATCHUP_MINUTES);
+  const newMin = clock.simMinutes + elapsed;
+  const world = await assembleFullWorld(userId);
+  const result = simulateElapsed(world, clock.simMinutes, elapsed, makeRng());
+  await applyTick(userId, world, result, newMin);
+  return result.events;
 }
 

@@ -30,6 +30,7 @@ import { detectPlanCue, shouldOfferDateChoice } from '../db/cue_util';
 import { jailNarratorPrompt, jailContextBlock } from '../db/jail_util';
 import { getLocation } from '../inworld/scenes';
 import { maybeCreateChoice } from '../db/choices';
+import { runLightTick } from '../db/sim_world';
 import { assembleWorld } from '../db/sim_world';
 import { extractIntent, refereeInputFromWorld } from '../sim/referee';
 import { consequencesFor } from '../sim/rules';
@@ -138,6 +139,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let arrested = false;
   let appliedAffinity: number | null = null;
   let worldEventFired = false;
+  let rippleRumor: string | null = null;
 
   if (phase === 'jailed') {
     // The user is in a holding cell. A strict jail NARRATOR takes over (the date
@@ -170,6 +172,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         `${responders} arrive and the user is being ARRESTED, handcuffed, and hauled to a holding cell. Have ${displayName} react ` +
         `with genuine shock in character. Narrate the bust in *stage directions*. This is serious — do NOT treat it as flirty, casual, or a joke.`;
       npcs.push(authorityActor(authority, `Moves in as ${responders} arrive to arrest the user.`));
+      rippleRumor = `the player got arrested for ${crimeLabel}`;
       void storeSignificantEvent(
         req.user!.id,
         characterId,
@@ -342,6 +345,16 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     }
 
     send('done', { remaining, affinityScore: newAffinityScore });
+
+    // Advance the living world a little each message (deterministic, no LLM, off the
+    // response path). Reactive ripple: notable actions seed a rumor that then spreads.
+    const ripple = rippleRumor
+      ? {
+          rumors: [{ npcId: characterId, rumor: { text: rippleRumor, credibility: 0.9, virality: 0.7, age: 0 } }],
+          events: [{ at: 0, kind: 'event', actors: ['player', characterId], text: `Word is spreading that ${rippleRumor}.` }],
+        }
+      : undefined;
+    void runLightTick(req.user!.id, ripple).catch((e) => console.warn('[tick] light tick failed:', e));
 
     // Offer a date choice when the conversation naturally turns toward making
     // plans (cue-based, with a cooldown). Only when apart — during a date the

@@ -84,3 +84,18 @@ export async function upsertNpcState(userId: string, npcId: string, patch: NpcSt
     ],
   );
 }
+
+/** Seeds a rumor into an NPC's knowledge (idempotent by text). Used by reactive
+ *  ripples from the player's actions; the tick then spreads it. */
+export async function seedRumor(
+  userId: string,
+  npcId: string,
+  rumor: { text: string; credibility: number; virality: number; age: number; source?: string },
+): Promise<void> {
+  const st = (await getNpcStates(userId, [npcId]))[npcId];
+  const k = (st?.knowledge ?? {}) as Record<string, unknown>;
+  const rumors = Array.isArray(k.rumors) ? (k.rumors as { text: string }[]) : [];
+  if (rumors.some((r) => r.text === rumor.text)) return;
+  await upsertNpcState(userId, npcId, { knowledge: { ...k, rumors: [...rumors, rumor] } });
+}
+
