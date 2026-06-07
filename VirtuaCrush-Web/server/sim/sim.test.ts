@@ -10,7 +10,7 @@ import { emptyProfile } from './player';
 const rel = (o: Partial<Relationship> = {}): Relationship => ({ affinity: 0, trust: 0, love: 0, resentment: 0, ...o });
 function npc(over: Partial<NpcEntity> & { id: string; name: string }): NpcEntity {
   return {
-    role: 'npc', location: 'mall', currentActivity: 'idling', mood: 'calm',
+    role: 'npc', location: 'mall', currentActivity: 'idling', mood: 'calm', personality: { warmth: 0.5, volatility: 0.5, boldness: 0.5, extraversion: 0.5, grudge: 0.5 },
     appearance: {}, presentation: { wornItemIds: [], grooming: {} }, inventory: [], fashionPrefs: [],
     needs: {}, goals: [], relationships: {},
     knowledge: { knownLocations: [], beliefs: {}, knownPlayerFacts: [], lastSeenOutfit: {}, rumors: [] },

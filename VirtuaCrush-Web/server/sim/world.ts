@@ -64,6 +64,17 @@ export interface InventoryItem {
 export interface Economy { money: number; reputation: Record<string, number> }
 export type Faction = 'mall_staff' | 'civilian' | 'security' | null;
 
+/** Stable Tier-1 traits (0..1) — the DOMINANT control signal. Goals, mood,
+ *  memory, and rumors modulate behavior; personality anchors it so NPCs stay
+ *  legible and emotionally readable. */
+export interface Personality {
+  warmth: number;       // tendency to bond / be agreeable
+  volatility: number;   // mood swing + escalation speed
+  boldness: number;     // willingness to act vs. defer (friction)
+  extraversion: number; // social drive / posting
+  grudge: number;       // how hard memories bias future intent
+}
+
 export interface NpcEntity {
   id: NpcId;
   name: string;
@@ -71,6 +82,7 @@ export interface NpcEntity {
   location: string;
   currentActivity: string;
   mood: string;                          // short-term weather
+  personality: Personality;              // stable Tier-1 traits
   appearance: PermanentAppearance;       // permanent identity
   presentation: PresentationState;       // what they're wearing now
   inventory: InventoryItem[];            // their wardrobe + owned items

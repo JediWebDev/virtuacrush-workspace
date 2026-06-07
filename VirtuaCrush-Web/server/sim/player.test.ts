@@ -5,7 +5,7 @@ import type { NpcEntity, PlayerProfile } from './world';
 
 function npc(knownPlayerFacts: string[]): NpcEntity {
   return {
-    id: 'x', name: 'X', role: 'npc', location: 'mall', currentActivity: '', mood: 'calm',
+    id: 'x', name: 'X', role: 'npc', location: 'mall', currentActivity: '', mood: 'calm', personality: { warmth: 0.5, volatility: 0.5, boldness: 0.5, extraversion: 0.5, grudge: 0.5 },
     appearance: {}, presentation: { wornItemIds: [], grooming: {} }, inventory: [], fashionPrefs: [],
     needs: {}, goals: [], relationships: {},
     knowledge: { knownLocations: [], beliefs: {}, knownPlayerFacts, lastSeenOutfit: {}, rumors: [] },

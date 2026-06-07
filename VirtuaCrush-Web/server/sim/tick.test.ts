@@ -113,3 +113,37 @@ test('stepWorld applies relationship + mood deltas to a fresh world', () => {
   assert.equal(next.npcs.becca.relationships.serena.resentment, 5);
   assert.equal(w.npcs.becca.mood, 'calm'); // original unchanged (pure)
 });
+
+// --- control hierarchy: personality-driven asymmetry + friction/silence ------
+const PERS = (o = {}) => ({ warmth: 0.5, volatility: 0.5, boldness: 0.5, extraversion: 0.5, grudge: 0.5, ...o });
+
+test('emotional asymmetry: the more volatile/grudging NPC reacts harder', () => {
+  const w = world({
+    becca: npc('becca', { location: 'mall', mood: 'annoyed', personality: PERS({ volatility: 0.9, grudge: 0.9, boldness: 1 }), relationships: { serena: rel({ affinity: -40, resentment: 60 }) } }),
+    serena: npc('serena', { location: 'mall', mood: 'annoyed', personality: PERS({ volatility: 0.1, grudge: 0.1, boldness: 1 }), relationships: { becca: rel({ affinity: -40, resentment: 60 }) } }),
+  });
+  const res = simulateStep(w, 600, rng(0));
+  const bToS = (res.patches.becca.relDeltas ?? []).find((d) => d.target === 'serena')!;
+  const sToB = (res.patches.serena.relDeltas ?? []).find((d) => d.target === 'becca')!;
+  assert.ok(Math.abs(bToS.affinity!) > Math.abs(sToB.affinity!)); // volatile Becca drops harder
+  const bMem = (res.patches.becca.addMemories ?? [])[0].weight;
+  const sMem = (res.patches.serena.addMemories ?? [])[0].weight;
+  assert.ok(bMem > sMem); // grudge-holder remembers harder
+});
+
+test('friction + silence: a reserved NPC defers a marginal argument; tension festers, no public event', () => {
+  const w = world({
+    becca: npc('becca', { location: 'mall', personality: PERS({ boldness: 0 }), relationships: { serena: rel({ affinity: 0 }) } }),
+    serena: npc('serena', { location: 'mall', mood: 'calm', personality: PERS({ boldness: 0.2, volatility: 0.5, extraversion: 0.3 }), relationships: { becca: rel({ affinity: -8, resentment: 20 }) } }),
+  });
+  // reserved + only marginal friction + unlucky roll -> defer
+  const intent = decideIntent(w.npcs.serena, ['becca'], w, rng(0.9));
+  assert.equal(intent.type, 'hold');
+  assert.equal(intent.deferredFrom, 'argue');
+
+  const res = simulateStep(w, 600, rng(0.9));
+  assert.ok(!res.events.some((e) => e.kind === 'interaction')); // silence: no public action
+  assert.ok((res.patches.serena.relDeltas ?? []).some((d) => d.target === 'becca' && (d.resentment ?? 0) > 0 && d.affinity === undefined));
+  assert.ok((res.patches.serena.addMemories ?? []).some((m) => /bit their tongue/.test(m.summary)));
+});
+
