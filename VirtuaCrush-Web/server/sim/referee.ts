@@ -20,12 +20,12 @@ const CATEGORY_GUIDE: Record<string, string> = {
   transaction: 'ONLY when the player explicitly buys, pays for, gifts, or tips something specific (buy, gift, tip) — NOT ordinary talk or merely being at a venue. Set "magnitude": modest|big|lavish for a real purchase.',
   movement: 'going places — go, leave, arrive, follow (set "target" to the destination)',
   conflict: 'non-criminal aggression — insult, provoke, threaten, intimidate, argue',
-  crime: 'illegal acts — theft, shoplift, armed_robbery, arson, assault, vandalism, kidnapping, fraud, reckless_endangerment',
+  crime: 'illegal acts — theft, shoplift, armed_robbery, arson, assault, vandalism, kidnapping, fraud, reckless_endangerment. Setting off fireworks/explosives or starting a fire indoors IS a crime (arson if it ignites, otherwise reckless_endangerment).',
   work: 'job actions — do_job, ask_about_work, help_with_work',
   observation: 'looking/waiting/gathering info — look, wait, inspect, watch, eavesdrop',
 };
 
-const MAX_HISTORY = 6;
+const MAX_HISTORY = 3;
 
 /** Pure: builds the referee classification prompt from a compact world view. */
 export function buildRefereePrompt(input: RefereeInput): string {

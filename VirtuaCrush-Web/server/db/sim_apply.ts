@@ -28,9 +28,12 @@ export async function applyEffects(
   }
 
   // Bill line items accrue on the current date (settled via the End-date flow).
-  for (const item of plan.billItems) {
-    if (item.amount > 0) {
-      await appendIncident(userId, companionId, { kind: 'spend', label: item.label, amount: item.amount });
+  // Skip when arrested — the date is over, there is no tab to settle.
+  if (!plan.arrest) {
+    for (const item of plan.billItems) {
+      if (item.amount > 0) {
+        await appendIncident(userId, companionId, { kind: 'spend', label: item.label, amount: item.amount });
+      }
     }
   }
 

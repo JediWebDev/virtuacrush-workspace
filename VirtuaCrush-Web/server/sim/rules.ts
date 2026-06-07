@@ -16,8 +16,8 @@ export const ARREST_AFFINITY_HIT = -8;
 
 const NON_ARRESTABLE_CRIME = new Set(['reckless_endangerment']);
 const CRIME_DAMAGE: Record<string, number> = {
-  theft: 250, shoplift: 120, armed_robbery: 0, arson: 1500, assault: 400,
-  vandalism: 600, kidnapping: 0, fraud: 300, reckless_endangerment: 120,
+  theft: 400, shoplift: 200, armed_robbery: 0, arson: 5000, assault: 1200,
+  vandalism: 1800, kidnapping: 0, fraud: 800, reckless_endangerment: 1500,
 };
 const CRIME_RESPONDERS: Record<string, string> = { arson: 'the fire department and police', theft: 'store security and the police', shoplift: 'store security' };
 const SPEND_AMOUNTS: Record<SpendTier, number> = { modest: 80, big: 300, lavish: 850 };
@@ -43,7 +43,7 @@ function crimeConsequences(intent: PlayerIntent, world: WorldState): Consequence
     cs.push({ type: 'arrest', reason: sub });
     cs.push({ type: 'dispatch_responders', who: CRIME_RESPONDERS[sub] ?? 'the police' });
   }
-  const dmg = CRIME_DAMAGE[sub] ?? 200;
+  const dmg = CRIME_DAMAGE[sub] ?? 1000;
   if (dmg > 0 && world.scene.phase === 'on_date') cs.push({ type: 'bill_add', label: `Damages (${sub})`, amount: dmg });
   cs.push({ type: 'affinity', npc: world.scene.companionId, delta: ARREST_AFFINITY_HIT, reason: 'crime' });
   return cs;

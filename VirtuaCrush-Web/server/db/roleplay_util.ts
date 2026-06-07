@@ -50,6 +50,8 @@ export function directorDisciplineDirective(characterName: string): string {
     `only — do not describe yourself in the third person there (use a [NARRATOR] line for third-person description). ` +
     `Keep ${characterName} fully in character. Only reference people, pets, objects, and places that are actually ` +
     `established in this conversation, your memory, or the current scene — never invent new ones (for example, do not ` +
-    `claim a pet, friend, or item is present unless it was actually established).`
+    `claim a pet, friend, or item is present unless it was actually established). When you mention real movies, shows, ` +
+    `music, or facts, only reference ones you are confident are real — do NOT invent titles, plots, quotes, or details; ` +
+    `speak in general terms if you are unsure.`
   );
 }

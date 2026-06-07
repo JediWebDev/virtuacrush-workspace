@@ -250,8 +250,18 @@ export async function selectChoice(
     // Date over: return the character to their own place.
     await setScene(userId, characterId, { mode: 'apart', location: null, billPending: false });
     await persistChoiceTurns(userId, characterId, option.label, option.reaction);
-    const viral = optionIndex === 1; // user let the character pay -> annoyed vent
-    return { ok: true, reaction: option.reaction, affinityScore, viral, sceneChanged: true, ended: true };
+    // If the user made the character pay, the character takes initiative and vents
+    // about it on THEIR OWN social feed (not a prompt for the user to share).
+    let posted = false;
+    if (optionIndex === 1) {
+      try {
+        await createPost(userId, characterId, option.reaction);
+        posted = true;
+      } catch (e) {
+        console.warn('[choice] bill vent post failed:', e);
+      }
+    }
+    return { ok: true, reaction: option.reaction, affinityScore, posted, sceneChanged: true, ended: true };
   }
 
   // --- goal: advance progress, maybe post ---
