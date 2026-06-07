@@ -17,12 +17,22 @@ export default function AvatarPage() {
   const [niTags, setNiTags] = useState("");
   const [presetName, setPresetName] = useState("");
 
-  useEffect(() => {
-    api.fetchProfile().then(setData).catch(() => setErr("Couldn't load your profile.")).finally(() => setLoading(false));
-  }, []);
+  const load = () => {
+    setLoading(true);
+    setErr(null);
+    api.fetchProfile().then(setData).catch(() => setErr("Couldn't reach the server — it may still be starting up.")).finally(() => setLoading(false));
+  };
+  useEffect(() => { load(); }, []);
 
   if (loading) return <div className="mx-auto max-w-3xl px-6 py-16 text-stone-500">Loading your profile…</div>;
-  if (!data) return <div className="mx-auto max-w-3xl px-6 py-16 text-stone-500">{err ?? "No profile."}</div>;
+  if (!data) {
+    return (
+      <div className="mx-auto max-w-3xl px-6 py-16 text-center">
+        <p className="mb-4 text-stone-500">{err ?? "No profile."}</p>
+        <button type="button" onClick={load} className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-deep">Retry</button>
+      </div>
+    );
+  }
 
   const { profile, presentation, inventory, presets } = data;
   const set = (patch: Partial<api.FullProfile>) => setData({ ...data, ...patch });

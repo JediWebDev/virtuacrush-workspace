@@ -3,7 +3,7 @@
 // different NPCs), describe outfits, and update perception when an NPC observes
 // what someone is wearing. Pure + testable. Future image generation reads the
 // same data (presentation + inventory + appearance) with no sim changes.
-import type { InventoryItem, PresentationState } from './world';
+import type { InventoryItem, PresentationState, Grooming } from './world';
 
 export function itemsById(items: InventoryItem[]): Record<string, InventoryItem> {
   const map: Record<string, InventoryItem> = {};
@@ -60,3 +60,11 @@ export function describeLastSeenOutfit(
   const names = ids.map((id) => byId[id]?.name).filter(Boolean);
   return names.join(', ');
 }
+
+/** Joins grooming into a readable phrase ('' if nothing set). */
+export function describeGrooming(g: Grooming): string {
+  return [
+    g.hairstyle, g.makeup && `${g.makeup} makeup`, g.fragrance && `wearing ${g.fragrance}`,
+  ].filter(Boolean).join(', ');
+}
+

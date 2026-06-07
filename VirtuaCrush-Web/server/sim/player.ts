@@ -46,12 +46,8 @@ export function describeKnownPlayer(profile: PlayerProfile, npc: NpcEntity): str
   const parts: string[] = [];
   const name = v.displayName || 'the user';
   if (v.appearance) {
-    const a = v.appearance;
-    const bits = [
-      a.age && `age ${a.age}`, a.height, a.build, a.hair && `${a.hair} hair`,
-      a.eyes && `${a.eyes} eyes`, a.features,
-    ].filter(Boolean);
-    if (bits.length) parts.push(`appearance: ${bits.join(', ')}`);
+    const d = describeAppearance(v.appearance);
+    if (d) parts.push(`appearance: ${d}`);
   }
   if (v.biography) {
     const b = v.biography;
@@ -97,3 +93,12 @@ export function observePlayer(opts: {
   if (opts.coPresent) learned.push('appearance');
   return learnAboutPlayer(opts.existingFacts, learned);
 }
+
+/** Joins a permanent appearance into a readable phrase ('' if nothing set). */
+export function describeAppearance(a: import('./world').PermanentAppearance): string {
+  return [
+    a.age && `age ${a.age}`, a.height, a.build, a.hair && `${a.hair} hair`,
+    a.eyes && `${a.eyes} eyes`, a.features,
+  ].filter(Boolean).join(', ');
+}
+

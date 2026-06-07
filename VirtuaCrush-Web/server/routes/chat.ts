@@ -36,8 +36,8 @@ import { consequencesFor } from '../sim/rules';
 import { planEffects } from '../sim/effects';
 import { applyEffects } from '../db/sim_apply';
 import { advanceNpcs } from '../sim/agency';
-import { describeKnownPlayer, observePlayer } from '../sim/player';
-import { describeLastSeenOutfit, itemsById } from '../sim/wardrobe';
+import { describeKnownPlayer, observePlayer, describeAppearance } from '../sim/player';
+import { describeLastSeenOutfit, itemsById, wornItems, describeOutfit, describeGrooming } from '../sim/wardrobe';
 import { upsertNpcState } from '../db/npc_state';
 
 // Recent turns fed to the LLM for local coherence. Long-term recall comes from
@@ -194,13 +194,29 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       }
     }
 
-    // Perception-gated: what this companion actually knows about the player, and
-    // the outfit they last saw on them.
+    // What the companion knows about the player. CO-PRESENT: they can SEE the
+    // player's current appearance + outfit (ground truth) — never invent looks.
+    // APART: they only recall what they last saw (may be stale/empty).
     const playerKnown = companionEntity ? describeKnownPlayer(world.user.profile, companionEntity) : '';
-    const lastOutfit = companionEntity
-      ? describeLastSeenOutfit(companionEntity.knowledge.lastSeenOutfit, 'player', itemsById(world.user.inventory))
-      : '';
-    const outfitNote = lastOutfit ? `\n\nLAST TIME YOU SAW THE USER, they were wearing: ${lastOutfit}.` : '';
+    let lookNote = '';
+    if (onDate) {
+      const appearanceDesc = describeAppearance(world.user.profile.appearance);
+      const outfitDesc = describeOutfit(wornItems(world.user.presentation, world.user.inventory));
+      const groomingDesc = describeGrooming(world.user.presentation.grooming);
+      const bits = [
+        appearanceDesc && `appearance — ${appearanceDesc}`,
+        outfitDesc && `currently wearing ${outfitDesc}`,
+        groomingDesc || '',
+      ].filter(Boolean);
+      lookNote = bits.length
+        ? `\n\nYOU CAN SEE THE USER RIGHT NOW: ${bits.join('; ')}. Describe their looks ONLY as stated here — do NOT invent or change their clothing, hair, or features.`
+        : `\n\nYou can see the user, but their appearance and outfit are not defined — do NOT invent clothing or looks; avoid describing what they are wearing.`;
+    } else if (companionEntity) {
+      const lastOutfit = describeLastSeenOutfit(companionEntity.knowledge.lastSeenOutfit, 'player', itemsById(world.user.inventory));
+      lookNote = lastOutfit
+        ? `\n\nLAST TIME YOU SAW THE USER they were wearing ${lastOutfit}; you do not know if that has changed. Do NOT invent a different outfit.`
+        : `\n\nYou are apart and cannot see the user — do NOT invent or assume what they are wearing.`;
+    }
 
     const directives =
       formatSituationBlock(situation.state, scene, displayName, appliedAffinity ?? affinity) +
@@ -208,7 +224,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       ROLEPLAY_INPUT_DIRECTIVE +
       directorDisciplineDirective(displayName) +
       playerKnown +
-      outfitNote +
+      lookNote +
       eventDirective +
       agencyHint +
       formatMemoryBlock(memories);
@@ -238,7 +254,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         : companionEntity.knowledge.lastSeenOutfit;
       void upsertNpcState(req.user!.id, characterId, {
         knowledge: { ...companionEntity.knowledge, knownPlayerFacts: learnedFacts, lastSeenOutfit },
-      });
+      }).catch((e) => console.warn('[chat] perception update failed:', e));
     }
   }
 
