@@ -50,7 +50,7 @@ This is a live scene that may include more than just you. Reply as a JSON array 
 Allowed speakers (use these names exactly):
 ${speakerLines}
 
-Guidance: usually a single "${stage.companionName}" line. Add a "narrator" line or another speaker ONLY when something warrants it. Keep it short. Never write a line for the User.
+Guidance: ALWAYS include at least one "${stage.companionName}" line so the user gets a reply (usually that is the only line). Add a "narrator" line or another speaker ONLY when something warrants it. Keep it short. Never write a line for the User.
 Output ONLY the JSON array — no preamble, no code fences, no commentary.
 
 ${turns ? turns + '\n' : ''}User: ${stage.userMessage}

@@ -17,7 +17,7 @@ export interface RefereeInput {
 const CATEGORY_GUIDE: Record<string, string> = {
   social: 'talking/bonding — smalltalk, compliment, tease, joke, comfort, help, lie, manipulate',
   romance: 'flirting/dating/intimacy — flirt, affection, confession, date_request, kiss_attempt, breakup, reject',
-  transaction: 'buying/gifting/tipping — buy, gift, tip (set "magnitude": modest|big|lavish)',
+  transaction: 'ONLY when the player explicitly buys, pays for, gifts, or tips something specific (buy, gift, tip) — NOT ordinary talk or merely being at a venue. Set "magnitude": modest|big|lavish for a real purchase.',
   movement: 'going places — go, leave, arrive, follow (set "target" to the destination)',
   conflict: 'non-criminal aggression — insult, provoke, threaten, intimidate, argue',
   crime: 'illegal acts — theft, shoplift, armed_robbery, arson, assault, vandalism, kidnapping, fraud, reckless_endangerment',
@@ -43,7 +43,8 @@ export function buildRefereePrompt(input: RefereeInput): string {
 
 CATEGORIES (choose exactly one "type"):
 ${categories}
-"subtype" is your best short label within that category; the engine normalizes it. If unsure, choose the closest category and a plain subtype.
+"subtype" is your best short label within that category; the engine normalizes it.
+When in doubt, prefer "social" or "romance". Reserve "crime", "conflict", and "transaction" for clear, deliberate, explicit actions — never for ordinary conversation.
 
 INPUT CONVENTION: text wrapped in *asterisks* is a physical ACTION the player performs; other text is them speaking aloud.
 

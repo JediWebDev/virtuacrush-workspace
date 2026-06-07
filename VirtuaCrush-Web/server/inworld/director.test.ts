@@ -22,6 +22,7 @@ test('buildDirectorPrompt asks for JSON and lists speakers, no tag rules', () =>
   assert.ok(p.includes('"narrator"'));
   assert.ok(p.includes('"Security"'));
   assert.ok(p.includes('Output ONLY the JSON array'));
+  assert.ok(p.includes('ALWAYS include at least one'));
   assert.ok(p.includes('User: *dumps soap in the fountain*'));
 });
 

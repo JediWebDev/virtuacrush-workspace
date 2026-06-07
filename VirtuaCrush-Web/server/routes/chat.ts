@@ -296,10 +296,13 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     } else {
       // Director Stage 1: one JSON completion (meaning only). Stage 2: deterministic
       // parse -> transcript. Fail-soft guarantees a non-empty turn (no blank replies).
-      const rawDirector = await completePrompt(directorPrompt!);
-      let dturns = parseDirectorTurns(rawDirector, displayName);
+      let dturns = parseDirectorTurns(await completePrompt(directorPrompt!), displayName);
       if (dturns.length === 0) {
-        dturns = [{ speaker: displayName, text: 'Sorry — I lost my train of thought there. What were you saying?' }];
+        // Empty completions are usually transient — retry once before giving up.
+        dturns = parseDirectorTurns(await completePrompt(directorPrompt!), displayName);
+      }
+      if (dturns.length === 0) {
+        dturns = [{ speaker: displayName, text: 'Mm — say that again? You had me for a second there.' }];
       }
       assistantFull = turnsToTranscript(dturns);
       if (!abortController.signal.aborted) send('chunk', { text: assistantFull });

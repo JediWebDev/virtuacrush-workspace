@@ -108,3 +108,8 @@ test('deception boundary: social/lie is talk-only; crime/fraud is systemic (arre
   assert.ok(fraud.some((c) => c.type === 'arrest'));
 });
 
+test('transaction/buy bills ONLY with an explicit magnitude (no silent $80 default)', () => {
+  assert.deepEqual(consequencesFor({ type: 'transaction', subtype: 'buy' }, world()), []);
+  assert.ok(consequencesFor({ type: 'transaction', subtype: 'buy', magnitude: 'big' }, world()).some((c) => c.type === 'bill_add' && c.amount === 300));
+});
+

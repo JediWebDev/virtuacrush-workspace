@@ -81,7 +81,9 @@ export function consequencesFor(intent: PlayerIntent, world: WorldState): Conseq
         return cs;
       }
       if (intent.subtype === 'tip') return [{ type: 'affinity', npc: target, delta: 0.3, reason: 'tip' }];
-      if (intent.subtype === 'buy') return onDate ? [{ type: 'bill_add', label: 'Purchases', amount: SPEND_AMOUNTS[intent.magnitude ?? 'modest'] }] : [];
+      // Routine buys are covered by the venue base price; only an explicit
+      // magnitude (a deliberate, notable spend) adds a bill line.
+      if (intent.subtype === 'buy') return onDate && intent.magnitude ? [{ type: 'bill_add', label: 'Purchases', amount: SPEND_AMOUNTS[intent.magnitude] }] : [];
       return [];
     }
 
