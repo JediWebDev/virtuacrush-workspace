@@ -8,7 +8,7 @@ import { getNpcStates } from './npc_state';
 import { scenePhase } from './scene_util';
 import { getCharacter } from '../inworld/characters';
 import { composeWorld } from '../sim/compose';
-import { stepWorld, simulateStep, simulateElapsed, type TickResult, type WorldEvent } from '../sim/tick';
+import { stepWorld, simulateStep, simulateElapsed, salienceOf, type TickResult, type WorldEvent } from '../sim/tick';
 import { ROSTER_IDS, baseNpcEntity } from '../sim/roster';
 import { upsertNpcState, seedRumor } from './npc_state';
 import { createPost } from './posts';
@@ -104,7 +104,9 @@ export async function applyTick(userId: string, world: WorldState, result: TickR
       try { await createPost(userId, id, post); } catch (e) { console.warn('[tick] post failed:', e); }
     }
   }
-  await insertWorldEvents(userId, result.events);
+  // Only surface high-salience ('explosive') events in the activity log; the
+  // rest still update world state, they just don't clutter the feed.
+  await insertWorldEvents(userId, result.events.filter((e) => salienceOf(e) >= 0.6));
   await setWorldClock(userId, newSimMinutes);
 }
 
@@ -116,6 +118,7 @@ const MAX_CATCHUP_MINUTES = 3 * 24 * 60;      // cap a long absence (3 in-world 
 export interface RippleSeed {
   rumors?: { npcId: string; rumor: { text: string; credibility: number; virality: number; age: number; source?: string } }[];
   events?: ActivityEvent[];
+  excludeId?: string; // the companion the player is actively with — don't wander them off
 }
 
 /** Lightweight per-message tick: advances the world ~10 min and runs one round.
@@ -128,7 +131,12 @@ export async function runLightTick(userId: string, seed?: RippleSeed): Promise<v
   if (seed?.rumors) {
     for (const { npcId, rumor } of seed.rumors) await seedRumor(userId, npcId, rumor);
   }
-  const world = await assembleFullWorld(userId);
+  let world = await assembleFullWorld(userId);
+  if (seed?.excludeId && world.npcs[seed.excludeId]) {
+    const npcs = { ...world.npcs };
+    delete npcs[seed.excludeId];
+    world = { ...world, npcs };
+  }
   const result = simulateStep(world, newMin, makeRng(), 'macro');
   if (seed?.events?.length) await insertWorldEvents(userId, seed.events.map((e) => ({ ...e, at: newMin })));
   await applyTick(userId, world, result, newMin);

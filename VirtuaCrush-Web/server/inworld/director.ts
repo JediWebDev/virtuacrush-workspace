@@ -50,7 +50,7 @@ This is a live scene that may include more than just you. Reply as a JSON array 
 Allowed speakers (use these names exactly):
 ${speakerLines}
 
-Guidance: ALWAYS include at least one "${stage.companionName}" line so the user gets a reply (usually that is the only line). Add a "narrator" line or another speaker ONLY when something warrants it. Keep it short. Never write a line for the User.
+Guidance: ALWAYS include at least one "${stage.companionName}" line so the player gets a reply (usually that is the only line). Add a "narrator" line or another speaker ONLY when something warrants it. Keep it short. Never write a line for the player. ADDRESS THE PLAYER AS "you" (second person) — never call them "the user" or "the player".
 Output ONLY the JSON array — no preamble, no code fences, no commentary.
 
 ${turns ? turns + '\n' : ''}User: ${stage.userMessage}
@@ -89,29 +89,49 @@ export function parseDirectorTurns(raw: string, companionName: string): Director
   const text = (raw ?? '').trim();
   if (!text) return [];
 
-  const arr = text.match(/\[[\s\S]*\]/);
-  if (arr) {
+  const cleanLine = (t: string): string =>
+    (t ?? '')
+      .replace(/^[\s"'`{\[]+/, '')
+      .replace(/[\s"'`}\],]+$/, '')
+      .replace(/"\s*[}\]]\s*,?\s*[{\[]?\s*"?/g, ' ') // collapse leaked "}, {" artifacts
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const tryParse = (json: string): DirectorTurn[] | null => {
     try {
-      const parsed = JSON.parse(arr[0]);
+      const parsed = JSON.parse(json);
       if (Array.isArray(parsed)) {
         const turns = parsed
           .map((it) => {
             const o = (it ?? {}) as Record<string, unknown>;
-            return { speaker: asStr(o.speaker) || companionName, text: asStr(o.text) };
+            return { speaker: asStr(o.speaker) || companionName, text: cleanLine(asStr(o.text)) };
           })
           .filter((t) => t.text);
-        if (turns.length) return turns;
+        return turns.length ? turns : null;
       }
     } catch {
-      /* fall through to salvage */
+      /* fall through */
     }
+    return null;
+  };
+
+  // 1) a JSON array
+  const arr = text.match(/\[[\s\S]*\]/);
+  if (arr) {
+    const t = tryParse(arr[0]);
+    if (t) return t;
   }
-
-  const salvaged = salvageTexts(text);
+  // 2) loose {speaker,text} objects with no enclosing array -> wrap them
+  const objs = text.match(/\{[^{}]*\}/g);
+  if (objs && objs.length) {
+    const t = tryParse('[' + objs.join(',') + ']');
+    if (t) return t;
+  }
+  // 3) salvage any "text" values
+  const salvaged = salvageTexts(text).map(cleanLine).filter(Boolean);
   if (salvaged.length) return salvaged.map((t) => ({ speaker: companionName, text: t }));
-
-  // Last resort: treat whatever came back as a plain companion line (never blank).
-  const cleaned = text.replace(/```[a-z]*|```/gi, '').replace(/^[\[{]+|[\]}]+$/g, '').trim();
+  // 4) last resort: raw as one companion line, JSON artifacts stripped
+  const cleaned = cleanLine(text.replace(/```[a-z]*|```/gi, ''));
   return cleaned ? [{ speaker: companionName, text: cleaned }] : [];
 }
 

@@ -168,8 +168,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       const responders = plan.responders.length ? plan.responders.join(' and ') : 'the police';
       const crimeLabel = referee.intent.subtype.replace(/_/g, ' ');
       eventDirective =
-        `\n\n>>> ARREST EVENT (decided by the simulation — narrate it, do not change it): the user just committed ${crimeLabel}. ` +
-        `${responders} arrive and the user is being ARRESTED, handcuffed, and hauled to a holding cell. Have ${displayName} react ` +
+        `\n\n>>> ARREST EVENT (decided by the simulation — narrate it, do not change it): you just committed ${crimeLabel}. ` +
+        `${responders} arrive and you are being ARRESTED, handcuffed, and hauled to a holding cell. Have ${displayName} react ` +
         `with genuine shock in character. Narrate the bust in *stage directions*. This is serious — do NOT treat it as flirty, casual, or a joke.`;
       npcs.push(authorityActor(authority, `Moves in as ${responders} arrive to arrest the user.`));
       rippleRumor = `the player got arrested for ${crimeLabel}`;
@@ -181,7 +181,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     } else if (plan.warnings.length) {
       eventDirective =
         `\n\nWORLD EVENT (decided by the simulation — narrate it, do not change it): ${authority} steps in over the user's behavior ` +
-        `(${plan.warnings.join(', ')}). Narrate ${authority}'s reaction in *stage directions*; have ${displayName} react in character. Keep it grounded.`;
+        `(${plan.warnings.join(', ')}) — directed at you. Narrate ${authority}'s reaction in *stage directions*; have ${displayName} react in character. Keep it grounded.`;
       npcs.push(authorityActor(authority, `Steps in to warn the user over ${plan.warnings.join(', ')}.`));
     }
 
@@ -352,8 +352,9 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       ? {
           rumors: [{ npcId: characterId, rumor: { text: rippleRumor, credibility: 0.9, virality: 0.7, age: 0 } }],
           events: [{ at: 0, kind: 'event', actors: ['player', characterId], text: `Word is spreading that ${rippleRumor}.` }],
+          excludeId: characterId,
         }
-      : undefined;
+      : { excludeId: characterId };
     void runLightTick(req.user!.id, ripple).catch((e) => console.warn('[tick] light tick failed:', e));
 
     // Offer a date choice when the conversation naturally turns toward making

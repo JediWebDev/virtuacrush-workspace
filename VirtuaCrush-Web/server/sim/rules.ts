@@ -17,7 +17,7 @@ export const ARREST_AFFINITY_HIT = -8;
 const NON_ARRESTABLE_CRIME = new Set(['reckless_endangerment']);
 const CRIME_DAMAGE: Record<string, number> = {
   theft: 400, shoplift: 200, armed_robbery: 0, arson: 5000, assault: 1200,
-  vandalism: 1800, kidnapping: 0, fraud: 800, reckless_endangerment: 1500,
+  vandalism: 1800, kidnapping: 0, fraud: 800, reckless_endangerment: 1500, indecent_exposure: 0, public_indecency: 0,
 };
 const CRIME_RESPONDERS: Record<string, string> = { arson: 'the fire department and police', theft: 'store security and the police', shoplift: 'store security' };
 const SPEND_AMOUNTS: Record<SpendTier, number> = { modest: 80, big: 300, lavish: 850 };

@@ -50,7 +50,7 @@ const CANONICAL: Record<IntentCategory, string[]> = {
   transaction: ['buy', 'gift', 'tip', 'pay'],
   movement: ['go', 'leave', 'arrive', 'follow'],
   conflict: ['insult', 'provoke', 'threaten', 'intimidate', 'argue'],
-  crime: ['theft', 'shoplift', 'armed_robbery', 'arson', 'assault', 'vandalism', 'kidnapping', 'fraud', 'reckless_endangerment'],
+  crime: ['theft', 'shoplift', 'armed_robbery', 'arson', 'assault', 'vandalism', 'kidnapping', 'fraud', 'reckless_endangerment', 'indecent_exposure', 'public_indecency'],
   work: ['do_job', 'ask_about_work', 'help_with_work'],
   observation: ['look', 'wait', 'inspect', 'watch', 'eavesdrop'],
 };
@@ -60,7 +60,7 @@ const SYNONYMS: Record<IntentCategory, Record<string, string>> = {
   transaction: { purchase: 'buy', spend: 'buy', present: 'gift', give: 'gift' },
   movement: { walk: 'go', travel: 'go', head: 'go', enter: 'arrive', exit: 'leave', depart: 'leave', tail: 'follow', chase: 'follow' },
   conflict: { mock: 'insult', yell: 'argue', fight_words: 'argue', menace: 'threaten' },
-  crime: { rob: 'armed_robbery', mug: 'armed_robbery', steal: 'theft', burn: 'arson', torch: 'arson', attack: 'assault', punch: 'assault', hit: 'assault', vandal: 'vandalism', smash: 'vandalism', destroy: 'vandalism', kidnap: 'kidnapping', hostage: 'kidnapping', scam: 'fraud', reckless: 'reckless_endangerment' },
+  crime: { rob: 'armed_robbery', mug: 'armed_robbery', steal: 'theft', burn: 'arson', torch: 'arson', attack: 'assault', punch: 'assault', hit: 'assault', vandal: 'vandalism', smash: 'vandalism', destroy: 'vandalism', kidnap: 'kidnapping', hostage: 'kidnapping', scam: 'fraud', reckless: 'reckless_endangerment', masturbat: 'indecent_exposure', expos: 'indecent_exposure', flash: 'indecent_exposure', naked: 'indecent_exposure', nude: 'indecent_exposure', lewd: 'indecent_exposure', indecent: 'indecent_exposure', streak: 'indecent_exposure', 'public indecency': 'public_indecency' },
   work: { job: 'do_job', shift: 'do_job', working: 'do_job' },
   observation: { spy: 'watch', observe: 'look', listen: 'eavesdrop', stare: 'look' },
 };

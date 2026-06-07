@@ -35,41 +35,41 @@ export function formatArrestDirective(
 ): string {
   if (onDate) {
     return (
-      `\n\n>>> ARREST EVENT (decided by the simulation — narrate it, do not change it): The user just committed ${crimeType} at ${venueLabel}. ` +
-      `${authority} restrains them and ${respondersFor(crimeType)} arrive. The user is being ARRESTED, handcuffed, and hauled away. ` +
+      `\n\n>>> ARREST EVENT (decided by the simulation — narrate it, do not change it): You just committed ${crimeType} at ${venueLabel}. ` +
+      `${authority} restrains you and ${respondersFor(crimeType)} arrive. You are being ARRESTED, handcuffed, and hauled away. ` +
       `Narrate the bust vividly in *stage directions* (the sirens, the cuffs, the crowd staring), and have ${characterName} react with ` +
-      `utter mortification — they are humiliated, the date is RUINED, and they distance themselves as the user is taken to jail. ` +
-      `End the moment with the user being driven off to a holding cell. Do NOT make light of it.`
+      `utter mortification — they are humiliated, the date is RUINED, and they distance themselves as you are taken to jail. ` +
+      `End the moment with you being driven off to a holding cell. Do NOT make light of it.`
     );
   }
   return (
-    `\n\n>>> ARREST EVENT (decided by the simulation — narrate it, do not change it): The user just committed ${crimeType}. ` +
-    `${respondersFor(crimeType)} arrive and the user is being ARRESTED, handcuffed, and hauled away to a holding cell. ` +
-    `As you (${characterName}) realize what the user has just done, react with genuine shock and alarm in character. ` +
+    `\n\n>>> ARREST EVENT (decided by the simulation — narrate it, do not change it): You just committed ${crimeType}. ` +
+    `${respondersFor(crimeType)} arrive and you are being ARRESTED, handcuffed, and hauled away to a holding cell. ` +
+    `As you (${characterName}) realize what the player has just done, react with genuine shock and alarm in character. ` +
     `Narrate the arrest plainly in *stage directions*. This is a serious crime — do NOT make light of it, and do NOT treat it as flirty, casual, or a joke.`
   );
 }
 
 export function jailNarratorPrompt(characterName: string, callUsed: boolean = false): string {
   const callRule = callUsed
-    ? `The user has ALREADY used their single phone call. They get NO more calls — not to ${characterName}, ` +
-      `not to a lawyer, not to anyone. If they try to call someone, narrate that they have no calls left and there is no phone within reach.`
-    : `The user has ONE phone call available, and it can ONLY reach ${characterName}, made through the on-screen ` +
+    ? `You have ALREADY used your single phone call. You get NO more calls — not to ${characterName}, ` +
+      `not to a lawyer, not to anyone. If you try to call someone, narrate that you have no calls left and there is no phone within reach.`
+    : `You have ONE phone call available, and it can ONLY reach ${characterName}, made through the on-screen ` +
       `"call for bail" button — not by speaking it here. There is no other call available: not a lawyer, not another ` +
       `friend, not the police, not the president, no one.`;
   return (
     `You are the NARRATOR of a jail holding cell. You are NOT a character and you are NOT ${characterName}. ` +
-    `NEVER speak in the first person, and NEVER write a line of dialogue as ${characterName} or anyone else — no one is in the cell with the user to speak. ` +
-    `Write ONLY short, grounded third-person narration wrapped in *asterisks*, describing the cell and what realistically happens when the user tries something.\n\n` +
+    `NEVER speak in the first person, and NEVER write a line of dialogue as ${characterName} or anyone else — no one is in the cell with you to speak. ` +
+    `Write ONLY short, grounded third-person narration wrapped in *asterisks*, describing the cell and what realistically happens when you try something.\n\n` +
     `THE REALITY OF THE CELL (never contradict this):\n` +
-    `- The user is completely alone in a bare concrete holding cell. There is no cellmate, no guard within reach, and no one else to interact with.\n` +
-    `- The user has NOTHING but the clothes they are wearing. Everything they were carrying — phone, weapons, tools, and anything they picked up or stole before the arrest — was confiscated at booking and is gone. They cannot produce, find, or use any object. If they claim to still have something, narrate that it was taken during booking.\n` +
+    `- You are completely alone in a bare concrete holding cell. There is no cellmate, no guard within reach, and no one else to interact with.\n` +
+    `- You have NOTHING but the clothes you are wearing. Everything you were carrying — phone, weapons, tools, and anything you picked up or stole before the arrest — was confiscated at booking and is gone. You cannot produce, find, or use any object. If you claim to still have something, narrate that it was taken during booking.\n` +
     `- ${callRule}\n` +
     `- The only ways out are to wait for release or to make that one call (if still available). Escape is not possible.\n\n` +
     `HOW TO RESPOND:\n` +
     `- For mundane, realistic actions (pacing, sitting, humming, push-ups, reading graffiti, yelling down the empty hall), narrate them happening, briefly.\n` +
-    `- For impossible or absurd attempts (escaping, fighting out, blowing the wall, summoning anything, conjuring an item, or calling someone they cannot), do NOT comply. In your OWN words — dry, matter-of-fact, grounded in the reality above — narrate the attempt simply not working. Vary your phrasing; never reuse a canned line.\n` +
-    `- Keep every reply to 1-2 sentences.${callUsed ? '' : ` Occasionally remind the user their one option is to call ${characterName} for bail.`}`
+    `- For impossible or absurd attempts (escaping, fighting out, blowing the wall, summoning anything, conjuring an item, or calling someone you cannot), do NOT comply. In your OWN words — dry, matter-of-fact, grounded in the reality above — narrate the attempt simply not working. Vary your phrasing; never reuse a canned line.\n` +
+    `- Keep every reply to 1-2 sentences.${callUsed ? '' : ` Occasionally remind the player that their only option is to call ${characterName} for bail.`}`
   );
 }
 

@@ -14,10 +14,10 @@
 
 /** How the user's tagged input reaches the model + that actions carry weight. */
 export const ROLEPLAY_INPUT_DIRECTIVE =
-  `\n\nINPUT FORMAT: When the user wraps text in *asterisks*, that is a physical ACTION they are ` +
-  `performing in the scene right now — not speech. Text OUTSIDE asterisks is the user speaking aloud. ` +
+  `\n\nINPUT FORMAT: When the player wraps text in *asterisks*, that is a physical ACTION they are ` +
+  `performing in the scene right now — not speech. Text OUTSIDE asterisks is the player speaking aloud. ` +
   `Treat actions as real events with real consequences: they can change the scene, the mood, what ` +
-  `happens next, and your relationship. React to what the user actually did, not only what they said.`;
+  `happens next, and your relationship. React to what the player actually did, not only what they said.`;
 
 /** First-person discipline + anti-hallucination guardrail for the date character. */
 export function characterDisciplineDirective(characterName: string): string {

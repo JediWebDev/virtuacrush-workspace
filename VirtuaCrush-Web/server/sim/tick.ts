@@ -14,7 +14,7 @@ export type IntentType = 'bond' | 'argue' | 'post' | 'rest' | 'socialize' | 'hol
 export interface Intent { type: IntentType; target?: NpcId; reason: string; deferredFrom?: 'argue' }
 export type TickScope = 'micro' | 'macro';
 
-export type WorldEventKind = 'move' | 'mood' | 'rumor' | 'interaction' | 'post';
+export type WorldEventKind = 'move' | 'mood' | 'rumor' | 'interaction' | 'post' | 'event';
 export interface WorldEvent { at: number; kind: WorldEventKind; actors: string[]; text: string }
 export interface RelDelta { target: string; affinity?: number; resentment?: number; love?: number }
 export interface NpcPatch {
@@ -32,6 +32,22 @@ export interface Rng { next(): number }
 
 const POSITIVE_MOODS = new Set(['cheerful', 'content', 'excited', 'calm']);
 const BOND_ACTS = ['grabbed coffee together', 'swapped playlists', 'vented about their week', 'made weekend plans'];
+const INCIDENTS = [
+  'was caught on video losing it at a barista — it is going viral 📹',
+  'got into a fender-bender in the parking lot',
+  'had a very public meltdown at the mall',
+  'got thrown out of a store for causing a scene',
+  'was spotted leaving with someone new 👀',
+  'went viral for a cringey post',
+];
+
+const BASE_SALIENCE: Record<string, number> = { move: 0.1, mood: 0.1, post: 0.3, interaction: 0.4, rumor: 0.4, event: 0.9 };
+/** How "interesting to anyone" an event is. Only high-salience events are logged. */
+export function salienceOf(e: WorldEvent): number {
+  if (e.kind === 'interaction' && /argument/i.test(e.text)) return 0.75;
+  if (e.kind === 'rumor' && /(feuding|broke up|dating|a thing|falling out|hooked up|arrested|viral|caught)/i.test(e.text)) return 0.75;
+  return BASE_SALIENCE[e.kind] ?? 0.3;
+}
 const ARGUMENT_TOPICS = ['a movie', 'a band they both like', 'last weekend', 'an old grudge', 'a fashion choice'];
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
@@ -154,6 +170,8 @@ export function simulateStep(world: WorldState, atMin: number, rng: Rng, scope: 
         (pt.addMemories ??= []).push(mem(atMin, `argued with ${A}`, 2 + Math.round(Pt.grudge * 3)));
         (p.addRumors ??= []).push({ text: `${A} and ${B} are feuding`, credibility: 0.8, virality: 0.6, age: 0, source: id });
         res.events.push({ at: atMin, kind: 'interaction', actors: [id, t], text: `${A} and ${B} got into a heated argument about ${pick(ARGUMENT_TOPICS, rng)}.` });
+        const afterArg = aff(world.npcs[id], t) - (3 + Math.round(Pi.volatility * 5));
+        if (afterArg <= -50 && aff(world.npcs[id], t) > -50) res.events.push({ at: atMin, kind: 'rumor', actors: [id, t], text: `${A} and ${B} had a huge falling out 💔` });
       } else {
         (p.relDeltas ??= []).push({ target: t, affinity: 3 + Math.round(Pi.warmth * 3) });
         (pt.relDeltas ??= []).push({ target: id, affinity: 3 + Math.round(Pt.warmth * 3) });
@@ -163,6 +181,8 @@ export function simulateStep(world: WorldState, atMin: number, rng: Rng, scope: 
         p.needDeltas = { ...(p.needDeltas ?? {}), social: -15 };
         pt.needDeltas = { ...(pt.needDeltas ?? {}), social: -15 };
         res.events.push({ at: atMin, kind: 'interaction', actors: [id, t], text: `${A} and ${B} ${pick(BOND_ACTS, rng)}.` });
+        const afterBond = aff(world.npcs[id], t) + (3 + Math.round(Pi.warmth * 3));
+        if (afterBond >= 70 && aff(world.npcs[id], t) < 70) res.events.push({ at: atMin, kind: 'rumor', actors: [id, t], text: `${A} and ${B} are officially a thing now 💕` });
       }
     } else if (intent.type === 'hold') {
       // SILENCE: choosing not to act. Deferred conflict festers as resentment
@@ -202,6 +222,14 @@ export function simulateStep(world: WorldState, atMin: number, rng: Rng, scope: 
         break;
       }
     }
+  }
+
+  // rare, explosive incidents — the kind anyone would find interesting
+  if (rng.next() < 0.04) {
+    const who = ids[Math.floor(rng.next() * ids.length)];
+    const text = pick(INCIDENTS, rng);
+    res.events.push({ at: atMin, kind: 'event', actors: [who], text: `${nameOf(world, who)} ${text}` });
+    (patchFor(res, who).addMemories ??= []).push(mem(atMin, text, 4));
   }
 
   // emit a mood event when an intent changed someone's mood (causal, not random)

@@ -223,12 +223,12 @@ export function formatWorldEventDirective(
 
   if (event.kind === 'mischief') {
     return onDate
-      ? `\n\nWORLD EVENT (decided by the simulation — narrate it, do not change it): the user just did ` +
+      ? `\n\nWORLD EVENT (decided by the simulation — narrate it, do not change it): you just did ` +
           `something disruptive in public. ${authority} notices and steps in (a stern warning to knock it off ` +
           `or be thrown out). Narrate ${authority}'s reaction in *stage directions*, and have ${characterName} ` +
           `react in character — mortified, amused, or scolding depending on their personality. Keep it grounded and in-scene.`
-      : `\n\nWORLD EVENT (decided by the simulation — narrate it, do not change it): the user just described ` +
-          `doing something disruptive/reckless where they are. ${authority} take notice and respond believably ` +
+      : `\n\nWORLD EVENT (decided by the simulation — narrate it, do not change it): you just described ` +
+          `doing something disruptive/reckless where you are. ${authority} take notice and respond believably ` +
           `(a complaint, a warning, someone intervening). Narrate that reaction briefly in *stage directions*, and ` +
           `have ${characterName} react in character over text — concerned, exasperated, or amused. Keep it grounded.`;
   }
@@ -237,12 +237,12 @@ export function formatWorldEventDirective(
   // this branch is a fallback for any non-arresting crime narration).
   const responders = event.crimeType ? respondersFor(event.crimeType) : 'the police';
   return onDate
-    ? `\n\nWORLD EVENT (decided by the simulation — narrate it, do not change it): the user just did something ` +
+    ? `\n\nWORLD EVENT (decided by the simulation — narrate it, do not change it): you just did something ` +
         `seriously dangerous/criminal (${event.crimeType}). ${authority} and bystanders react with alarm, and ` +
         `${responders} are being called and are on the way. Narrate the escalating chaos in vivid *stage directions* ` +
         `(the authority intervening, the panic, sirens approaching), and have ${characterName} react with genuine ` +
         `shock/horror in character. This is a major, unforgettable incident — do NOT brush it off or treat it as a joke.`
-    : `\n\nWORLD EVENT (decided by the simulation — narrate it, do not change it): the user just described doing ` +
+    : `\n\nWORLD EVENT (decided by the simulation — narrate it, do not change it): you just described doing ` +
         `something seriously dangerous/criminal (${event.crimeType}). Alarm spreads where they are and ${responders} ` +
         `are on the way. Narrate the escalating chaos briefly in *stage directions*, and have ${characterName} react ` +
         `with genuine shock/horror in character. This is a major, unforgettable incident — do NOT treat it as a joke.`;

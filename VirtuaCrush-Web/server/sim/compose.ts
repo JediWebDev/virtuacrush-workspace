@@ -29,7 +29,7 @@ export function composeWorld(p: ComposePieces): WorldState {
   const companion: NpcEntity = {
     ...base,
     mood: p.npcState?.mood ?? base.mood,
-    location: p.npcState?.location ?? p.location ?? base.location,
+    location: p.phase === 'on_date' ? (p.location ?? base.location) : (p.npcState?.location ?? p.location ?? base.location),
     presentation: { wornItemIds: p.npcState?.currentOutfit ?? [], grooming: {} },
     relationships: {
       [PLAYER]: {
