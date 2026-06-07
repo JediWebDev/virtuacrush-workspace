@@ -5,6 +5,7 @@ import ChoiceCard from "./ChoiceCard";
 import { endDate, beginDate, shareViralMoment, requestBail } from "../lib/api";
 import { splitNarration } from "../lib/narration";
 import { parseScript } from "../lib/script";
+import ActivityLog from "./ActivityLog";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, Play, Lock, History, Search, Info } from "lucide-react";
@@ -452,19 +453,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
             Affinity {affinity}%
           </span>
           
-          <div className="mb-6 w-full rounded-2xl border border-black/[0.06] dark:border-white/[0.06] bg-black/[0.03] dark:bg-white/[0.03] p-4 text-left">
-            <h4 className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500">
-                How to roleplay
-            </h4>
-            <ul className="space-y-2 text-[12px] leading-relaxed text-stone-600 dark:text-stone-300">
-              <li>
-                Wrap actions in <span className="font-mono text-accent">*asterisks*</span> — e.g.{" "}
-                <em>*I lean in and smile*</em>. Anything without asterisks is you speaking out loud.
-              </li>
-              <li>Actions are real. What you do has consequences — for the moment, the mood, and your relationship.</li>
-              <li>Push your luck and the world pushes back: staff, security, even the police can step in.</li>
-            </ul>
-          </div>
+          <ActivityLog />
 
           <PrivateMessagesInbox onPlayAudio={openAudioMessage} userTier={userTier} />
         </div>
@@ -962,17 +951,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
                   <span className="mb-5 inline-flex items-center rounded-full border border-black/10 bg-black/[0.04] px-3 py-1 text-[11px] font-semibold text-stone-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-300">
                     Affinity {affinity}%
                   </span>
-                  <div className="w-full rounded-2xl border border-black/[0.06] bg-black/[0.03] p-4 text-left dark:border-white/[0.06] dark:bg-white/[0.03]">
-                    <h4 className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500">How to roleplay</h4>
-                    <ul className="space-y-2 text-[12px] leading-relaxed text-stone-600 dark:text-stone-300">
-                      <li>
-                        Wrap actions in <span className="font-mono text-accent">*asterisks*</span> — e.g.{" "}
-                        <em>*I lean in and smile*</em>. Text without asterisks is you speaking out loud.
-                      </li>
-                      <li>Actions are real. What you do has consequences — for the moment, the mood, and your relationship.</li>
-                      <li>Push your luck and the world pushes back: staff, security, even the police can step in.</li>
-                    </ul>
-                  </div>
+                  <ActivityLog />
                   <PrivateMessagesInbox
                     userTier={userTier}
                     onPlayAudio={() => {
