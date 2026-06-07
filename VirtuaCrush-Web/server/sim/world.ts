@@ -16,12 +16,15 @@ export interface Memory { at: number; summary: string; weight: number }
 export interface ScheduleEntry { fromHour: number; toHour: number; location: string; activity: string }
 
 export interface Belief { location?: string; activity?: string; withPlayer?: boolean; at?: number }
+
+/** A piece of gossip with a lifecycle: it decays, mutates, and spreads by virality. */
+export interface Rumor { text: string; credibility: number; virality: number; age: number; source?: NpcId }
 export interface Knowledge {
   knownLocations: string[];
   beliefs: Record<NpcId, Belief>;          // knownNPCStates (partial, fallible)
   knownPlayerFacts: string[];              // which permanent player facts are learned
   lastSeenOutfit: Record<NpcId, string[]>; // last observed worn-item ids per actor (stale until re-seen)
-  rumors: string[];
+  rumors: Rumor[];
 }
 
 // --- Permanent identity ------------------------------------------------------

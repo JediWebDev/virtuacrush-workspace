@@ -3,7 +3,7 @@
 // wrapper lives in db/sim_world.ts; keeping the composition pure makes it
 // testable. v1 includes the companion as the sole sim NPC; rivals/others slot in
 // here later.
-import type { WorldState, NpcEntity, PlayerProfile, PresentationState, InventoryItem, UserStatus } from './world';
+import type { WorldState, NpcEntity, PlayerProfile, PresentationState, InventoryItem, UserStatus, Rumor } from './world';
 import { PLAYER } from './world';
 import { baseNpcEntity } from './roster';
 
@@ -45,7 +45,7 @@ export function composeWorld(p: ComposePieces): WorldState {
       beliefs: (k.beliefs ?? {}) as NpcEntity['knowledge']['beliefs'],
       knownPlayerFacts: Array.isArray(k.knownPlayerFacts) ? (k.knownPlayerFacts as string[]) : [],
       lastSeenOutfit: (k.lastSeenOutfit ?? {}) as Record<string, string[]>,
-      rumors: Array.isArray(k.rumors) ? (k.rumors as string[]) : [],
+      rumors: Array.isArray(k.rumors) ? (k.rumors as Rumor[]) : [],
     },
   };
   const status: UserStatus = p.phase === 'jailed' ? 'jailed' : 'free';
