@@ -1,8 +1,11 @@
 // OpenAI-compatible adapter. Works with OpenAI, OpenRouter, Together, Fireworks,
-// DeepInfra, Groq, and self-hosted vLLM/Ollama — anything that speaks the
-// /v1/chat/completions format. The MODEL can be any of theirs (Llama, Mistral,
-// Qwen, uncensored fine-tunes, Claude/Gemini via OpenRouter); "OpenAI-compatible"
-// is the wire format, not the model maker.
+// DeepInfra, Groq, and self-hosted vLLM/Ollama (incl. RunPod serverless) — any
+// endpoint that speaks the /v1/chat/completions format. "OpenAI-compatible" is
+// the wire format, not the model maker.
+//
+// Includes retry-with-backoff + a per-attempt timeout so transient 429/5xx and
+// serverless cold-starts (RunPod spinning a worker up) auto-recover instead of
+// surfacing as a failed message.
 import type { LlmProvider } from './types';
 
 export interface OpenAiCfg {
@@ -52,6 +55,17 @@ export function parseChatResponse(json: unknown): string {
   return j?.choices?.[0]?.message?.content ?? '';
 }
 
+// HTTP statuses worth retrying: rate limits, conflicts, and transient gateway/
+// cold-start errors common on serverless GPU endpoints.
+const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Exponential backoff with jitter, capped (attempt is 0-based): ~1s, 2s, 4s, 8s. */
+function backoffMs(attempt: number): number {
+  return Math.min(1000 * 2 ** attempt, 8000) + Math.floor(Math.random() * 250);
+}
+
 let loggedConfig = false;
 
 async function complete(prompt: string): Promise<string> {
@@ -66,26 +80,59 @@ async function complete(prompt: string): Promise<string> {
   }
   if (!cfg.apiKey) {
     throw new Error(
-      '[llm] LLM_API_KEY is empty after trimming — set it on your host with no quotes or spaces ' +
-        '(OpenRouter keys start with "sk-or-").',
+      '[llm] LLM_API_KEY is empty after trimming — set it on your host with no quotes or spaces.',
     );
   }
-  const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${cfg.apiKey}`,
-      // OpenRouter likes these (harmless elsewhere):
-      'HTTP-Referer': clean(process.env.PUBLIC_APP_URL),
-      'X-Title': 'VirtuaCrush',
-    },
-    body: JSON.stringify(buildChatBody(prompt, cfg)),
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`[llm] ${cfg.model} HTTP ${res.status}: ${body.slice(0, 300)}`);
+
+  const url = `${cfg.baseUrl}/chat/completions`;
+  const body = JSON.stringify(buildChatBody(prompt, cfg));
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${cfg.apiKey}`,
+    'HTTP-Referer': clean(process.env.PUBLIC_APP_URL), // OpenRouter likes these (harmless elsewhere)
+    'X-Title': 'VirtuaCrush',
+  };
+  const maxRetries = Math.max(0, Number(process.env.LLM_MAX_RETRIES ?? 3));
+  const timeoutMs = Math.max(1000, Number(process.env.LLM_TIMEOUT_MS ?? 120_000));
+
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    let res: Response;
+    try {
+      res = await fetch(url, { method: 'POST', headers, body, signal: ac.signal });
+    } catch (err) {
+      // Network failure / timeout (abort) — transient, retry.
+      clearTimeout(timer);
+      lastErr = err;
+      const reason = (err as Error)?.name === 'AbortError' ? `timeout after ${timeoutMs}ms` : (err as Error)?.message;
+      if (attempt < maxRetries) {
+        const waitMs = backoffMs(attempt);
+        console.warn(`[llm] ${cfg.model} request failed (${reason}) [attempt ${attempt + 1}/${maxRetries + 1}] — retrying in ${waitMs}ms`);
+        await sleep(waitMs);
+        continue;
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (res.ok) return parseChatResponse(await res.json());
+
+    const errBody = await res.text().catch(() => '');
+    if (RETRYABLE_STATUS.has(res.status) && attempt < maxRetries) {
+      const retryAfter = Number(res.headers.get('retry-after'));
+      const waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : backoffMs(attempt);
+      console.warn(`[llm] ${cfg.model} HTTP ${res.status} [attempt ${attempt + 1}/${maxRetries + 1}] — retrying in ${waitMs}ms`);
+      await sleep(waitMs);
+      continue;
+    }
+    // Non-retryable (e.g. 401/400) or out of retries — surface it.
+    throw new Error(`[llm] ${cfg.model} HTTP ${res.status}: ${errBody.slice(0, 300)}`);
   }
-  return parseChatResponse(await res.json());
+
+  throw lastErr instanceof Error ? lastErr : new Error('[llm] request failed after retries');
 }
 
 export const openAiProvider: LlmProvider = {
