@@ -1,6 +1,8 @@
 import { pool } from './pool';
 
-export const FREE_TIER_DAILY_LIMIT = 5;
+// Free-tier daily message cap. Override with FREE_TIER_DAILY_LIMIT (e.g. set it
+// high on your host while testing). Defaults to 5 for real free users.
+export const FREE_TIER_DAILY_LIMIT = Math.max(1, Number(process.env.FREE_TIER_DAILY_LIMIT ?? 35));
 
 /**
  * Returns today's message count for a user (UTC day boundary).

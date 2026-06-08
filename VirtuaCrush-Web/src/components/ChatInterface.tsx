@@ -12,6 +12,7 @@ import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, Play, Lock, Hi
 import { Character } from "../types/character";
 import { hasPremiumAccess, type UserTier } from "../types/subscription";
 import SocialFeed from "./SocialFeed";
+import UpgradeToast from "./UpgradeToast";
 
 type PrivateMessage = {
   id: string;
@@ -147,6 +148,8 @@ function PrivateMessagesInbox({
 
 export default function ChatInterface({ character, onBack, onAffinityChange, autoOpenMessageId, userTier }: Props) {
   const [affinity, setAffinity] = useState(character.currentAffinity);
+  const [quotaToast, setQuotaToast] = useState(false);
+  const [quotaLimit, setQuotaLimit] = useState<number | null>(null);
   const { messages, setMessages, send: sendMessage, streaming: isLoading } = useChat({
     characterId: character.id,
     initialMessages: [],
@@ -155,6 +158,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
       onAffinityChange?.(character.id, score);
     },
     onChoice: (c: DialogueChoice) => setChoice(c),
+    onQuotaExceeded: (info) => { setQuotaLimit(info?.limit ?? null); setQuotaToast(true); },
     onDone: () => {
       // The scene can change mid-conversation (e.g. arrival flips apart->together),
       // so refresh the status strip after each reply.
@@ -414,6 +418,12 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
       exit={{ opacity: 0, scale: 0.98 }}
       className="relative flex h-[calc(100vh-104px)] w-full flex-col overflow-hidden bg-stone-50 dark:bg-surface lg:grid lg:grid-cols-[300px_1fr_350px] lg:grid-rows-1 lg:flex-none"
     >
+      <UpgradeToast
+        open={quotaToast}
+        limit={quotaLimit}
+        onClose={() => setQuotaToast(false)}
+        onUpgrade={() => { setQuotaToast(false); navigate("/how-it-works"); }}
+      />
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(201,113,125,0.12),transparent)]" />
 
       {/* Profile rail — dating / social profile feel */}

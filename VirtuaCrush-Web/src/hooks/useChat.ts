@@ -24,7 +24,7 @@ interface UseChatOptions {
   characterId: string;
   initialMessages?: Message[];
   onDone?: (remaining: number | null) => void;
-  onQuotaExceeded?: () => void;
+  onQuotaExceeded?: (info?: { limit?: number; used?: number }) => void;
   onAffinityUpdate?: (score: number) => void;
   onChoice?: (choice: any) => void;
 }
@@ -130,7 +130,9 @@ export function useChat({
           // Quota exceeded. Roll back the optimistic messages and flag the UI.
           setMessages((prev) => prev.filter((m) => m.id !== userMsg.id && m.id !== assistantId));
           setQuotaExceeded(true);
-          onQuotaExceeded?.();
+          let info: { limit?: number; used?: number } | undefined;
+          try { const j = await res.json(); info = { limit: j?.limit, used: j?.used }; } catch { /* ignore */ }
+          onQuotaExceeded?.(info);
           return;
         }
         if (res.status === 401) {
