@@ -16,6 +16,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { toNodeHandler } from 'better-auth/node';
 import { selectProviderName } from './server/llm';
+import { applyMigrations } from './server/db/applyMigrations';
 
 import { auth } from './server/lib/auth';
 import chatRouter from './server/routes/chat';
@@ -108,6 +109,9 @@ if (process.env.SERVE_STATIC === 'true' || process.env.SERVE_STATIC === '1') {
 const HOST = process.env.HOST ?? '0.0.0.0';
 const server = app.listen(PORT, HOST, () => {
   console.log(`[server] listening on ${HOST}:${PORT}`);
+  // Run DB migrations AFTER binding the port so a slow/unready database can
+  // never block startup or fail the healthcheck. Idempotent + non-fatal.
+  void applyMigrations().catch((e) => console.error('[migrate] background run failed:', e));
 });
 
 // Friendly handling for the common "port already taken" case (usually a stale

@@ -10,7 +10,7 @@
     "clean:dist": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "npm run clean:dist && vite build --outDir dist/public && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
-    "start:railway": "tsx db/migrate.ts && node dist/server.cjs",
+    "start:railway": "node dist/server.cjs",
     "migrate": "tsx db/migrate.ts",
     "clean": "npm run clean:dist",
     "lint": "tsc --noEmit",
