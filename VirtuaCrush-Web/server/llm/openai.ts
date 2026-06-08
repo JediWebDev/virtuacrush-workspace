@@ -52,8 +52,18 @@ export function parseChatResponse(json: unknown): string {
   return j?.choices?.[0]?.message?.content ?? '';
 }
 
+let loggedConfig = false;
+
 async function complete(prompt: string): Promise<string> {
   const cfg = openAiConfig();
+  if (!loggedConfig) {
+    loggedConfig = true;
+    // One-time masked diagnostic: confirms what actually reached the runtime so
+    // a wrong/blank key is obvious without ever printing the secret.
+    const k = cfg.apiKey;
+    const masked = k ? `${k.slice(0, 8)}…(len ${k.length})` : '(empty)';
+    console.log(`[llm] openai-compatible config: baseUrl=${cfg.baseUrl} model=${cfg.model} key=${masked}`);
+  }
   if (!cfg.apiKey) {
     throw new Error(
       '[llm] LLM_API_KEY is empty after trimming — set it on your host with no quotes or spaces ' +
