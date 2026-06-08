@@ -5,8 +5,10 @@ import {
   CreditCard,
   Receipt,
   Bell,
+  LogOut,
   type LucideIcon,
 } from "lucide-react";
+import { useSession, signOut } from "../lib/auth-client";
 
 type Section = {
   id: string;
@@ -174,17 +176,30 @@ function SectionCard({ section }: { section: Section }) {
 }
 
 export default function AccountPage() {
+  const { data: session } = useSession();
+
   return (
     <main className="relative px-6 pb-24 pt-4 md:px-12">
       <div className="mx-auto max-w-3xl">
-        <div className="mb-10 flex items-center gap-4">
+        <div className="mb-10 flex flex-wrap items-center gap-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/15 text-accent">
             <User size={28} />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <h1 className="font-serif text-3xl font-bold text-stone-900 dark:text-stone-50 md:text-4xl">Account</h1>
-            <p className="mt-1 text-stone-600 dark:text-stone-400">Manage your profile, security, and billing.</p>
+            <p className="mt-1 text-stone-600 dark:text-stone-400">
+              {session?.user?.email
+                ? `Signed in as ${session.user.email}`
+                : "Manage your profile, security, and billing."}
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={() => signOut()}
+            className="flex items-center gap-2 rounded-xl border border-black/10 bg-black/[0.04] px-4 py-2.5 text-sm font-semibold text-stone-700 transition-colors hover:bg-black/[0.08] dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-200 dark:hover:bg-white/[0.08]"
+          >
+            <LogOut size={16} /> Sign out
+          </button>
         </div>
         <div className="space-y-6">
           {sections.map((s) => (

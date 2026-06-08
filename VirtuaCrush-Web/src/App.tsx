@@ -12,6 +12,7 @@ import BrowseCharactersPage from "./pages/BrowseCharactersPage";
 import AccountPage from "./pages/AccountPage";
 import HowItWorksPage from "./pages/HowItWorksPage";
 import AvatarPage from "./components/AvatarPage";
+import AuthPage from "./pages/AuthPage";
 import { useSession, signOut } from './lib/auth-client';
 
 type AppLocationState = {
@@ -35,7 +36,8 @@ function ChatDeepLink({ onSelect }: { onSelect: (char: Character) => void }) {
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  
+  const { data: session, isPending } = useSession();
+
   // Defaulting to "pro" for testing phase to bypass all locks/modals
   const [userTier, setUserTier] = useState<UserTier>("pro");
   
@@ -69,6 +71,21 @@ export default function App() {
       setAutoOpenMessageId(undefined);
     }
   }, [location.pathname, location.state]);
+
+  // --- Auth gate -----------------------------------------------------------
+  // Block the whole app until there's a session. Locally you can still set
+  // AUTH_BYPASS=1 on the server; in production a real login is required.
+  if (isPending) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-stone-50 text-stone-500 dark:bg-surface dark:text-stone-400">
+        Loading…
+      </div>
+    );
+  }
+  if (!session?.user) {
+    return <AuthPage />;
+  }
+  // -------------------------------------------------------------------------
 
   return (
     <div className="flex min-h-screen flex-col bg-stone-50 dark:bg-surface">
