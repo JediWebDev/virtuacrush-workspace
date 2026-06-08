@@ -1,6 +1,6 @@
 // Streaming chat function. Takes the user's message + recent history + character,
 // returns an async iterable of text/emotion chunks suitable for SSE + affinity scoring.
-import { getLLM } from './client';
+import { getLLM, activeModelId } from './client';
 import { getCharacter, type CharacterId } from './characters';
 import type { InworldEmotionEvent } from '../db/affinity';
 
@@ -124,8 +124,13 @@ export async function completePrompt(prompt: string): Promise<string> {
   const llmAny = llm as unknown as {
     generateContentComplete: (opts: { prompt: string }) => Promise<string | { text?: string; content?: string }>;
   };
-  const result = await llmAny.generateContentComplete({ prompt });
-  return typeof result === 'string' ? result : (result?.content ?? result?.text ?? '');
+  try {
+    const result = await llmAny.generateContentComplete({ prompt });
+    return typeof result === 'string' ? result : (result?.content ?? result?.text ?? '');
+  } catch (err) {
+    console.error(`[llm] completion failed (model=${activeModelId()}):`, (err as Error)?.message ?? err);
+    throw err;
+  }
 }
 
 export async function* streamChat(params: StreamChatParams): AsyncGenerator<StreamChatChunk> {
