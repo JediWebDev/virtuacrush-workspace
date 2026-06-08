@@ -1,8 +1,8 @@
 // Better Auth server configuration. Server-only — never import this from src/.
 import { betterAuth } from 'better-auth';
-import { Pool } from 'pg';
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Reuse the shared, SSL-aware pool (handles managed Postgres over public URLs)
+// instead of opening a second connection with no SSL config.
+import { pool } from '../db/pool';
 
 export const auth = betterAuth({
   database: pool,
