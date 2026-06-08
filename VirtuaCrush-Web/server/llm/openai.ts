@@ -13,11 +13,24 @@ export interface OpenAiCfg {
   maxTokens: number;
 }
 
+// Env values pasted into a host dashboard often arrive with surrounding quotes
+// or stray whitespace/newlines. That produces a broken `Bearer` header and an
+// opaque 401, so scrub each value before use.
+function clean(v: string | undefined): string {
+  return (v ?? '').trim().replace(/^["']+|["']+$/g, '').trim();
+}
+
+// The key specifically: also drop a stray leading "Bearer " if the value was
+// pasted with it, which would otherwise double up in the Authorization header.
+function cleanKey(v: string | undefined): string {
+  return clean(v).replace(/^bearer\s+/i, '').trim();
+}
+
 export function openAiConfig(env: NodeJS.ProcessEnv = process.env): OpenAiCfg {
   return {
-    baseUrl: (env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, ''),
-    apiKey: env.LLM_API_KEY || '',
-    model: env.LLM_MODEL || 'gpt-4o-mini',
+    baseUrl: (clean(env.LLM_BASE_URL) || 'https://api.openai.com/v1').replace(/\/+$/, ''),
+    apiKey: cleanKey(env.LLM_API_KEY),
+    model: clean(env.LLM_MODEL) || 'gpt-4o-mini',
     temperature: Number(env.LLM_TEMPERATURE ?? 0.85),
     maxTokens: Number(env.LLM_MAX_TOKENS ?? 400),
   };
@@ -41,13 +54,19 @@ export function parseChatResponse(json: unknown): string {
 
 async function complete(prompt: string): Promise<string> {
   const cfg = openAiConfig();
+  if (!cfg.apiKey) {
+    throw new Error(
+      '[llm] LLM_API_KEY is empty after trimming — set it on your host with no quotes or spaces ' +
+        '(OpenRouter keys start with "sk-or-").',
+    );
+  }
   const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${cfg.apiKey}`,
       // OpenRouter likes these (harmless elsewhere):
-      'HTTP-Referer': process.env.PUBLIC_APP_URL || '',
+      'HTTP-Referer': clean(process.env.PUBLIC_APP_URL),
       'X-Title': 'VirtuaCrush',
     },
     body: JSON.stringify(buildChatBody(prompt, cfg)),
