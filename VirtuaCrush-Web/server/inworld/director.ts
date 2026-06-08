@@ -63,6 +63,38 @@ function mapLines(arr: unknown[], companionName: string): DirectorTurn[] {
     .filter((t) => t.text);
 }
 
+// Attempts to repair near-valid JSON from weaker models: strips trailing commas,
+// closes an unterminated string, and balances brackets/braces. Best-effort.
+function repairJson(s: string): string {
+  let t = s.trim().replace(/,\s*([}\]])/g, '$1');
+  const quotes = (t.match(/(?<!\\)"/g) || []).length;
+  if (quotes % 2 === 1) t += '"';
+  const openSq = (t.match(/\[/g) || []).length - (t.match(/\]/g) || []).length;
+  if (openSq > 0) t += ']'.repeat(openSq);
+  const openBr = (t.match(/\{/g) || []).length - (t.match(/\}/g) || []).length;
+  if (openBr > 0) t += '}'.repeat(openBr);
+  return t;
+}
+
+// True if the text still looks like raw JSON structure — used to refuse dumping
+// JSON fragments to the player when every parse attempt has failed.
+function looksStructured(s: string): boolean {
+  return /"(?:intent|lines|speaker|text|type|subtype|target|magnitude)"\s*:/.test(s);
+}
+
+// Best-effort intent extraction even when the JSON object won't parse, so the
+// engine still classifies the player's action (e.g. crimes still trigger arrest).
+function salvageIntent(raw: string): PlayerIntent | null {
+  const type = raw.match(/"type"\s*:\s*"([^"]+)"/)?.[1];
+  if (!type) return null;
+  return validateIntent({
+    type,
+    subtype: raw.match(/"subtype"\s*:\s*"([^"]*)"/)?.[1] ?? '',
+    target: raw.match(/"target"\s*:\s*"([^"]*)"/)?.[1],
+    magnitude: raw.match(/"magnitude"\s*:\s*"([^"]*)"/)?.[1],
+  });
+}
+
 /** Legacy: narration-only prompt (JSON array of lines). */
 export function buildDirectorPrompt(stage: DirectorStage): string {
   const turns = stage.history.slice(-MAX_HISTORY_TURNS).map((m) => (m.role === 'user' ? `User: ${m.content}` : m.content)).join('\n');
@@ -93,19 +125,31 @@ export function parseDirectorTurns(raw: string, companionName: string): Director
   if (!text) return [];
   const tryParse = (json: string): DirectorTurn[] | null => {
     try {
-      const parsed = JSON.parse(json);
-      if (Array.isArray(parsed)) { const t = mapLines(parsed, companionName); return t.length ? t : null; }
+      const parsed = JSON.parse(json) as unknown;
+      const arr = Array.isArray(parsed)
+        ? parsed
+        : parsed && typeof parsed === 'object'
+          ? Array.isArray((parsed as { lines?: unknown[] }).lines)
+            ? (parsed as { lines: unknown[] }).lines
+            : [parsed]
+          : null;
+      if (arr) { const t = mapLines(arr, companionName); return t.length ? t : null; }
     } catch { /* fall through */ }
     return null;
   };
   const arr = text.match(/\[[\s\S]*\]/);
-  if (arr) { const t = tryParse(arr[0]); if (t) return t; }
+  if (arr) { const t = tryParse(arr[0]) ?? tryParse(repairJson(arr[0])); if (t) return t; }
   const objs = text.match(/\{[^{}]*\}/g);
   if (objs && objs.length) { const t = tryParse('[' + objs.join(',') + ']'); if (t) return t; }
+  // Repair a truncated object/array starting at the first bracket.
+  const firstBracket = [text.indexOf('['), text.indexOf('{')].filter((i) => i >= 0).sort((a, b) => a - b)[0];
+  if (firstBracket !== undefined) { const t = tryParse(repairJson(text.slice(firstBracket))); if (t) return t; }
   const salvaged = salvageTexts(text).map(cleanLine).filter(Boolean);
   if (salvaged.length) return salvaged.map((t) => ({ speaker: companionName, text: t }));
+  // Plain prose becomes a line; JSON-looking garbage does NOT (route supplies a
+  // graceful fallback instead of leaking structure to the player).
   const cleaned = cleanLine(text.replace(/```[a-z]*|```/gi, ''));
-  return cleaned ? [{ speaker: companionName, text: cleaned }] : [];
+  return cleaned && !looksStructured(text) ? [{ speaker: companionName, text: cleaned }] : [];
 }
 
 /** Renders ordered turns into the canonical tagged transcript the UI reads. */
@@ -160,14 +204,21 @@ export function parseScene(raw: string, companionName: string): SceneResult {
   const text = (raw ?? '').trim();
   let intent: PlayerIntent | null = null;
   let turns: DirectorTurn[] = [];
-  const m = text.match(/\{[\s\S]*\}/);
-  if (m) {
-    try {
-      const obj = JSON.parse(m[0]) as Record<string, unknown>;
-      intent = validateIntent(obj.intent);
-      if (Array.isArray(obj.lines)) turns = mapLines(obj.lines as unknown[], companionName);
-    } catch { /* fall through to salvage */ }
+  const start = text.indexOf('{');
+  if (start >= 0) {
+    const lastClose = text.lastIndexOf('}');
+    const candidate = lastClose > start ? text.slice(start, lastClose + 1) : text.slice(start);
+    for (const json of [candidate, repairJson(candidate)]) {
+      try {
+        const obj = JSON.parse(json) as Record<string, unknown>;
+        intent = validateIntent(obj.intent);
+        if (Array.isArray(obj.lines)) turns = mapLines(obj.lines as unknown[], companionName);
+        if (turns.length) break;
+      } catch { /* try repaired, then fall through */ }
+    }
   }
+  // Even if the lines couldn't be parsed, still classify the player's action.
+  if (!intent) intent = salvageIntent(text);
   if (turns.length === 0) turns = parseDirectorTurns(text, companionName);
   return { intent, turns };
 }

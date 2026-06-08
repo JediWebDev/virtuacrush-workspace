@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDirectorPrompt, companionTagFor, parseDirectorTurns, turnsToTranscript } from './director';
+import { buildDirectorPrompt, companionTagFor, parseDirectorTurns, parseScene, turnsToTranscript } from './director';
 
 test('companionTagFor uppercases a name', () => {
   assert.equal(companionTagFor('Serena'), 'SERENA');
@@ -63,4 +63,25 @@ test('turnsToTranscript: renders canonical tagged transcript', () => {
     { speaker: 'Security', text: 'out, now' },
   ]);
   assert.equal(t, '[SERENA] hi\n[NARRATOR] *the door opens*\n[SECURITY] out, now');
+});
+
+test('parseScene: malformed scene JSON never leaks structure, still salvages intent', () => {
+  const raw = '{"intent": { "type": "observation", "subtype": "introduction", "target": "Andrew lines":';
+  const { intent, turns } = parseScene(raw, 'Madison');
+  for (const t of turns) {
+    assert.ok(!/"(?:intent|lines|speaker|text|type)"\s*:/.test(t.text), `leaked JSON: ${t.text}`);
+  }
+  assert.equal(intent?.type, 'observation');
+});
+
+test('parseScene: repairs truncated JSON and extracts the line', () => {
+  const raw = '{"intent":{"type":"social","subtype":"greeting"},"lines":[{"speaker":"Madison","text":"hi there!"}';
+  const { intent, turns } = parseScene(raw, 'Madison');
+  assert.equal(intent?.type, 'social');
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].text, 'hi there!');
+});
+
+test('parseDirectorTurns: refuses to leak JSON-looking garbage', () => {
+  assert.deepEqual(parseDirectorTurns('intent": "observation", "lines":', 'Madison'), []);
 });
