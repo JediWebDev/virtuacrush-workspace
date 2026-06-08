@@ -22,6 +22,9 @@ export const pool = new Pool({
   ssl: resolveSsl(),
   max: 10,
   idleTimeoutMillis: 30_000,
+  // Fail a stuck connection attempt in 10s instead of hanging forever (matters
+  // at container boot when managed Postgres networking may lag a moment).
+  connectionTimeoutMillis: 10_000,
 });
 
 pool.on('error', (err) => {

@@ -14,6 +14,25 @@ async function main() {
     process.exit(1);
   }
 
+  // Wait for the database to accept connections. Railway's internal Postgres
+  // networking can lag a few seconds at container boot, and without this the
+  // migrate step (and therefore the whole server start) could stall past the
+  // healthcheck window. Bounded so a truly unreachable DB still fails clearly.
+  let ready = false;
+  for (let attempt = 1; attempt <= 15 && !ready; attempt++) {
+    try {
+      await pool.query('SELECT 1');
+      ready = true;
+    } catch {
+      console.log(`[migrate] database not ready yet (attempt ${attempt}/15) — retrying in 2s`);
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+  if (!ready) {
+    console.error('[migrate] database unreachable after retries — aborting');
+    process.exit(1);
+  }
+
   const dir = path.join(process.cwd(), 'db', 'migrations');
   const files = readdirSync(dir)
     .filter((f) => f.endsWith('.sql'))
