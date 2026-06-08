@@ -2,7 +2,7 @@
 // their lore and the prior day's state, advancing them toward their goal while
 // reacting to their challenges. Uses the Inworld LLM; fails soft to a
 // deterministic seed-based fallback so the story never blocks chat.
-import { getLLM } from './client';
+import { completePrompt } from '../llm';
 import { getLore } from './lore';
 import {
   parseGeneratedState,
@@ -68,19 +68,13 @@ export async function generateDailyState(params: {
   const today = params.today ?? utcDateString();
   const lore = getLore(params.characterId);
   try {
-    const llm = await getLLM();
-    const llmAny = llm as unknown as {
-      generateContentComplete: (
-        opts: { prompt: string },
-      ) => Promise<string | { text?: string; content?: string }>;
-    };
     const prompt = buildStatePrompt({
       displayName: params.displayName,
       characterId: params.characterId,
       prior: params.prior,
       today,
     });
-    const result = await llmAny.generateContentComplete({ prompt });
+    const result = await completePrompt(prompt);
     const parsed = parseGeneratedState(result);
     if (parsed) return parsed;
     console.warn(`[story] unparseable state for ${params.characterId}; using fallback`);

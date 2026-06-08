@@ -165,7 +165,7 @@ Respond with ONLY this JSON (no prose/fences):
   try {
     const llm = await llmComplete();
     const raw = await llm.generateContentComplete({ prompt });
-    const text = raw;
+    const text = typeof raw === 'string' ? raw : (raw?.content ?? raw?.text ?? '');
     const m = text.match(/\{[\s\S]*\}/);
     if (!m) return fallback;
     const obj = JSON.parse(m[0]);
@@ -254,7 +254,7 @@ Respond with ONLY this JSON (no prose/fences). Do NOT state any dollar amount th
   try {
     const llm = await llmComplete();
     const raw = await llm.generateContentComplete({ prompt });
-    const text = raw;
+    const text = typeof raw === 'string' ? raw : (raw?.content ?? raw?.text ?? '');
     const m = text.match(/\{[\s\S]*\}/);
     if (!m) return fallback;
     const obj = JSON.parse(m[0]);
@@ -298,7 +298,7 @@ Output ONLY the line, nothing else.`;
   try {
     const llm = await llmComplete();
     const raw = await llm.generateContentComplete({ prompt });
-    const text = raw;
+    const text = typeof raw === 'string' ? raw : (raw?.content ?? raw?.text ?? '');
     const line = text.trim().replace(/^["']|["']$/g, '').slice(0, 400);
     return line || fallback;
   } catch (err) {
@@ -324,7 +324,7 @@ Write your 1-2 sentence reaction in character. You may include a brief *stage di
   try {
     const llm = await llmComplete();
     const raw = await llm.generateContentComplete({ prompt });
-    const text = raw;
+    const text = typeof raw === 'string' ? raw : (raw?.content ?? raw?.text ?? '');
     const line = text.trim().replace(/^["']|["']$/g, '').slice(0, 400);
     return line || fallback;
   } catch (err) {

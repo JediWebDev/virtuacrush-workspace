@@ -12,7 +12,7 @@
 // memory_util.ts so they are testable without the native runtime or a DB.
 // Everything here fails soft: a memory hiccup must never break chat.
 import { pool } from './pool';
-import { getLLM } from '../inworld/client';
+import { completePrompt } from '../llm';
 import { embed } from '../inworld/embedder';
 import {
   rankMemories,
@@ -59,17 +59,11 @@ JSON array:`;
 
 async function extractFacts(userMessage: string, assistantMessage: string): Promise<string[]> {
   try {
-    const llm = await getLLM();
-    const llmAny = llm as unknown as {
-      generateContentComplete: (
-        opts: { prompt: string },
-      ) => Promise<string | { text?: string; content?: string }>;
-    };
     const prompt = FACT_EXTRACTION_PROMPT.replace('{{USER}}', userMessage.slice(0, 4000)).replace(
       '{{ASSISTANT}}',
       assistantMessage.slice(0, 4000),
     );
-    const result = await llmAny.generateContentComplete({ prompt });
+    const result = await completePrompt(prompt);
     return parseFacts(result);
   } catch (err) {
     console.warn('[memory] fact extraction failed:', err);

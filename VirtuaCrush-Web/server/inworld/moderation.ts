@@ -3,7 +3,7 @@
 // is toward the chat partner. Designed to run in parallel with the chat stream
 // so it adds no user-visible latency, and to fail soft (return 0) on any error
 // so chat never breaks because moderation hiccuped.
-import { getLLM } from './client';
+import { completePrompt } from '../llm';
 
 const CLASSIFIER_PROMPT = `You are a content moderation classifier for a companion-chat app.
 Rate how hostile, abusive, or cruel the following USER message is toward the person they are talking to.
@@ -38,15 +38,8 @@ export async function classifyHostility(message: string): Promise<number | null>
   if (!message || !message.trim()) return 0;
 
   try {
-    const llm = await getLLM();
-    const llmAny = llm as unknown as {
-      generateContentComplete: (
-        opts: { prompt: string },
-      ) => Promise<string | { text?: string; content?: string }>;
-    };
-
     const prompt = CLASSIFIER_PROMPT.replace('{{MESSAGE}}', message.slice(0, 4000));
-    const result = await llmAny.generateContentComplete({ prompt });
+    const result = await completePrompt(prompt);
     return parseScore(result);
   } catch (err) {
     console.warn('[moderation] classifyHostility failed, falling back to heuristic:', err);

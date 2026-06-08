@@ -1,7 +1,10 @@
 // Streaming chat function. Takes the user's message + recent history + character,
-// returns an async iterable of text/emotion chunks suitable for SSE + affinity scoring.
-import { getLLM, activeModelId } from './client';
+// returns an async iterable of text chunks suitable for SSE.
+//
+// LLM calls are routed through the provider layer (../llm), so the underlying
+// model is swappable by env (Inworld today, OpenRouter/self-hosted tomorrow).
 import { getCharacter, type CharacterId } from './characters';
+import { completePrompt, streamPrompt } from '../llm';
 import type { InworldEmotionEvent } from '../db/affinity';
 
 export interface ChatMessage {
@@ -40,99 +43,6 @@ function buildPrompt(
 
 const MAX_HISTORY_TURNS = 30;
 
-function extractEmotionEvent(chunk: unknown): InworldEmotionEvent | undefined {
-  if (!chunk || typeof chunk !== 'object') return undefined;
-
-  const record = chunk as Record<string, unknown>;
-  const raw =
-    record.emotionEvent ??
-    record.emotion_event ??
-    (record.metadata && typeof record.metadata === 'object'
-      ? (record.metadata as Record<string, unknown>).emotionEvent ??
-        (record.metadata as Record<string, unknown>).emotion_event
-      : undefined);
-
-  if (!raw || typeof raw !== 'object') return undefined;
-
-  const evt = raw as Record<string, unknown>;
-  const behavior = evt.behavior;
-  if (typeof behavior !== 'string' || !behavior.trim()) return undefined;
-
-  const strengthRaw = evt.strength;
-  const strength =
-    typeof strengthRaw === 'number'
-      ? strengthRaw
-      : typeof strengthRaw === 'string'
-        ? parseFloat(strengthRaw)
-        : 0;
-
-  return {
-    behavior: behavior.trim(),
-    strength: Number.isFinite(strength) ? strength : 0,
-  };
-}
-
-function extractText(chunk: unknown): string | undefined {
-  if (!chunk || typeof chunk !== 'object') return undefined;
-  const record = chunk as Record<string, unknown>;
-  const text = record.content ?? record.text;
-  return typeof text === 'string' && text.length > 0 ? text : undefined;
-}
-
-const emitChunk = function* (raw: unknown): Generator<StreamChatChunk> {
-  const text = extractText(raw);
-  const emotionEvent = extractEmotionEvent(raw);
-  if (text) yield { text };
-  if (emotionEvent) yield { emotionEvent };
-};
-
-/**
- * Streams model output for an already-built prompt string. Shared by streamChat
- * (single persona) and the scene director (multi-actor tagged transcript).
- */
-export async function* streamPrompt(prompt: string): AsyncGenerator<StreamChatChunk> {
-  const llm = await getLLM();
-  const llmAny = llm as unknown as {
-    generateContentStream?: (opts: { prompt: string }) => AsyncIterable<unknown>;
-    generateContent?: (opts: { prompt: string }) => Promise<AsyncIterable<unknown>>;
-    generateContentComplete: (opts: { prompt: string }) => Promise<string | { text?: string; content?: string }>;
-  };
-
-  if (typeof llmAny.generateContentStream === 'function') {
-    for await (const raw of llmAny.generateContentStream({ prompt })) {
-      yield* emitChunk(raw);
-    }
-    return;
-  }
-
-  if (typeof llmAny.generateContent === 'function') {
-    const stream = await llmAny.generateContent({ prompt });
-    for await (const raw of stream) {
-      yield* emitChunk(raw);
-    }
-    return;
-  }
-
-  const result = await llmAny.generateContentComplete({ prompt });
-  const text = typeof result === 'string' ? result : (result.content ?? result.text ?? '');
-  if (text) yield { text };
-}
-
-/** One-shot completion for a fully-built prompt (used by the JSON director). */
-export async function completePrompt(prompt: string): Promise<string> {
-  const llm = await getLLM();
-  const llmAny = llm as unknown as {
-    generateContentComplete: (opts: { prompt: string }) => Promise<string | { text?: string; content?: string }>;
-  };
-  try {
-    const result = await llmAny.generateContentComplete({ prompt });
-    return typeof result === 'string' ? result : (result?.content ?? result?.text ?? '');
-  } catch (err) {
-    console.error(`[llm] completion failed (model=${activeModelId()}):`, (err as Error)?.message ?? err);
-    throw err;
-  }
-}
-
 export async function* streamChat(params: StreamChatParams): AsyncGenerator<StreamChatChunk> {
   const character = getCharacter(params.characterId);
   const trimmedHistory = params.history.slice(-MAX_HISTORY_TURNS);
@@ -142,5 +52,10 @@ export async function* streamChat(params: StreamChatParams): AsyncGenerator<Stre
     params.userMessage,
     params.memoryContext,
   );
-  yield* streamPrompt(prompt);
+  for await (const text of streamPrompt(prompt)) {
+    if (text) yield { text };
+  }
 }
+
+// Re-export the provider entry points so existing import sites keep working.
+export { completePrompt, streamPrompt };

@@ -1,0 +1,14 @@
+# Pins the build for Railway's Nixpacks builder so deploys are reproducible.
+# Node is pinned to 22 (matches local dev); install uses the lockfile.
+
+[phases.setup]
+nixPkgs = ["nodejs_22"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+# Start is defined in railway.json (startCommand) so migrations run before boot:
+#   npm run start:railway  ->  tsx db/migrate.ts && node dist/server.cjs

@@ -2,7 +2,11 @@
 // Uses the Inworld Runtime TextEmbedder primitive with a remote OpenAI-backed
 // model, authenticated with the same INWORLD_API_KEY as the chat LLM. One
 // instance is reused across requests; TextEmbedder.create() is expensive.
-import { TextEmbedder } from '@inworld/runtime/primitives/embeddings';
+//
+// The '@inworld/runtime' native addon is imported LAZILY so a deploy without an
+// INWORLD_API_KEY (e.g. OpenRouter-only) never loads the native binary — memory
+// just turns off and everything below fails soft to null.
+import type { TextEmbedder } from '@inworld/runtime/primitives/embeddings';
 
 let embedderPromise: Promise<TextEmbedder> | null = null;
 
@@ -11,13 +15,15 @@ function getEmbedder(): Promise<TextEmbedder> {
     if (!process.env.INWORLD_API_KEY) {
       throw new Error('INWORLD_API_KEY is not set');
     }
-    embedderPromise = TextEmbedder.create({
-      remoteConfig: {
-        provider: process.env.INWORLD_EMBED_PROVIDER ?? 'openai',
-        modelName: process.env.INWORLD_EMBED_MODEL ?? 'text-embedding-3-small',
-        apiKey: process.env.INWORLD_API_KEY,
-      },
-    });
+    embedderPromise = import('@inworld/runtime/primitives/embeddings').then(({ TextEmbedder }) =>
+      TextEmbedder.create({
+        remoteConfig: {
+          provider: process.env.INWORLD_EMBED_PROVIDER ?? 'openai',
+          modelName: process.env.INWORLD_EMBED_MODEL ?? 'text-embedding-3-small',
+          apiKey: process.env.INWORLD_API_KEY,
+        },
+      }),
+    );
   }
   return embedderPromise;
 }

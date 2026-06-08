@@ -10,14 +10,12 @@
 //   7. Health check
 import 'dotenv/config';
 
-if (!process.env.INWORLD_API_KEY?.trim()) {
-  console.error('[startup] INWORLD_API_KEY is not set — chat and emotion scoring will fail');
-}
-
+import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { toNodeHandler } from 'better-auth/node';
+import { selectProviderName } from './server/llm';
 
 import { auth } from './server/lib/auth';
 import chatRouter from './server/routes/chat';
@@ -32,6 +30,19 @@ import dateRouter from './server/routes/date';
 import jailRouter from './server/routes/jail';
 import profileRouter from './server/routes/profile';
 import worldRouter from './server/routes/world';
+
+// --- Startup config checks (provider-aware) ---------------------------------
+const LLM_PROVIDER = selectProviderName();
+if (LLM_PROVIDER === 'inworld' && !process.env.INWORLD_API_KEY?.trim()) {
+  console.error('[startup] LLM_PROVIDER=inworld but INWORLD_API_KEY is not set — chat will fail');
+}
+if (LLM_PROVIDER === 'openai' && !process.env.LLM_API_KEY?.trim()) {
+  console.error('[startup] LLM_PROVIDER=openai but LLM_API_KEY is not set — chat will fail');
+}
+if (!process.env.INWORLD_API_KEY?.trim()) {
+  console.warn('[startup] INWORLD_API_KEY unset — long-term memory (embeddings) is disabled; it fails soft');
+}
+console.log(`[startup] LLM provider: ${LLM_PROVIDER}`);
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
@@ -77,6 +88,21 @@ app.use('/api/world', worldRouter);
 
 // --- Health check -----------------------------------------------------------
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
+// --- Static frontend (single-service deploy) --------------------------------
+// When SERVE_STATIC is on, Express also serves the built SPA, so the whole app
+// runs as ONE Railway service (frontend + API same-origin → no CORS needed,
+// simpler session cookies). For a split deploy, leave it off and host the
+// frontend separately (then set PUBLIC_APP_URL + SameSite=None cookies).
+if (process.env.SERVE_STATIC === 'true' || process.env.SERVE_STATIC === '1') {
+  const staticDir = path.resolve(process.env.STATIC_DIR || 'dist/public');
+  app.use(express.static(staticDir));
+  // SPA fallback: any non-API GET returns index.html so client-side routing works.
+  app.get(/^\/(?!api\/).*/, (_req, res) => {
+    res.sendFile(path.join(staticDir, 'index.html'));
+  });
+  console.log(`[server] serving static frontend from ${staticDir}`);
+}
 
 // --- Start ------------------------------------------------------------------
 const server = app.listen(PORT, () => {
