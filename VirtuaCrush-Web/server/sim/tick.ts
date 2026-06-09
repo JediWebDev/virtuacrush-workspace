@@ -9,6 +9,8 @@
 // Movement is schedule-driven logistics (macro scope). Pure + deterministic
 // given an injected RNG; no LLM (activity-log text is templated).
 import type { WorldState, NpcEntity, NpcId, Rumor, Memory, ScheduleEntry } from './world';
+import { getLore } from '../inworld/lore';
+import { desireNudge } from './traits';
 
 export type IntentType = 'bond' | 'argue' | 'post' | 'rest' | 'socialize' | 'hold';
 export interface Intent { type: IntentType; target?: NpcId; reason: string; deferredFrom?: 'argue' }
@@ -77,6 +79,7 @@ export function decideIntent(npc: NpcEntity, others: string[], world: WorldState
   const rest = need(npc, 'rest');
   const moodPos = POSITIVE_MOODS.has(npc.mood);
   const moodAnnoyed = npc.mood === 'annoyed';
+  const desires = getLore(npc.id).desires;
 
   // ATTENTION BUDGET: only the few most salient co-located others factor in.
   const salient = [...others]
@@ -88,14 +91,14 @@ export function decideIntent(npc: NpcEntity, others: string[], world: WorldState
   const holdScore = (1 - P.boldness) * 0.35;
   const cands: { i: Intent; s: number }[] = [
     { i: { type: 'hold', reason: 'keeping to themselves' }, s: holdScore },
-    { i: { type: 'rest', reason: 'worn out' }, s: (1 - P.extraversion) * 0.15 + clamp01((rest - 50) / 50) * 0.4 + (npc.mood === 'tired' ? 0.3 : 0) },
-    { i: { type: 'post', reason: 'wants to be seen' }, s: P.extraversion * 0.35 + clamp01((social - 50) / 100) * 0.3 + (others.length === 0 ? 0.2 : 0) + (moodPos ? 0.05 : 0) },
+    { i: { type: 'rest', reason: 'worn out' }, s: (1 - P.extraversion) * 0.15 + clamp01((rest - 50) / 50) * 0.4 + (npc.mood === 'tired' ? 0.3 : 0) + desireNudge(desires, 'rest') },
+    { i: { type: 'post', reason: 'wants to be seen' }, s: P.extraversion * 0.35 + clamp01((social - 50) / 100) * 0.3 + (others.length === 0 ? 0.2 : 0) + (moodPos ? 0.05 : 0) + desireNudge(desires, 'post') },
   ];
   if (salient.length) {
     const best = salient.reduce((m, o) => (aff(npc, o) > aff(npc, m) ? o : m), salient[0]);
     const worst = salient.reduce((m, o) => (conflictScore(npc, o, world) > conflictScore(npc, m, world) ? o : m), salient[0]);
-    cands.push({ i: { type: 'bond', target: best, reason: `enjoys ${nameOf(world, best)}` }, s: P.warmth * 0.5 + aff(npc, best) / 100 * 0.5 + clamp01((social - 50) / 100) * 0.2 + (moodPos ? 0.1 : 0) });
-    cands.push({ i: { type: 'argue', target: worst, reason: `friction with ${nameOf(world, worst)}` }, s: P.volatility * 0.4 + conflictScore(npc, worst, world) * 0.7 + (moodAnnoyed ? 0.2 : 0) + (recentGrudge(npc, nameOf(world, worst)) ? P.grudge * 0.3 : 0) });
+    cands.push({ i: { type: 'bond', target: best, reason: `enjoys ${nameOf(world, best)}` }, s: P.warmth * 0.5 + aff(npc, best) / 100 * 0.5 + clamp01((social - 50) / 100) * 0.2 + (moodPos ? 0.1 : 0) + (aff(npc, best) > 0 ? desireNudge(desires, 'bond') : 0) });
+    cands.push({ i: { type: 'argue', target: worst, reason: `friction with ${nameOf(world, worst)}` }, s: P.volatility * 0.4 + conflictScore(npc, worst, world) * 0.7 + (moodAnnoyed ? 0.2 : 0) + (recentGrudge(npc, nameOf(world, worst)) ? P.grudge * 0.3 : 0) + desireNudge(desires, 'argue') });
   }
   for (const g of npc.goals) {
     if (g.id === 'increase_closeness' && g.target && salient.includes(g.target)) {

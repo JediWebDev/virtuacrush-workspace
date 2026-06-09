@@ -31,6 +31,7 @@ import dateRouter from './server/routes/date';
 import jailRouter from './server/routes/jail';
 import profileRouter from './server/routes/profile';
 import worldRouter from './server/routes/world';
+import desireRouter from './server/routes/desire';
 
 // --- Startup config checks (provider-aware) ---------------------------------
 const LLM_PROVIDER = selectProviderName();
@@ -86,6 +87,7 @@ app.use('/api/date', dateRouter);
 app.use('/api/jail', jailRouter);
 app.use('/api/profile', profileRouter);
 app.use('/api/world', worldRouter);
+app.use('/api/desire', desireRouter);
 
 // --- Health check -----------------------------------------------------------
 app.get('/api/health', (_req, res) => res.json({ ok: true }));

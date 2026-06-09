@@ -23,6 +23,8 @@ import {
 } from '../db/memory';
 import { getCharacter, type CharacterId } from '../inworld/characters';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
+import { formatPersonaTraitsBlock, shouldRevealSecret } from '../sim/traits';
+import { getDrives, initDrives, advanceDrives, surfacedDrive, flavorBlock, eventCard, type DriveEventCard } from '../sim/drives';
 import { getSituation } from '../db/state';
 import { formatSituationBlock, scenePhase } from '../db/scene_util';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
@@ -140,6 +142,9 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let world: WorldState | undefined;
   let companionEntity: NpcEntity | undefined;
   let onDate = false;
+  let revealSecretNow = false;
+  let newDrives: Record<string, number> | undefined;
+  let newPendingEvent: DriveEventCard | undefined;
   let arrested = false;
   let appliedAffinity: number | null = null;
   let worldEventFired = false;
@@ -193,14 +198,38 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         : `\n\nYou are apart and cannot see the player — do NOT invent what they are wearing.`;
     }
 
+    const secretDiscovered = Boolean(companionEntity?.knowledge.secretDiscovered);
+    revealSecretNow = shouldRevealSecret({ affinity, discovered: secretDiscovered, message });
+
+    // --- Desire/drive meters: advance, then flavor the reply (and maybe surface an event)
+    let driveFlavor = '';
+    if (companionEntity) {
+      const defs = getDrives(characterId);
+      const k = companionEntity.knowledge;
+      const prev = (k.drives as Record<string, number> | undefined) ?? initDrives(defs);
+      const lastAt = k.drivesUpdatedAt ? new Date(k.drivesUpdatedAt).getTime() : Date.now();
+      const hours = Math.min(12, Math.max(0, (Date.now() - lastAt) / 3_600_000));
+      const hour = new Date().getUTCHours();
+      newDrives = advanceDrives(prev, defs, { affinity, apart: !onDate, night: hour >= 20 || hour < 6, afterPositive: affinity >= 55 }, hours);
+      const surfaced = surfacedDrive(newDrives, defs);
+      if (surfaced) {
+        driveFlavor = flavorBlock(surfaced.def, displayName);
+        if (surfaced.level === 'event' && !k.pendingDriveEvent) newPendingEvent = eventCard(surfaced.def, displayName);
+      }
+    }
+    const driveReaction = (companionEntity?.knowledge.pendingDriveReaction as string | undefined) || '';
+
     const directives =
       formatSituationBlock(situation.state, scene, displayName, affinity) +
       formatCharacterFactsBlock(getLore(characterId)) +
+      formatPersonaTraitsBlock(getLore(characterId), { discovered: secretDiscovered, revealNow: revealSecretNow }) +
       ROLEPLAY_INPUT_DIRECTIVE +
       directorDisciplineDirective(displayName) +
       playerKnown +
       lookNote +
       agencyHint +
+      driveFlavor +
+      (driveReaction ? `\n\n${driveReaction}` : '') +
       formatMemoryBlock(memories);
 
     directorPrompt = buildScenePrompt({
@@ -273,7 +302,20 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       if (companionEntity) {
         const learnedFacts = observePlayer({ coPresent: onDate, message, profile: world!.user.profile, existingFacts: companionEntity.knowledge.knownPlayerFacts });
         const lastSeenOutfit = onDate ? { ...companionEntity.knowledge.lastSeenOutfit, player: world!.user.presentation.wornItemIds } : companionEntity.knowledge.lastSeenOutfit;
-        void upsertNpcState(req.user!.id, characterId, { knowledge: { ...companionEntity.knowledge, knownPlayerFacts: learnedFacts, lastSeenOutfit } }).catch((e) => console.warn('[chat] perception update failed:', e));
+        const knowledgePatch: Record<string, unknown> = {
+          ...companionEntity.knowledge,
+          knownPlayerFacts: learnedFacts,
+          lastSeenOutfit,
+          drives: newDrives ?? companionEntity.knowledge.drives,
+          drivesUpdatedAt: new Date().toISOString(),
+          pendingDriveEvent: newPendingEvent ?? companionEntity.knowledge.pendingDriveEvent ?? null,
+          pendingDriveReaction: null,
+        };
+        if (revealSecretNow) {
+          knowledgePatch.secretDiscovered = true;
+          void storeSignificantEvent(req.user!.id, characterId, `Player uncovered ${displayName}'s secret: ${getLore(characterId).secret.label}.`);
+        }
+        void upsertNpcState(req.user!.id, characterId, { knowledge: knowledgePatch }).catch((e) => console.warn('[chat] perception update failed:', e));
       }
     }
 

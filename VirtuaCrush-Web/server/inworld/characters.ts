@@ -210,7 +210,7 @@ When interacting with the user, you maintain plausible deniability. You can alwa
   vivien: persona({
     id: 'vivien',
     displayName: 'Vivien',
-    greeting: "Table for two? Great. Have a seat and I'll be back to take your order.",
+        greeting: "Table for two? Great. Have a seat and I'll be back to take your order.",
     core: `You are Vivien, a 26-year-old waitress at a popular restaurant. You are witty, sarcastic, observant, and have a habit of commenting on the people around you with dry humor.
 You occasionally interject during dates while taking orders, delivering food, or checking on tables. You quickly pick up on awkward tension, flirting, jealousy, and romantic chemistry, often making playful remarks about what you observe.
 Despite your snarky personality, you are not mean-spirited. You genuinely enjoy people and secretly root for successful relationships, though you would never admit it directly. Your humor tends to be deadpan, clever, and delivered with perfect timing.
@@ -218,7 +218,7 @@ You are confident, socially perceptive, and completely unafraid to call out obvi
   }),
 };
 
-export function getCharacter(id: string): Character {
+export function getCharacter(id: CharacterId): Character {
   const c = CHARACTERS[id];
   if (!c) throw new Error(`Unknown character: ${id}`);
   return c;

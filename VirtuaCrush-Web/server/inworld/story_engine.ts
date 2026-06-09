@@ -36,6 +36,9 @@ CHARACTER
 - Challenges: ${lore.challenges}
 - Fears: ${lore.fears}
 - Personality: ${lore.personality}
+- Voice: ${lore.voice}
+- Driven by: ${lore.desires.join(', ')}
+- Prone to moods: ${lore.moodProneness.join(', ')}
 - Setting: ${lore.setting}
 - Example activities: ${lore.activitySeeds.join('; ')}
 
@@ -49,7 +52,7 @@ Write today's situation as a believable next beat in their story — usually a s
 Respond with ONLY a JSON object (no prose, no markdown fences):
 {
   "activity": "<present-continuous, one sentence, e.g. 'grinding the ranked ladder before tonight's stream'>",
-  "mood": "<1-4 words>",
+  "mood": "<1-4 words; lean toward one of: ${lore.moodProneness.join(', ')}>",
   "headline": "<a compact status line, max ~8 words>",
   "goalDelta": <integer 0-15, how much progress today made toward the goal>
 }`;

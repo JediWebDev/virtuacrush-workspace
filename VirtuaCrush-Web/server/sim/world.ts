@@ -25,6 +25,11 @@ export interface Knowledge {
   knownPlayerFacts: string[];              // which permanent player facts are learned
   lastSeenOutfit: Record<NpcId, string[]>; // last observed worn-item ids per actor (stale until re-seen)
   rumors: Rumor[];
+  secretDiscovered?: boolean;            // has THIS player uncovered the companion's secret?
+  drives?: Record<string, number>;       // desire/quirk meters 0-100 for THIS player
+  drivesUpdatedAt?: string;              // ISO timestamp of last drive advance
+  pendingDriveEvent?: { drive: string; prompt: string; options: { id: string; label: string }[] } | null;
+  pendingDriveReaction?: string | null;  // directive injected into the next reply after a choice
 }
 
 // --- Permanent identity ------------------------------------------------------

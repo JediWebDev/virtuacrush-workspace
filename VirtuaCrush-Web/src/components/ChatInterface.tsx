@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
-import { fetchGreeting, fetchCharacterState, fetchActiveChoice, type CharacterState, type DialogueChoice, type ChoiceResolution } from "../lib/api";
+import { fetchGreeting, fetchCharacterState, fetchActiveChoice, respondToDesire, type CharacterState, type DialogueChoice, type ChoiceResolution } from "../lib/api";
 import ChoiceCard from "./ChoiceCard";
 import { endDate, beginDate, shareViralMoment, requestBail } from "../lib/api";
 import { splitNarration } from "../lib/narration";
@@ -13,6 +13,9 @@ import { Character } from "../types/character";
 import { hasPremiumAccess, type UserTier } from "../types/subscription";
 import SocialFeed from "./SocialFeed";
 import UpgradeToast from "./UpgradeToast";
+import SecretCard from "./SecretCard";
+import DriveMeters from "./DriveMeters";
+import DesireEventCard from "./DesireEventCard";
 
 type PrivateMessage = {
   id: string;
@@ -184,6 +187,20 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
   const [bailing, setBailing] = useState(false);
   const [nowTick, setNowTick] = useState(Date.now());
   const navigate = useNavigate();
+
+  const handleDesireRespond = async (choice: "encourage" | "redirect" | "decline") => {
+    if (!storyState?.pendingEvent) return;
+    try {
+      const r = await respondToDesire(character.id, choice);
+      if (typeof r.affinity === "number") {
+        setAffinity(r.affinity);
+        onAffinityChange?.(character.id, r.affinity);
+      }
+    } catch {
+      /* non-fatal */
+    }
+    fetchCharacterState(character.id).then(setStoryState).catch(() => {});
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -463,6 +480,8 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
             Affinity {affinity}%
           </span>
           
+          <DriveMeters drives={storyState?.drives} />
+          <SecretCard secret={storyState?.secret} name={character.name} />
           <ActivityLog />
 
           <PrivateMessagesInbox onPlayAudio={openAudioMessage} userTier={userTier} />
@@ -851,6 +870,16 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
             </div>
           </div>
         ) : null}
+        {storyState?.pendingEvent && !choice ? (
+          <div className="px-4 pt-2 md:px-8">
+            <DesireEventCard
+              characterName={character.name}
+              characterImage={character.image}
+              event={storyState.pendingEvent}
+              onRespond={handleDesireRespond}
+            />
+          </div>
+        ) : null}
         {choice ? (
           <div className="px-4 pt-2 md:px-8">
             <ChoiceCard choice={choice} characterName={character.name} onResolved={handleChoiceResolved} />
@@ -961,7 +990,9 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
                   <span className="mb-5 inline-flex items-center rounded-full border border-black/10 bg-black/[0.04] px-3 py-1 text-[11px] font-semibold text-stone-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-300">
                     Affinity {affinity}%
                   </span>
-                  <ActivityLog />
+                  <DriveMeters drives={storyState?.drives} />
+          <SecretCard secret={storyState?.secret} name={character.name} />
+          <ActivityLog />
                   <PrivateMessagesInbox
                     userTier={userTier}
                     onPlayAudio={() => {

@@ -58,12 +58,26 @@ export interface CharacterState {
   scene?: SceneInfo;
   phase?: ScenePhase;
   sceneLabel?: string | null;
+  secret?: { label: string; discovered: boolean; reveal: string | null };
+  drives?: { key: string; label: string; value: number }[];
+  pendingEvent?: { drive: string; prompt: string; options: { id: string; label: string }[] } | null;
 }
 
 // Current story-engine state (what the character is "doing" today) for the
 // status strip above the chat. Lazily generated server-side on a new day.
 export async function fetchCharacterState(characterId: string): Promise<CharacterState> {
   return api<CharacterState>(`/api/state/${encodeURIComponent(characterId)}`);
+}
+
+// Respond to a surfaced desire event (encourage / redirect / decline).
+export async function respondToDesire(
+  characterId: string,
+  choice: 'encourage' | 'redirect' | 'decline',
+): Promise<{ ok: boolean; affinity?: number; moodHint?: string }> {
+  return api(`/api/desire/${encodeURIComponent(characterId)}/respond`, {
+    method: 'POST',
+    body: JSON.stringify({ choice }),
+  });
 }
 
 // --- Timed dialogue choices (mechanic #2) ------------------------------------
