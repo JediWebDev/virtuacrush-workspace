@@ -2,10 +2,9 @@
 // of choice to offer, and per-option effects. No DB / runtime imports.
 import { getLocation, type LocationKind } from '../inworld/scenes';
 import type { DailyState } from './story_util';
-import type { Incident } from './world_util';
 
 export type SceneMode = 'apart' | 'together';
-export type ScenePhase = 'home' | 'planning' | 'on_date' | 'jailed';
+export type ScenePhase = 'home' | 'planning' | 'on_date';
 export type ChoiceKind = 'date' | 'bill' | 'goal';
 
 export interface SceneState {
@@ -13,9 +12,6 @@ export interface SceneState {
   location: string | null;        // venue slug when together
   billPending: boolean;
   plannedLocation?: string | null; // agreed venue while still apart (logistics phase)
-  jailedUntil?: string | null;     // ISO timestamp; user is jailed until then
-  bailCallUsed?: boolean;          // whether the one phone call was spent
-  incidents?: Incident[];          // priced mischief incidents recorded during the current date
 }
 
 /**
@@ -25,8 +21,7 @@ export interface SceneState {
  *  - 'home'     : no date in progress; solo, reachable remotely.
  * Every system (UI gating, status strip, auto-spawn, prompt) keys off this.
  */
-export function scenePhase(scene: SceneState, now: number = Date.now()): ScenePhase {
-  if (scene.jailedUntil && new Date(scene.jailedUntil).getTime() > now) return 'jailed';
+export function scenePhase(scene: SceneState): ScenePhase {
   if (scene.mode === 'together') return 'on_date';
   if (scene.plannedLocation) return 'planning';
   return 'home';
@@ -35,7 +30,7 @@ export function scenePhase(scene: SceneState, now: number = Date.now()): ScenePh
 // Relationship-affinity effects for the dating choices (server-authoritative).
 export const CHOICE_DATE_AFFINITY = 1.5; // picking a place to go together
 export const CHOICE_BILL_PAY_AFFINITY = 2; // user picks up the bill
-export const CHOICE_BILL_LETPAY_AFFINITY = 0.75; // user lets the character pay
+export const CHOICE_BILL_LETPAY_AFFINITY = - 1; // user lets the character pay
 
 function closenessNote(affinity?: number): string {
   if (typeof affinity !== 'number' || !Number.isFinite(affinity)) return '';
@@ -73,11 +68,7 @@ export function formatSituationBlock(
         `This is your current location: ${loc.label}. You are NOT at home and you are NOT apart from the user.\n` +
         `If the user asks where you are, where you both are, or what you're doing, your answer is: here together at ${loc.label}. ` +
         `Never say you are at home or alone. Stay present and let the place color your words — you can reference ${loc.cues}. ` +
-        `React directly to what the user does; don't give one-word non-answers.
-` +
-        `This is a real public place with other people and staff around (including ${loc.authority}). Stay grounded in that reality and play only your own part as ${characterName}. ` +
-        `Do NOT invent or narrate consequences of your own — do not summon ${loc.authority}, security, police, sirens, arrests, or any outside intervention, and do not decide the user has been caught, removed, or punished. ` +
-        `Those events are decided by the simulation and will be handed to you explicitly when they happen; until then, just react in character to what the user says and does.${closeness}`
+        `React directly to what the user does; don't give one-word non-answers.${closeness}`
       );
     }
   }

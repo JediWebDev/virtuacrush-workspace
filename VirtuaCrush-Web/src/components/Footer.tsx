@@ -63,10 +63,10 @@ export default function Footer() {
             <div>
               <h4 className="mb-4 text-xs font-semibold uppercase tracking-widest text-stone-900 dark:text-stone-500">Legal</h4>
               <ul className="space-y-3 text-sm text-stone-600 dark:text-stone-400">
-                <li><a href="#" className="hover:text-accent">Terms of Use</a></li>
-                <li><a href="#" className="hover:text-accent">Privacy Statement</a></li>
-                <li><a href="#" className="hover:text-accent">Acceptable Use Policy</a></li>
-                <li><a href="#" className="hover:text-accent">AI Disclaimer</a></li>
+                <li><a href="VirtuaCrush-Web\public\README.md" target="_blank" rel="noopener noreferrer" className="hover:text-accent">Terms of Use</a></li>
+                <li><a href="VirtuaCrush-Web\public\Privacy.md" target="_blank" rel="noopener noreferrer" className="hover:text-accent">Privacy Statement</a></li>
+                <li><a href="VirtuaCrush-Web\public\AcceptableUse.md" target="_blank" rel="noopener noreferrer" className="hover:text-accent">Acceptable Use Policy</a></li>
+                <li><a href="VirtuaCrush-Web\public\AIDisclaimer.md" target="_blank" rel="noopener noreferrer" className="hover:text-accent">AI Disclaimer</a></li>
               </ul>
             </div>
           </div>
