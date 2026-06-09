@@ -95,6 +95,52 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+// Conversation archive for the chat-history side panel: one entry per day
+// that has messages, newest first.
+router.get('/history/:characterId', requireAuth, async (req: Request, res: Response) => {
+  const { characterId } = req.params;
+
+  if (!characterId) {
+    return res.status(400).json({ error: 'invalid_request' });
+  }
+
+  try {
+    const { rows } = await pool.query<{
+      day: string;
+      first_user_message: string | null;
+      last_message: string;
+      last_role: 'user' | 'assistant';
+      message_count: number;
+    }>(
+      `SELECT
+         to_char(created_at::date, 'YYYY-MM-DD') AS day,
+         (array_agg(content ORDER BY created_at ASC) FILTER (WHERE role = 'user'))[1] AS first_user_message,
+         (array_agg(content ORDER BY created_at DESC))[1] AS last_message,
+         (array_agg(role ORDER BY created_at DESC))[1] AS last_role,
+         count(*)::int AS message_count
+       FROM chat_messages
+       WHERE user_id = $1 AND character_id = $2
+       GROUP BY created_at::date
+       ORDER BY created_at::date DESC`,
+      [req.user!.id, characterId],
+    );
+
+    const days = rows.map((r) => ({
+      id: r.day,
+      day: r.day,
+      title: r.first_user_message?.slice(0, 80).trim() || null,
+      lastRole: r.last_role,
+      lastMessage: r.last_message.slice(0, 140),
+      messageCount: r.message_count,
+    }));
+
+    return res.json({ days });
+  } catch (err) {
+    console.error('[chat] history error:', err);
+    return res.status(500).json({ error: 'history_failed' });
+  }
+});
+
 router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, res: Response) => {
   const { characterId, message } = req.body as ChatRequestBody;
 

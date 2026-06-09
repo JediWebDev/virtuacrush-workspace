@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
-import { fetchGreeting, fetchCharacterState, fetchActiveChoice, respondToDesire, type CharacterState, type DialogueChoice, type ChoiceResolution } from "../lib/api";
+import { fetchGreeting, fetchCharacterState, fetchActiveChoice, respondToDesire, fetchChatHistory, type CharacterState, type DialogueChoice, type ChoiceResolution, type ChatHistoryDay } from "../lib/api";
 import ChoiceCard from "./ChoiceCard";
 import { endDate, beginDate, shareViralMoment, requestBail } from "../lib/api";
 import { splitNarration } from "../lib/narration";
@@ -35,32 +35,11 @@ const DEMO_AUDIO_MESSAGE = {
   caption: "I couldn't sleep, so I just wanted to say hi...",
 };
 
-const CHAT_HISTORY_ARCHIVE = [
-  {
-    id: "hist-1",
-    date: "May 15, 2026",
-    title: "Late night thoughts about the future",
-    preview: "You: I keep thinking about where we'll be in five years...",
-  },
-  {
-    id: "hist-2",
-    date: "May 12, 2026",
-    title: "Game day and chapter brunch plans",
-    preview: "Callie: OMG you have to see this fit before brunch 🥂",
-  },
-  {
-    id: "hist-3",
-    date: "May 8, 2026",
-    title: "Voice note ideas and study break",
-    preview: "You: Send me a voice note when you get a sec?",
-  },
-  {
-    id: "hist-4",
-    date: "April 30, 2026",
-    title: "First conversation",
-    preview: "You: Hey — glad we matched on here.",
-  },
-];
+function formatHistoryDate(day: string): string {
+  // day is YYYY-MM-DD; anchor at noon to avoid timezone date shifts.
+  const d = new Date(`${day}T12:00:00`);
+  return d.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
+}
 
 // Subtle themed background per date location. Drop a real photo at
 // /public/scenes/<location>.jpg to layer it over the gradient.
@@ -175,6 +154,8 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
   const [greetingLoading, setGreetingLoading] = useState(true);
   const [showHistoryView, setShowHistoryView] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
+  const [historyDays, setHistoryDays] = useState<ChatHistoryDay[] | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [feedOpen, setFeedOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [activeMessage, setActiveMessage] = useState<typeof DEMO_AUDIO_MESSAGE | null>(null);
@@ -415,10 +396,37 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
 
   const handleBack = () => {
     onBack();
-    navigate("/");
   };
 
-  const filteredHistory = CHAT_HISTORY_ARCHIVE.filter((item) => {
+  // Load the real conversation archive whenever the history panel is opened
+  // (re-fetched on each open so new messages show up).
+  useEffect(() => {
+    if (!showHistoryView) return;
+    let cancelled = false;
+    setHistoryLoading(true);
+    fetchChatHistory(character.id)
+      .then((r) => {
+        if (!cancelled) setHistoryDays(r.days);
+      })
+      .catch(() => {
+        if (!cancelled) setHistoryDays([]);
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showHistoryView, character.id]);
+
+  const historyItems = (historyDays ?? []).map((d) => ({
+    id: d.id,
+    date: formatHistoryDate(d.day),
+    title: d.title || `Conversation with ${character.name}`,
+    preview: `${d.lastRole === "user" ? "You" : character.name}: ${d.lastMessage}`,
+  }));
+
+  const filteredHistory = historyItems.filter((item) => {
     const q = historySearch.trim().toLowerCase();
     if (!q) return true;
     return (
@@ -556,8 +564,14 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
               </div>
             </div>
             <div className="no-scrollbar flex-1 overflow-y-auto p-4 md:p-6">
-              {filteredHistory.length === 0 ? (
-                <p className="py-8 text-center text-sm text-stone-900 dark:text-stone-500">No conversations match your search.</p>
+              {historyLoading && historyDays === null ? (
+                <p className="flex items-center justify-center gap-2 py-8 text-sm text-stone-900 dark:text-stone-500">
+                  <Loader2 size={16} className="animate-spin" /> Loading conversations…
+                </p>
+              ) : filteredHistory.length === 0 ? (
+                <p className="py-8 text-center text-sm text-stone-900 dark:text-stone-500">
+                  {historyItems.length === 0 ? "No past conversations yet." : "No conversations match your search."}
+                </p>
               ) : (
                 <ul className="space-y-1">
                   {filteredHistory.map((item) => (

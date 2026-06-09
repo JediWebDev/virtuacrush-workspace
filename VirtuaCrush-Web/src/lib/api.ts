@@ -37,6 +37,19 @@ export async function fetchGreeting(
   if (!res.ok) throw new Error('greet_failed');
   return res.json();
 }
+
+export interface ChatHistoryDay {
+  id: string;
+  day: string; // YYYY-MM-DD
+  title: string | null;
+  lastRole: 'user' | 'assistant';
+  lastMessage: string;
+  messageCount: number;
+}
+
+export function fetchChatHistory(characterId: string): Promise<{ days: ChatHistoryDay[] }> {
+  return api<{ days: ChatHistoryDay[] }>(`/api/chat/history/${characterId}`);
+}
 export type ScenePhase = "home" | "planning" | "on_date" | "jailed";
 
 export interface SceneInfo {

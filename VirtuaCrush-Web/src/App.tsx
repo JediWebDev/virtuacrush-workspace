@@ -1,5 +1,5 @@
-﻿import React, { useState, useEffect } from "react";
-import { Routes, Route, useParams, useNavigate, useLocation } from "react-router-dom";
+﻿import { useState, useEffect, useMemo } from "react";
+import { Routes, Route, Navigate, useMatch, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Lock } from "lucide-react";
 import { Character, CHARACTERS } from "./types/character";
@@ -13,25 +13,16 @@ import AccountPage from "./pages/AccountPage";
 import HowItWorksPage from "./pages/HowItWorksPage";
 import AvatarPage from "./components/AvatarPage";
 import AuthPage from "./pages/AuthPage";
+import LegalPage from "./pages/LegalPage";
+import termsMd from "./content/legal/terms.md?raw";
+import privacyMd from "./content/legal/privacy.md?raw";
+import acceptableUseMd from "./content/legal/acceptable-use.md?raw";
+import aiDisclaimerMd from "./content/legal/ai-disclaimer.md?raw";
 import { useSession, signOut } from './lib/auth-client';
 
 type AppLocationState = {
-  openChat?: string;
   openMessage?: string;
 };
-
-function ChatDeepLink({ onSelect }: { onSelect: (char: Character) => void }) {
-  const { characterId } = useParams();
-  const navigate = useNavigate();
-
-  React.useEffect(() => {
-    const char = CHARACTERS.find((c) => c.id === characterId);
-    if (char) onSelect(char);
-    else navigate("/", { replace: true });
-  }, [characterId, onSelect, navigate]);
-
-  return null;
-}
 
 export default function App() {
   const navigate = useNavigate();
@@ -42,35 +33,28 @@ export default function App() {
   const [userTier, setUserTier] = useState<UserTier>("pro");
   
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [activeChat, setActiveChat] = useState<Character | null>(null);
-  const [autoOpenMessageId, setAutoOpenMessageId] = useState<string | undefined>();
+
+  // The URL is the single source of truth for which chat is open. Deriving
+  // this (instead of mirroring it in state) avoids the render race that made
+  // the logo / back buttons bounce users straight back into the chat.
+  const chatMatch = useMatch("/chat/:characterId");
+  const activeChat = useMemo<Character | null>(
+    () => (chatMatch ? CHARACTERS.find((c) => c.id === chatMatch.params.characterId) ?? null : null),
+    [chatMatch],
+  );
+  const autoOpenMessageId = (location.state as AppLocationState | null)?.openMessage;
 
   const handleSelect = (char: Character) => {
     // Auth and Upgrade checks bypassed for testing
     navigate(`/chat/${char.id}`);
-    setActiveChat(char);
   };
 
+  // Consume one-shot location state (e.g. "open this audio message") so a
+  // refresh doesn't replay it.
   useEffect(() => {
-    const state = location.state as AppLocationState | null;
-    if (state?.openChat) {
-      const char = CHARACTERS.find((c) => c.id === state.openChat);
-      if (char) {
-        // Auth and Upgrade checks bypassed for testing
-        setActiveChat(char);
-        if (state.openMessage) {
-          setAutoOpenMessageId(state.openMessage);
-        }
-      }
-      window.history.replaceState({}, document.title);
-      return;
-    }
-
-    if (!location.pathname.startsWith("/chat/")) {
-      setActiveChat(null);
-      setAutoOpenMessageId(undefined);
-    }
-  }, [location.pathname, location.state]);
+    if (!autoOpenMessageId) return;
+    navigate(location.pathname, { replace: true, state: null });
+  }, [autoOpenMessageId, location.pathname, navigate]);
 
   // --- Auth gate -----------------------------------------------------------
   // Block the whole app until there's a session. Locally you can still set
@@ -87,9 +71,14 @@ export default function App() {
   }
   // -------------------------------------------------------------------------
 
+  // Unknown character id in the URL: bail back home.
+  if (chatMatch && !activeChat) {
+    return <Navigate to="/" replace />;
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-stone-50 dark:bg-surface">
-      <Nav onLogoClick={() => setActiveChat(null)} />
+      <Nav />
 
       <div className="relative flex flex-1 flex-col">
         {activeChat ? (
@@ -97,11 +86,7 @@ export default function App() {
             character={activeChat}
             userTier={userTier}
             autoOpenMessageId={autoOpenMessageId}
-            onBack={() => {
-              setActiveChat(null);
-              setAutoOpenMessageId(undefined);
-              navigate("/");
-            }}
+            onBack={() => navigate("/")}
           />
         ) : (
           <>
@@ -114,7 +99,10 @@ export default function App() {
               <Route path="/account" element={<AccountPage />} />
               <Route path="/avatar" element={<AvatarPage />} />
               <Route path="/how-it-works" element={<HowItWorksPage />} />
-              <Route path="/chat/:characterId" element={<ChatDeepLink onSelect={handleSelect} />} />
+              <Route path="/terms" element={<LegalPage markdown={termsMd} />} />
+              <Route path="/privacy" element={<LegalPage markdown={privacyMd} />} />
+              <Route path="/acceptable-use" element={<LegalPage markdown={acceptableUseMd} />} />
+              <Route path="/ai-disclaimer" element={<LegalPage markdown={aiDisclaimerMd} />} />
             </Routes>
 
             {/* Upgrade Modal kept structurally just in case it is triggered elsewhere, but shouldn't fire with 'pro' tier */}
@@ -215,3 +203,4 @@ const CTASection = () => (
     </div>
   </section>
 );
+

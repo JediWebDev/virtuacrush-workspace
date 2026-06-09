@@ -2,10 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Sparkles, User, Mail, Menu, X, Sun, Moon, Shirt } from "lucide-react";
 
-interface NavProps {
-  onLogoClick: () => void;
-}
-
 const navLinkClass = (active: boolean) =>
   `text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 ${
     active ? "text-accent" : "text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
@@ -14,7 +10,7 @@ const navLinkClass = (active: boolean) =>
 const iconButtonClass =
   "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-black/[0.04] text-stone-600 transition-all duration-200 hover:scale-105 hover:border-accent/30 hover:bg-black/[0.08] hover:text-stone-900 active:scale-95 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-300 dark:hover:bg-white/[0.08] dark:hover:text-stone-50";
 
-export default function Nav({ onLogoClick }: NavProps) {
+export default function Nav() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -74,7 +70,7 @@ export default function Nav({ onLogoClick }: NavProps) {
   const openCallieChat = () => {
     setHasUnread(false);
     setIsNotificationsOpen(false);
-    navigate("/", { state: { openChat: "callie", openMessage: "audio-1" } });
+    navigate("/chat/callie", { state: { openMessage: "audio-1" } });
   };
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
@@ -84,10 +80,7 @@ export default function Nav({ onLogoClick }: NavProps) {
       <div className="flex items-center justify-between">
         <Link
           to="/"
-          onClick={() => {
-            onLogoClick();
-            setIsMobileMenuOpen(false);
-          }}
+          onClick={() => setIsMobileMenuOpen(false)}
           className="flex items-center gap-3 transition-all duration-200 hover:scale-[1.02] hover:opacity-90 active:scale-[0.98]"
         >
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent shadow-lg shadow-accent/25">
