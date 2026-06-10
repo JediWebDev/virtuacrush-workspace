@@ -25,10 +25,11 @@ import { getCharacter, type CharacterId } from '../inworld/characters';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
 import { formatPersonaTraitsBlock, shouldRevealSecret } from '../sim/traits';
 import { getDrives, initDrives, advanceDrives, surfacedDrive, flavorBlock, eventCard, type DriveEventCard } from '../sim/drives';
-import { getSituation } from '../db/state';
+import { getSituation, setScene, setMood } from '../db/state';
+import { driveDeltasForIntent, applyDriveDeltas, moodShiftForIntent } from '../sim/vitals';
 import { formatSituationBlock, scenePhase } from '../db/scene_util';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
-import { detectPlanCue, shouldOfferDateChoice } from '../db/cue_util';
+import { detectPlanCue, detectAgreedVenue, shouldOfferDateChoice } from '../db/cue_util';
 import { jailNarratorPrompt, jailContextBlock } from '../db/jail_util';
 import { getLocation } from '../inworld/scenes';
 import { maybeCreateChoice } from '../db/choices';
@@ -46,7 +47,9 @@ import { upsertNpcState } from '../db/npc_state';
 
 // Recent turns fed to the LLM for local coherence. Long-term recall comes from
 // RAG memory (db/memory.ts), not from replaying a long transcript.
-const RECENT_TURNS_FOR_PROMPT = 6;
+// Bigger window = the model can see (and is told to avoid) its own recent
+// phrasing, which is the main lever against verbatim self-repetition.
+const RECENT_TURNS_FOR_PROMPT = 12;
 
 const router = Router();
 
@@ -190,6 +193,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let onDate = false;
   let revealSecretNow = false;
   let newDrives: Record<string, number> | undefined;
+  let drivePressure = false;
   let newPendingEvent: DriveEventCard | undefined;
   let arrested = false;
   let appliedAffinity: number | null = null;
@@ -258,6 +262,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       const hour = new Date().getUTCHours();
       newDrives = advanceDrives(prev, defs, { affinity, apart: !onDate, night: hour >= 20 || hour < 6, afterPositive: affinity >= 55 }, hours);
       const surfaced = surfacedDrive(newDrives, defs);
+      drivePressure = Boolean(surfaced);
       if (surfaced) {
         driveFlavor = flavorBlock(surfaced.def, displayName);
         if (surfaced.level === 'event' && !k.pendingDriveEvent) newPendingEvent = eventCard(surfaced.def, displayName);
@@ -335,6 +340,25 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       arrested = applied.arrested;
       appliedAffinity = applied.affinityScore;
       worldEventFired = plan.arrest || plan.warnings.length > 0;
+
+      // Conversation-driven vitals: the classified action moves the drive
+      // meters and can shift the mood word immediately — wall-clock drift
+      // alone is imperceptible within a session.
+      if (companionEntity) {
+        const defs = getDrives(characterId);
+        const convDeltas = driveDeltasForIntent(effIntent, defs);
+        if (Object.keys(convDeltas).length > 0) {
+          const base =
+            newDrives ??
+            (companionEntity.knowledge.drives as Record<string, number> | undefined) ??
+            initDrives(defs);
+          newDrives = applyDriveDeltas(base, defs, convDeltas);
+        }
+      }
+      const moodShift = moodShiftForIntent(effIntent);
+      if (moodShift) {
+        void setMood(req.user!.id, characterId, moodShift).catch((e) => console.warn('[chat] mood update failed:', e));
+      }
       if (plan.arrest) {
         const crimeLabel = effIntent.subtype.replace(/_/g, ' ');
         rippleRumor = `the player got arrested for ${crimeLabel}`;
@@ -362,6 +386,23 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           void storeSignificantEvent(req.user!.id, characterId, `Player uncovered ${displayName}'s secret: ${getLore(characterId).secret.label}.`);
         }
         void upsertNpcState(req.user!.id, characterId, { knowledge: knowledgePatch }).catch((e) => console.warn('[chat] perception update failed:', e));
+      }
+
+      // Free-text date agreement: if the pair just committed to a venue in
+      // plain dialogue (no choice card), record the plan so the sim and the
+      // fiction stay in sync — the planning-phase situation block then tells
+      // the character where she's headed instead of leaving her clueless.
+      if (phase === 'home') {
+        const agreedVenue = detectAgreedVenue(message, assistantFull);
+        if (agreedVenue) {
+          void setScene(req.user!.id, characterId, {
+            mode: 'apart',
+            location: null,
+            billPending: false,
+            plannedLocation: agreedVenue,
+          }).catch((e) => console.warn('[chat] plan sync failed:', e));
+          void storeSignificantEvent(req.user!.id, characterId, `Agreed to meet up at the ${agreedVenue.replace(/_/g, ' ')}.`);
+        }
       }
     }
 
@@ -441,7 +482,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         }
 
         const cue = detectPlanCue(message, assistantFull);
-        if (shouldOfferDateChoice({ userMsgCount, msgsSinceLastChoice, hadPriorChoice, cue })) {
+        if (shouldOfferDateChoice({ userMsgCount, msgsSinceLastChoice, hadPriorChoice, cue, drivePressure })) {
           const choice = await maybeCreateChoice(req.user!.id, characterId, userMsgCount);
           if (choice && !abortController.signal.aborted) send('choice', choice);
         }

@@ -14,6 +14,9 @@ export interface OpenAiCfg {
   model: string;
   temperature: number;
   maxTokens: number;
+  /** Discourages verbatim self-repetition (roleplay models loop without it). */
+  frequencyPenalty: number;
+  presencePenalty: number;
 }
 
 // Env values pasted into a host dashboard often arrive with surrounding quotes
@@ -36,6 +39,8 @@ export function openAiConfig(env: NodeJS.ProcessEnv = process.env): OpenAiCfg {
     model: clean(env.LLM_MODEL) || 'gpt-4o-mini',
     temperature: Number(env.LLM_TEMPERATURE ?? 0.85),
     maxTokens: Number(env.LLM_MAX_TOKENS ?? 400),
+    frequencyPenalty: Number(env.LLM_FREQUENCY_PENALTY ?? 0.3),
+    presencePenalty: Number(env.LLM_PRESENCE_PENALTY ?? 0.15),
   };
 }
 
@@ -46,6 +51,8 @@ export function buildChatBody(prompt: string, cfg: OpenAiCfg) {
     messages: [{ role: 'user', content: prompt }],
     temperature: cfg.temperature,
     max_tokens: cfg.maxTokens,
+    frequency_penalty: cfg.frequencyPenalty,
+    presence_penalty: cfg.presencePenalty,
   };
 }
 

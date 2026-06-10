@@ -52,6 +52,8 @@ export function directorDisciplineDirective(characterName: string): string {
     `established in this conversation, your memory, or the current scene — never invent new ones (for example, do not ` +
     `claim a pet, friend, or item is present unless it was actually established). When you mention real movies, shows, ` +
     `music, or facts, only reference ones you are confident are real — do NOT invent titles, plots, quotes, or details; ` +
-    `speak in general terms if you are unsure.`
+    `speak in general terms if you are unsure. NEVER repeat sentences, pet names, or signature phrases you already ` +
+    `used earlier in this conversation — re-read your previous lines and say something NEW each time; advance the ` +
+    `conversation instead of restating it.`
   );
 }

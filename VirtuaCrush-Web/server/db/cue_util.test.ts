@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   detectPlanCue,
+  detectAgreedVenue,
   shouldOfferDateChoice,
   CHOICE_MIN_GAP,
   CHOICE_MAX_GAP,
@@ -45,13 +46,31 @@ test('shouldOfferDateChoice: cue fires after cooldown', () => {
   );
 });
 
-test('shouldOfferDateChoice: lull fallback fires without a cue', () => {
+test('shouldOfferDateChoice: lull fallback needs drive pressure', () => {
   assert.equal(
-    shouldOfferDateChoice({ userMsgCount: 20, msgsSinceLastChoice: CHOICE_MAX_GAP, hadPriorChoice: true, cue: false }),
+    shouldOfferDateChoice({ userMsgCount: 20, msgsSinceLastChoice: CHOICE_MAX_GAP, hadPriorChoice: true, cue: false, drivePressure: true }),
     true,
   );
+  // No surfaced drive: a cue-less lull never forces a card (no more random offers).
   assert.equal(
-    shouldOfferDateChoice({ userMsgCount: 12, msgsSinceLastChoice: CHOICE_MAX_GAP - 1, hadPriorChoice: true, cue: false }),
+    shouldOfferDateChoice({ userMsgCount: 20, msgsSinceLastChoice: CHOICE_MAX_GAP, hadPriorChoice: true, cue: false }),
     false,
   );
+  assert.equal(
+    shouldOfferDateChoice({ userMsgCount: 12, msgsSinceLastChoice: CHOICE_MAX_GAP - 1, hadPriorChoice: true, cue: false, drivePressure: true }),
+    false,
+  );
+});
+
+test('detectAgreedVenue: venue + commitment in either direction', () => {
+  assert.equal(detectAgreedVenue("wanna grab coffee tomorrow?", "yes!! let's do it, I know a place"), 'coffee_shop');
+  assert.equal(detectAgreedVenue("ok deal", "the arcade it is — see you there at 7 😏"), 'arcade');
+  assert.equal(detectAgreedVenue("sounds great", "come over, we can watch something at my place"), 'character_home');
+  assert.equal(detectAgreedVenue("let's hit the theme park saturday", "it's a date 🎢"), 'amusement_park');
+});
+
+test('detectAgreedVenue: no commitment or no venue -> null', () => {
+  assert.equal(detectAgreedVenue('i had coffee this morning', 'oh nice, how was it?'), null);
+  assert.equal(detectAgreedVenue("we should hang out sometime", 'haha maybe!'), null);
+  assert.equal(detectAgreedVenue('sounds good', 'glad you liked the song!'), null);
 });

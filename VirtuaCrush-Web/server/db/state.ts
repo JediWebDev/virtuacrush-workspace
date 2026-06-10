@@ -199,6 +199,18 @@ export async function setScene(
   return rows[0] ? rowToScene(rows[0]) : scene;
 }
 
+/**
+ * Conversation-reactive mood nudge: overwrites the current mood word for this
+ * user/character. The daily regen still sets the morning baseline.
+ */
+export async function setMood(userId: string, characterId: string, mood: string): Promise<void> {
+  await pool.query(
+    `UPDATE character_state SET mood = $3, updated_at = NOW()
+     WHERE user_id = $1 AND character_id = $2`,
+    [userId, characterId, mood.slice(0, 60)],
+  );
+}
+
 /** Arrests the user: jail until `until`, clear any date/scene, reset the call. */
 export async function arrestUser(
   userId: string,
