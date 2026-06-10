@@ -117,6 +117,7 @@ export type StyleArchetype =
   | 'sporty'
   | 'alt_edgy'
   | 'polished_chic'
+  | 'preppy_classic'
   | 'rugged_casual';
 
 export const OUTFITS: Record<StyleArchetype, Record<OutfitContext, readonly string[]>> = {
@@ -138,11 +139,11 @@ export const OUTFITS: Record<StyleArchetype, Record<OutfitContext, readonly stri
     sleep: ['running shorts and a team tee', 'compression shorts and a loose tank'],
     home_day: ['joggers and a half-zip, hair in a ponytail', 'gym shorts and a hoodie, post-workout glow'],
     home_evening: ['track pants and a fitted tee', 'leggings and a zip-up, sneakers by the door'],
-    date_casual: ['fitted jeans, clean sneakers, and a varsity-style jacket', 'a tennis skirt and a cropped windbreaker'],
-    date_out: ['sleek black jeans and a structured top', 'a fitted jumpsuit and white kicks'],
+    date_casual: ['fitted jeans, clean sneakers, and a simple tee', 'a tennis skirt and a cropped top with a sporty watch'],
+    date_out: ['wide-leg trousers and a tucked blouse', 'a sporty-chic dress with heels and a leather jacket'],
   },
   alt_edgy: {
-    sleep: ['a band tee three sizes too big', 'black shorts and a faded tour shirt'],
+    sleep: ['a band tee three sizes too big', 'black shorts and a faded tour shirt'], 
     home_day: ['ripped black jeans and a flannel', 'a band tee and cargo pants, rings still on'],
     home_evening: ['fishnets under shorts and an oversized hoodie', 'a cropped band tee and plaid pajama pants'],
     date_casual: ['black skinny jeans, docs, and a leather jacket', 'a graphic tee under a pleated skirt with chains'],
@@ -151,8 +152,15 @@ export const OUTFITS: Record<StyleArchetype, Record<OutfitContext, readonly stri
   polished_chic: {
     sleep: ['a linen sleep set', 'a long satin robe over shorts'],
     home_day: ['tailored trousers and a soft tee, reading glasses on', 'a cashmere sweater and slim jeans'],
-    home_evening: ['a silk camisole and lounge pants', 'an oversized button-down and bare legs'],
-    date_casual: ['a midi skirt, fitted knit, and loafers', 'wide-leg trousers and a tucked blouse'],
+    home_evening: ['a silk camisole and lounge pants', 'an oversized button-down shirt and bare legs'],
+    date_casual: ['a midi skirt, fitted knit, and loafers with a cable knit sweater worn around the neck', 'wide-leg trousers and a tucked blouse'],
+    date_out: ['a structured blazer over a slip dress', 'a backless black dress and delicate jewelry'],
+  },
+  preppy_classic: {
+    sleep: ['a pastel pajama set', 'a long silk robe over shorts'],
+    home_day: ['a pleated skirt and a tucked blouse, pearls in place', 'a cardigan and tailored trousers'],
+    home_evening: ['a silk camisole and lounge pants', 'an oversized button-down shirt and bare legs'],
+    date_casual: ['a midi skirt, fitted knit, and loafers with a cable knit sweater worn around the neck', 'wide-leg trousers and a tucked polo shirt with the collar popped'],
     date_out: ['a structured blazer over a slip dress', 'a backless black dress and delicate jewelry'],
   },
   rugged_casual: {
@@ -168,7 +176,7 @@ export const OUTFITS: Record<StyleArchetype, Record<OutfitContext, readonly stri
 export const CHARACTER_STYLE: Record<string, StyleArchetype> = {
   mina: 'alt_edgy',
   becca: 'girly_glam',
-  madison: 'girly_glam',
+  madison: 'preppy_classic',
   jordan: 'sporty',
   serena: 'alt_edgy',
   riot: 'alt_edgy',

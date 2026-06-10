@@ -46,6 +46,7 @@ import { advanceNpcs } from '../sim/agency';
 import { describeKnownPlayer, observePlayer, describeAppearance } from '../sim/player';
 import { describeLastSeenOutfit, itemsById, wornItems, describeOutfit, describeGrooming } from '../sim/wardrobe';
 import { upsertNpcState } from '../db/npc_state';
+import { looksDegenerate } from '../llm/quality';
 
 // Recent turns fed to the LLM for local coherence. Long-term recall comes from
 // RAG memory (db/memory.ts), not from replaying a long transcript.
@@ -368,8 +369,17 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       }
     } else {
       // ONE call classifies the player's action AND narrates the scene.
+      // Degenerate output (token salad from a flaky provider) triggers the same
+      // single retry as an unparseable reply; twice in a row falls through to
+      // the in-character recovery line below instead of showing garbage.
+      const badReply = (p: { turns: { text: string }[] }) =>
+        p.turns.length === 0 || p.turns.some((t) => looksDegenerate(t.text));
       let parsed = parseScene(await completePrompt(directorPrompt!), displayName);
-      if (parsed.turns.length === 0) parsed = parseScene(await completePrompt(directorPrompt!), displayName); // retry once
+      if (badReply(parsed)) parsed = parseScene(await completePrompt(directorPrompt!), displayName); // retry once
+      if (parsed.turns.some((t) => looksDegenerate(t.text))) {
+        console.warn('[chat] degenerate model output twice — serving recovery line');
+        parsed = { ...parsed, turns: [] };
+      }
       const effIntent: PlayerIntent = parsed.intent ?? { type: 'observation', subtype: 'wait' };
       // Engine stays authoritative: apply consequences from the classification.
       const plan = planEffects(consequencesFor(effIntent, world!));

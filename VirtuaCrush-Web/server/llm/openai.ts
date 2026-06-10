@@ -39,8 +39,11 @@ export function openAiConfig(env: NodeJS.ProcessEnv = process.env): OpenAiCfg {
     model: clean(env.LLM_MODEL) || 'gpt-4o-mini',
     temperature: Number(env.LLM_TEMPERATURE ?? 0.85),
     maxTokens: Number(env.LLM_MAX_TOKENS ?? 400),
-    frequencyPenalty: Number(env.LLM_FREQUENCY_PENALTY ?? 0.3),
-    presencePenalty: Number(env.LLM_PRESENCE_PENALTY ?? 0.15),
+    // OPT-IN: several free/quantized providers degenerate into token salad
+    // when penalties are applied — leave at 0 unless your model handles them
+    // (e.g. DeepSeek/OpenAI-hosted models take 0.2-0.4 fine).
+    frequencyPenalty: Number(env.LLM_FREQUENCY_PENALTY ?? 0),
+    presencePenalty: Number(env.LLM_PRESENCE_PENALTY ?? 0),
   };
 }
 
@@ -51,8 +54,9 @@ export function buildChatBody(prompt: string, cfg: OpenAiCfg) {
     messages: [{ role: 'user', content: prompt }],
     temperature: cfg.temperature,
     max_tokens: cfg.maxTokens,
-    frequency_penalty: cfg.frequencyPenalty,
-    presence_penalty: cfg.presencePenalty,
+    // Only sent when explicitly configured — some providers mishandle them.
+    ...(cfg.frequencyPenalty ? { frequency_penalty: cfg.frequencyPenalty } : {}),
+    ...(cfg.presencePenalty ? { presence_penalty: cfg.presencePenalty } : {}),
   };
 }
 
