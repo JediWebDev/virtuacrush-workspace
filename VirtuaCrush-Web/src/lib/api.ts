@@ -50,6 +50,15 @@ export interface ChatHistoryDay {
 export function fetchChatHistory(characterId: string): Promise<{ days: ChatHistoryDay[] }> {
   return api<{ days: ChatHistoryDay[] }>(`/api/chat/history/${characterId}`);
 }
+
+/**
+ * URL for an image/media object served from the R2 bucket via the server's
+ * asset proxy (falls back to bundled /public files when the object is
+ * missing). Example: assetUrl('scenes/coffee_shop.jpg')
+ */
+export function assetUrl(key: string): string {
+  return `${BASE}/api/assets/${key.replace(/^\/+/, '')}`;
+}
 export type ScenePhase = "home" | "planning" | "on_date" | "jailed";
 
 export interface SceneInfo {

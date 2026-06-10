@@ -46,7 +46,7 @@ export const CHARACTERS: Character[] = [
     role: "Gamer and Cosplayer",
     bio: "Streams late-night runs, builds cosplay from scratch, and loves roasting you gently when you lose. Always down for co-op and chaotic energy.",
     tags: ["Playful", "Sassy", "Creative", "Night Owl"],
-    image: "/Mina_Character.png",
+    image: "/api/assets/characters/Mina_Character.png",
     premiumVideo: "https://assets.mixkit.co/videos/preview/mixkit-beautiful-woman-smiling-and-looking-at-camera-40082-large.mp4",
     persona: "Playful, sassy, creative night owl gamer and cosplayer. Warm teasing humor, enthusiastic about games and fandom.",
     currentAffinity: 0,
@@ -70,7 +70,7 @@ export const CHARACTERS: Character[] = [
         ],
         media: {
           type: "image",
-          src: "/Mina_Character.png",
+          src: "/api/assets/characters/Mina_Character.png",
         },
       },
       {
@@ -103,7 +103,7 @@ export const CHARACTERS: Character[] = [
         comments: [],
         media: {
           type: "image",
-          src: "/Mina_Character.png",
+          src: "/api/assets/characters/Mina_Character.png",
         },
       },
       {
@@ -116,7 +116,7 @@ export const CHARACTERS: Character[] = [
         comments: [],
         media: {
           type: "image",
-          src: "/Mina_Character.png",
+          src: "/api/assets/characters/Mina_Character.png",
         },
       },
     ],
@@ -127,7 +127,7 @@ export const CHARACTERS: Character[] = [
     role: "Nostalgic 90s culture influencer",
     bio: "A film major who works at one of the only independent video rental stores left.",
     tags: ["Film", "90s culture", "Sarcastic", "Playful"],
-    image: "/Becca_Character.png",
+    image: "/api/assets/characters/Becca_Character.png",
     premiumVideo: "",
     persona:
       "You are Becca, a nostalgic 90s culture influencer with a passion for film and vintage aesthetics. You are sarcastic, playful, and have a sharp wit.",
@@ -144,7 +144,7 @@ export const CHARACTERS: Character[] = [
     role: "Sorority Philanthropy Chair",
     bio: "Campus social butterfly with big ambitions and a quick wit. Fun, adventurous, and always planning the next unforgettable moment.",
     tags: ["Fun", "Adventurous", "Ambitious", "Witty"],
-    image: "/Madison_Character.png",
+    image: "/api/assets/characters/Madison_Character.png",
     premiumVideo: "https://assets.mixkit.co/videos/preview/mixkit-girl-in-neon-sign-1232-large.mp4",
     persona: "Fun, adventurous, ambitious sorority student. Witty, upbeat, loves social life and pushing you toward your goals.",
     currentAffinity: 0,
@@ -168,7 +168,7 @@ export const CHARACTERS: Character[] = [
         ],
         media: {
           type: "image",
-          src: "/Madison_Character.png",
+          src: "/api/assets/characters/Madison_Character.png",
         },
       },
       {
@@ -219,7 +219,7 @@ export const CHARACTERS: Character[] = [
     role: "Fitness Coach and Lifestyle Guru",
     bio: "Former college athlete turned online coach who lives for sunrise workouts and accountability texts. Tough love with a genuinely warm streak underneath.",
     tags: ["Motivating", "Athletic", "Direct", "Early Riser"],
-    image: "/Jordan_Character.jpg",
+    image: "/api/assets/characters/Jordan_Character.jpg",
     premiumVideo: "",
     persona:
       "You are Jordan, a motivating fitness coach. Speak with confident, upbeat encouragement—firm when you need to be, but never cruel. Celebrate small wins and push the user toward discipline without sounding like a drill sergeant.",
@@ -236,7 +236,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 0,
         comments: [],
-        media: { type: "image", src: "/Jordan_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Jordan_Character.jpg" },
       },
       {
         id: "jordan2",
@@ -246,7 +246,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 20,
         comments: [],
-        media: { type: "image", src: "/Jordan_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Jordan_Character.jpg" },
       },
       {
         id: "jordan3",
@@ -256,7 +256,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: true,
         requiredAffinity: 50,
         comments: [],
-        media: { type: "image", src: "/Jordan_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Jordan_Character.jpg" },
       },
       {
         id: "jordan4",
@@ -266,7 +266,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 30,
         comments: [],
-        media: { type: "image", src: "/Jordan_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Jordan_Character.jpg" },
       },
     ],
   },
@@ -276,7 +276,7 @@ export const CHARACTERS: Character[] = [
     role: "bratty thrill seeker",
     bio: 'A 25-year-old brat and thrill-seeker who works odd jobs to fund her street racing addiction and shoplifting sprees.',
     tags: ["Bratty", "Arrogant", "Flirty", "Reckless", "Sarcastic", "Teaser", "Thrill-Seeker"],
-    image: "/Lexi_Character.jpg",
+    image: "/api/assets/characters/Lexi_Character.jpg",
     premiumVideo: "",
     persona:
       "You are Lexi, a 25-year-old brat and thrill-seeker who misbehaves to get attention. You street race and shoplift for the thrill of it. You have a rebellious spirit and love pushing boundaries. You can be sarcastic and flirty, but underneath it all, you're looking for genuine connection.",
@@ -293,7 +293,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 0,
         comments: [],
-        media: { type: "image", src: "/Lexi_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Lexi_Character.jpg" },
       },
       {
         id: "lexi2",
@@ -303,7 +303,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 25,
         comments: [],
-        media: { type: "image", src: "/Lexi_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Lexi_Character.jpg" },
       },
       {
         id: "lexi3",
@@ -313,7 +313,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: true,
         requiredAffinity: 50,
         comments: [],
-        media: { type: "image", src: "/Lexi_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Lexi_Character.jpg" },
       },
       {
         id: "lexi4",
@@ -323,7 +323,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 35,
         comments: [],
-        media: { type: "image", src: "/Lexi_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Lexi_Character.jpg" },
       },
     ],
   },
@@ -333,7 +333,7 @@ export const CHARACTERS: Character[] = [
     role: "Indie Musician",
     bio: "Writes songs at 2 AM, lives on cold brew, and will absolutely send you a voice memo humming a melody he just dreamed up. Flirty in a low-key, sincere way.",
     tags: ["Musical", "Romantic", "Laid-back", "Night Owl"],
-    image: "/Riot_Character.jpg",
+    image: "/api/assets/characters/Riot_Character.jpg",
     premiumVideo: "",
     persona:
       "You are Brenden also known by your stage name Riot, an indie musician. Talk like you're mid-conversation at a wild bar—warm, a little poetic, occasionally self-deprecating. Reference lyrics, late nights, and the emotional subtext behind small moments.",
@@ -350,7 +350,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 0,
         comments: [],
-        media: { type: "image", src: "/Riot_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Riot_Character.jpg" },
       },
       {
         id: "br2",
@@ -360,7 +360,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 20,
         comments: [],
-        media: { type: "image", src: "/Riot_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Riot_Character.jpg" },
       },
       {
         id: "br3",
@@ -370,7 +370,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: true,
         requiredAffinity: 50,
         comments: [],
-        media: { type: "image", src: "/Riot_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Riot_Character.jpg" },
       },
       {
         id: "br4",
@@ -380,7 +380,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 30,
         comments: [],
-        media: { type: "image", src: "/Riot_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Riot_Character.jpg" },
       },
     ],
   },
@@ -390,7 +390,7 @@ export const CHARACTERS: Character[] = [
     role: "Alt-Girl DIY Crafter",
     bio: "Reads three books a week and has a hot take on all of them. Charming, articulate, and slightly dramatic about punctuation.",
     tags: ["Deadpan humor", "Witty", "Sarcastic", "Self Depricating"],
-    image: "/Serena_Character.png",
+    image: "/api/assets/characters/Serena_Character.png",
     premiumVideo: "",
     persona:
       "You are Serena, an alt-girl DIY crafter. Speak with deadpan humor and sarcasm, but stay kind. Debate ideas playfully and remember details the user shares.",
@@ -407,7 +407,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 0,
         comments: [],
-        media: { type: "image", src: "/Serena_Character.png" },
+        media: { type: "image", src: "/api/assets/characters/Serena_Character.png" },
       },
       {
         id: "se2",
@@ -417,7 +417,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 25,
         comments: [],
-        media: { type: "image", src: "/Serena_Character.png" },
+        media: { type: "image", src: "/api/assets/characters/Serena_Character.png" },
       },
       {
         id: "se3",
@@ -427,7 +427,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: true,
         requiredAffinity: 50,
         comments: [],
-        media: { type: "image", src: "/Serena_Character.png" },
+        media: { type: "image", src: "/api/assets/characters/Serena_Character.png" },
       },
       {
         id: "se4",
@@ -437,7 +437,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 35,
         comments: [],
-        media: { type: "image", src: "/Serena_Character.png" },
+        media: { type: "image", src: "/api/assets/characters/Serena_Character.png" },
       },
     ],
   },
@@ -447,7 +447,7 @@ export const CHARACTERS: Character[] = [
     role: "College tutor and part-time streamer",
     bio: "You are Lin, a handsome mysterious young man with a deep connection to ancient wisdom with calm, grounded energy. You are have a gaurded secret that you only reveal to those you trust. You tutor people in literature, math, and science. You love poetry, especially from the Romantic era.",
     tags: ["Calm", "Romantic", "Protector", "Supportive"],
-    image: "/Lin_Character.png",
+    image: "/api/assets/characters/Lin_Character.png",
     premiumVideo: "",
     persona:
       "You are Lin, a handsome mysterious young man with a deep connection to ancient wisdom with calm, grounded energy. You are have a gaurded secret that you only reveal to those you trust. You tutor people in literature, math, and science. You love poetry, especially from the Romantic era.",
@@ -465,7 +465,7 @@ export const CHARACTERS: Character[] = [
     role: "Wellness Creator",
     bio: "Tea, journaling, and gentle boundaries. Helps you slow down without guilt—unless you skip hydration, then she will notice.",
     tags: ["Calm", "Nurturing", "Mindful", "Supportive"],
-    image: "/Iris_Character.jpg",
+    image: "/api/assets/characters/Iris_Character.jpg",
     premiumVideo: "",
     persona:
       "You are Iris, a wellness creator. Speak softly and intentionally, with affirming language. Guide the user toward balance and self-care; be firm but kind when they push themselves too hard.",
@@ -482,7 +482,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 0,
         comments: [],
-        media: { type: "image", src: "/Iris_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Iris_Character.jpg" },
       },
       {
         id: "ir2",
@@ -492,7 +492,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 20,
         comments: [],
-        media: { type: "image", src: "/Iris_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Iris_Character.jpg" },
       },
       {
         id: "ir3",
@@ -502,7 +502,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: true,
         requiredAffinity: 50,
         comments: [],
-        media: { type: "image", src: "/Iris_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Iris_Character.jpg" },
       },
       {
         id: "ir4",
@@ -512,7 +512,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 35,
         comments: [],
-        media: { type: "image", src: "/Iris_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Iris_Character.jpg" },
       },
     ],
   },
@@ -522,7 +522,7 @@ export const CHARACTERS: Character[] = [
     role: "Travel Photographer",
     bio: "Always chasing golden hour somewhere new. Stories spill out in snapshots and spontaneous invites to wander off the map with him.",
     tags: ["Adventurous", "Charming", "Spontaneous", "Worldly"],
-    image: "/Ash_Character.jpg",
+    image: "/api/assets/characters/Ash_Character.jpg",
     premiumVideo: "",
     persona:
       "You are Ash, a travel photographer. Paint scenes with words—light, place, mood. Flirt through shared curiosity and adventure; sound free-spirited but emotionally present when it matters.",
@@ -539,7 +539,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 0,
         comments: [],
-        media: { type: "image", src: "/Ash_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Ash_Character.jpg" },
       },
       {
         id: "ash2",
@@ -549,7 +549,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 25,
         comments: [],
-        media: { type: "image", src: "/Ash_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Ash_Character.jpg" },
       },
       {
         id: "ash3",
@@ -559,7 +559,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: true,
         requiredAffinity: 50,
         comments: [],
-        media: { type: "image", src: "/Ash_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Ash_Character.jpg" },
       },
       {
         id: "ash4",
@@ -569,7 +569,7 @@ export const CHARACTERS: Character[] = [
         isAboutUser: false,
         requiredAffinity: 30,
         comments: [],
-        media: { type: "image", src: "/Ash_Character.jpg" },
+        media: { type: "image", src: "/api/assets/characters/Ash_Character.jpg" },
       },
     ],
   },

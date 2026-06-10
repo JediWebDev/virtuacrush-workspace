@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
-import { fetchGreeting, fetchCharacterState, fetchActiveChoice, respondToDesire, fetchChatHistory, type CharacterState, type DialogueChoice, type ChoiceResolution, type ChatHistoryDay } from "../lib/api";
+import { fetchGreeting, fetchCharacterState, fetchActiveChoice, respondToDesire, fetchChatHistory, assetUrl, type CharacterState, type DialogueChoice, type ChoiceResolution, type ChatHistoryDay } from "../lib/api";
 import ChoiceCard from "./ChoiceCard";
 import { endDate, beginDate, shareViralMoment, requestBail } from "../lib/api";
 import { splitNarration } from "../lib/narration";
@@ -41,8 +41,21 @@ function formatHistoryDate(day: string): string {
   return d.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
 }
 
-// Subtle themed background per date location. Drop a real photo at
-// /public/scenes/<location>.jpg to layer it over the gradient.
+// Photo backdrops served from the R2 bucket (via /api/assets) per date
+// location. Keys are the object names in the bucket — after uploading a new
+// image, add its location here. Locations without an entry fall back to the
+// SCENE_BG gradient alone.
+const SCENE_IMAGE: Record<string, string> = {
+  coffee_shop: "cafe.png",
+  restaurant: "restaurant.png",
+  mall: "mall.png",
+};
+
+// Backdrop while the user is in a holding cell (jail mechanic).
+const JAIL_IMAGE = "Jail.png";
+
+// Subtle themed background per date location, layered under the photo (and
+// shown alone when no photo is mapped in SCENE_IMAGE above).
 const SCENE_BG: Record<string, string> = {
   coffee_shop: "linear-gradient(160deg, rgba(120,72,40,0.20), rgba(60,40,30,0.10))",
   restaurant: "linear-gradient(160deg, rgba(90,30,45,0.22), rgba(30,20,30,0.12))",
@@ -419,6 +432,27 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
     };
   }, [showHistoryView, character.id]);
 
+  // Chat backdrop: jail photo while locked up; the location photo (when one
+  // is mapped) over its gradient while on a date; otherwise none.
+  const sceneLocation =
+    storyState?.scene?.mode === "together" ? storyState.scene.location : null;
+  const chatBackdropStyle: React.CSSProperties | undefined =
+    storyState?.phase === "jailed"
+      ? {
+          backgroundImage: `linear-gradient(160deg, rgba(10,10,18,0.55), rgba(5,5,12,0.35)), url(${assetUrl(JAIL_IMAGE)})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }
+      : sceneLocation && SCENE_BG[sceneLocation]
+        ? {
+            backgroundImage: `${
+              SCENE_IMAGE[sceneLocation] ? `url(${assetUrl(SCENE_IMAGE[sceneLocation])}), ` : ""
+            }${SCENE_BG[sceneLocation]}`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }
+        : undefined;
+
   const historyItems = (historyDays ?? []).map((d) => ({
     id: d.id,
     date: formatHistoryDate(d.day),
@@ -642,15 +676,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
         <div
             ref={scrollRef}
             className="no-scrollbar flex-1 space-y-4 overflow-y-auto p-4 md:space-y-5 md:p-8"
-            style={
-              storyState?.scene?.mode === "together" && storyState.scene.location && SCENE_BG[storyState.scene.location]
-                ? {
-                    backgroundImage: `url(/scenes/${storyState.scene.location}.jpg), ${SCENE_BG[storyState.scene.location]}`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                  }
-                : undefined
-            }
+            style={chatBackdropStyle}
         >
           {messages.length === 1 && (
             <div className="flex flex-col items-center justify-center space-y-6 py-16 text-center md:py-24">

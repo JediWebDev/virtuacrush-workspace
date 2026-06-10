@@ -32,6 +32,7 @@ import jailRouter from './server/routes/jail';
 import profileRouter from './server/routes/profile';
 import worldRouter from './server/routes/world';
 import desireRouter from './server/routes/desire';
+import assetsRouter from './server/routes/assets';
 
 // --- Startup config checks (provider-aware) ---------------------------------
 const LLM_PROVIDER = selectProviderName();
@@ -89,6 +90,11 @@ app.use('/api/profile', profileRouter);
 app.use('/api/world', worldRouter);
 app.use('/api/desire', desireRouter);
 
+// Images/media proxied from the private R2 bucket (falls back to /public).
+// No auth: these are the same assets the site ships publicly, and skipping
+// auth keeps them browser/CDN cacheable.
+app.use('/api/assets', assetsRouter);
+
 // --- Health check -----------------------------------------------------------
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
@@ -117,4 +123,11 @@ const server = app.listen(PORT, HOST, () => {
 });
 
 // Friendly handling for the common "port already taken" case (usually a stale
-// dev server still holding the port — see the shutdown note b
+// dev server still holding the port).
+server.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`[server] port ${PORT} is already in use — is another dev server still running?`);
+    process.exit(1);
+  }
+  throw err;
+});
