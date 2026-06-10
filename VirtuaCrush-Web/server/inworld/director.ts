@@ -170,8 +170,13 @@ export function buildScenePrompt(stage: DirectorStage): string {
     `- "narrator" — third-person beats and what the world or others do (wrap actions in *asterisks*; no dialogue).`,
     ...stage.npcs.map((n) => `- "${n.name}" — ${n.brief ?? 'present in the scene'}.`),
   ].join('\n');
+  // ORDER MATTERS FOR COST: the prompt is laid out stable-prefix-first so
+  // providers with prompt caching (DeepSeek, OpenAI, ...) can reuse the
+  // identical prefix across every message: system persona + contract + rules
+  // never change for a character, while scene directives, history, and the
+  // player's message churn every turn and live at the end.
   return (
-`${stage.companionSystem}${stage.directives}
+`${stage.companionSystem}
 
 === CLASSIFY, THEN PLAY THE SCENE (one step) ===
 Reply with ONE JSON object only:
@@ -181,8 +186,6 @@ Reply with ONE JSON object only:
 }
 
 "intent" is your honest classification of what the PLAYER just did — NOT a consequence.
-Speakers allowed in "lines":
-${speakerLines}
 
 HOW THE WORLD REACTS (make your narration match your classification):
 - crime (theft, robbery, arson, assault, vandalism, kidnapping, indecent_exposure, …) → the player is ARRESTED: police/security arrive, cuff them, haul them off. Narrate it seriously; never a joke.
@@ -193,6 +196,10 @@ RULES:
 - ALWAYS include at least one "${stage.companionName}" line. Address the player as "you".
 - NEVER put another speaker's words, name, or a "Narrator" label inside your own line — give each speaker their own entry in "lines".
 - Keep it short. Output ONLY the JSON object — no prose, no code fences.
+
+=== THIS SCENE ===
+Speakers allowed in "lines":
+${speakerLines}${stage.directives}
 
 ${turns ? turns + '\n' : ''}Player: ${stage.userMessage}
 

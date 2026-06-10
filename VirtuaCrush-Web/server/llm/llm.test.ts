@@ -24,7 +24,9 @@ test('openAiConfig: sensible defaults', () => {
   assert.equal(c.model, 'gpt-4o-mini');
   assert.equal(c.apiKey, '');
   assert.equal(c.temperature, 0.85);
-  assert.equal(c.maxTokens, 400);
+  assert.equal(c.maxTokens, 700); // director JSON (intent + all lines) needs headroom
+  assert.equal(c.frequencyPenalty, 0); // penalties are opt-in (free providers degenerate)
+  assert.equal(c.presencePenalty, 0);
 });
 
 test('openAiConfig: reads env + strips trailing slash from base url', () => {

@@ -7,8 +7,27 @@ import {
   rankMemories,
   parseFacts,
   formatMemoryBlock,
+  seemsFactBearing,
   type UserMemory,
 } from './memory_util';
+
+test('seemsFactBearing: personal disclosures pass', () => {
+  assert.equal(seemsFactBearing("I work at a vet clinic actually"), true);
+  assert.equal(seemsFactBearing("my sister is visiting this weekend"), true);
+  assert.equal(seemsFactBearing("I'm from Ohio, born and raised"), true);
+  assert.equal(seemsFactBearing("i just got a dog, her name is Biscuit"), true);
+});
+
+test('seemsFactBearing: banter and smalltalk are skipped', () => {
+  assert.equal(seemsFactBearing('haha'), false);
+  assert.equal(seemsFactBearing('what are you wearing?'), false);
+  assert.equal(seemsFactBearing('that sounds fun, tell me more'), false);
+  assert.equal(seemsFactBearing('ok deal, see you there'), false);
+});
+
+test('seemsFactBearing: long messages always extract', () => {
+  assert.equal(seemsFactBearing('a'.repeat(220)), true);
+});
 
 test('cosineSimilarity: identical vectors = 1', () => {
   assert.ok(Math.abs(cosineSimilarity([1, 2, 3], [1, 2, 3]) - 1) < 1e-9);

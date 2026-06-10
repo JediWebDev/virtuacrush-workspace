@@ -12,6 +12,24 @@ export interface UserMemory {
   embedding: number[];
 }
 
+// --- Extraction gate -----------------------------------------------------------
+// Fact extraction costs a full LLM call per exchange; most messages ("haha",
+// "what are you wearing", banter) contain nothing durable. This cheap heuristic
+// decides whether the call is worth making: first-person + substantive topic,
+// or a long message (where skipping risks losing real disclosures).
+
+const FIRST_PERSON = /\b(i|i'm|im|i've|ive|i'?ll|my|mine|me)\b/i;
+const SUBSTANCE =
+  /\b(name(?:'s| is)?|work|job|career|boss|school|college|uni|class|study|studied|degree|live|lives|moved?|from|grew up|hometown|born|family|sister|brother|mom|mother|dad|father|parents?|kids?|son|daughter|wife|husband|girlfriend|boyfriend|fianc|ex\b|divorce|dog|cat|pet|birthday|years? old|allerg|favorite|favourite|hobby|hobbies|guitar|piano|gym|team|band|vegan|vegetarian|religio|christian|muslim|jewish|graduat|promot|fired|hired|surgery|diagnos)\b/i;
+
+/** True when an LLM fact-extraction pass on this user message is worthwhile. */
+export function seemsFactBearing(userText: string): boolean {
+  const t = (userText ?? '').trim();
+  if (t.length < 8) return false;
+  if (t.length >= 200) return true; // long messages: be safe, extract
+  return FIRST_PERSON.test(t) && SUBSTANCE.test(t);
+}
+
 /** Cosine similarity of two equal-length vectors. Returns 0 on bad input. */
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (!Array.isArray(a) || !Array.isArray(b) || a.length === 0 || a.length !== b.length) {

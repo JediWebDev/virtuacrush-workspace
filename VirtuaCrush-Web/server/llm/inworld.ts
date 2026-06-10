@@ -3,7 +3,7 @@
 // The '@inworld/runtime' native addon is loaded LAZILY (dynamic import inside
 // the methods) so that an OpenAI/OpenRouter-only deploy never touches the
 // native binary at startup — and could even drop the dependency entirely.
-import type { LlmProvider } from './types';
+import type { LlmProvider, CompleteOpts } from './types';
 
 function extractText(chunk: unknown): string | undefined {
   if (!chunk || typeof chunk !== 'object') return undefined;
@@ -26,7 +26,7 @@ async function lowLevel(): Promise<{ llm: LowLevel; modelId: string }> {
 
 export const inworldProvider: LlmProvider = {
   name: 'inworld',
-  async complete(prompt) {
+  async complete(prompt, _opts?: CompleteOpts) {
     const { llm, modelId } = await lowLevel();
     try {
       const r = await llm.generateContentComplete({ prompt });

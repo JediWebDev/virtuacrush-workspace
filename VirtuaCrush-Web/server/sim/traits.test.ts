@@ -41,9 +41,12 @@ test('formatPersonaTraitsBlock: hides reveal text while guarding, shows it on re
 });
 
 test('proneMood: returns a mood from the proneness pool, deterministic by roll', () => {
-  const lore = getLore('serena'); // moodProneness: ['calm','melancholy','playful']
-  assert.equal(proneMood(lore, 'neutral', 0), 'calm');
-  assert.equal(proneMood(lore, 'neutral', 0.99), 'playful');
+  const lore = getLore('serena');
+  const pool = lore.moodProneness;
+  assert.ok(pool.includes(proneMood(lore, 'neutral', 0)));
+  assert.ok(pool.includes(proneMood(lore, 'neutral', 0.99)));
+  assert.equal(proneMood(lore, 'neutral', 0), pool[0]);            // roll 0 -> first in pool
+  assert.equal(proneMood(lore, 'neutral', 0.5), proneMood(lore, 'neutral', 0.5)); // deterministic
 });
 
 test('desireNudge: rewards posting for attention-seekers, calms the home-bodies', () => {

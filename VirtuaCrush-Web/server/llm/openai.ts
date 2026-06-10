@@ -6,7 +6,7 @@
 // Includes retry-with-backoff + a per-attempt timeout so transient 429/5xx and
 // serverless cold-starts (RunPod spinning a worker up) auto-recover instead of
 // surfacing as a failed message.
-import type { LlmProvider } from './types';
+import type { LlmProvider, CompleteOpts } from './types';
 
 export interface OpenAiCfg {
   baseUrl: string;
@@ -38,7 +38,10 @@ export function openAiConfig(env: NodeJS.ProcessEnv = process.env): OpenAiCfg {
     apiKey: cleanKey(env.LLM_API_KEY),
     model: clean(env.LLM_MODEL) || 'gpt-4o-mini',
     temperature: Number(env.LLM_TEMPERATURE ?? 0.85),
-    maxTokens: Number(env.LLM_MAX_TOKENS ?? 400),
+    // The director reply is one JSON object: intent + ALL dialogue lines
+    // (companion, narrator, side characters). 400 routinely truncated the JSON
+    // mid-string once scenes gained a second speaker -> unparseable -> fallback.
+    maxTokens: Number(env.LLM_MAX_TOKENS ?? 700),
     // OPT-IN: several free/quantized providers degenerate into token salad
     // when penalties are applied — leave at 0 unless your model handles them
     // (e.g. DeepSeek/OpenAI-hosted models take 0.2-0.4 fine).
@@ -66,6 +69,63 @@ export function parseChatResponse(json: unknown): string {
   return j?.choices?.[0]?.message?.content ?? '';
 }
 
+// --- Token metering -----------------------------------------------------------
+// Every response carries usage counts; we accumulate them per UTC day so the
+// server log answers "what does a message cost?" without external tooling.
+// Set LLM_PRICE_IN / LLM_PRICE_OUT ($ per million tokens) to get a running $.
+
+export interface ChatUsage {
+  promptTokens: number;
+  completionTokens: number;
+  /** Provider-reported cached prompt tokens (discounted), when available. */
+  cachedTokens: number;
+}
+
+/** Pure: pull usage counts out of a chat-completions response. */
+export function parseChatUsage(json: unknown): ChatUsage {
+  const u = (json as {
+    usage?: {
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      prompt_tokens_details?: { cached_tokens?: number };
+      prompt_cache_hit_tokens?: number; // DeepSeek-style field
+    };
+  })?.usage;
+  return {
+    promptTokens: u?.prompt_tokens ?? 0,
+    completionTokens: u?.completion_tokens ?? 0,
+    cachedTokens: u?.prompt_tokens_details?.cached_tokens ?? u?.prompt_cache_hit_tokens ?? 0,
+  };
+}
+
+const meter = { day: '', calls: 0, prompt: 0, completion: 0, cached: 0 };
+
+function recordUsage(u: ChatUsage): void {
+  const today = new Date().toISOString().slice(0, 10);
+  if (meter.day !== today) {
+    meter.day = today;
+    meter.calls = 0;
+    meter.prompt = 0;
+    meter.completion = 0;
+    meter.cached = 0;
+  }
+  meter.calls++;
+  meter.prompt += u.promptTokens;
+  meter.completion += u.completionTokens;
+  meter.cached += u.cachedTokens;
+
+  const priceIn = Number(process.env.LLM_PRICE_IN ?? 0);   // $ per 1M input tokens
+  const priceOut = Number(process.env.LLM_PRICE_OUT ?? 0); // $ per 1M output tokens
+  const cost =
+    priceIn || priceOut
+      ? ` ≈$${(((meter.prompt - meter.cached) * priceIn + meter.completion * priceOut) / 1e6).toFixed(4)} today`
+      : '';
+  console.log(
+    `[llm] usage in=${u.promptTokens} (cached ${u.cachedTokens}) out=${u.completionTokens} | ` +
+      `today: ${meter.calls} calls, in=${meter.prompt}, out=${meter.completion}${cost}`,
+  );
+}
+
 // HTTP statuses worth retrying: rate limits, conflicts, and transient gateway/
 // cold-start errors common on serverless GPU endpoints.
 const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
@@ -79,7 +139,7 @@ function backoffMs(attempt: number): number {
 
 let loggedConfig = false;
 
-async function complete(prompt: string): Promise<string> {
+async function complete(prompt: string, opts?: CompleteOpts): Promise<string> {
   const cfg = openAiConfig();
   if (!loggedConfig) {
     loggedConfig = true;
@@ -96,7 +156,7 @@ async function complete(prompt: string): Promise<string> {
   }
 
   const url = `${cfg.baseUrl}/chat/completions`;
-  const body = JSON.stringify(buildChatBody(prompt, cfg));
+  const body = JSON.stringify(buildChatBody(prompt, cfg, Boolean(opts?.json)));
   const headers = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${cfg.apiKey}`,
@@ -129,7 +189,11 @@ async function complete(prompt: string): Promise<string> {
       clearTimeout(timer);
     }
 
-    if (res.ok) return parseChatResponse(await res.json());
+    if (res.ok) {
+      const json = await res.json();
+      recordUsage(parseChatUsage(json));
+      return parseChatResponse(json);
+    }
 
     const errBody = await res.text().catch(() => '');
     if (RETRYABLE_STATUS.has(res.status) && attempt < maxRetries) {
@@ -149,7 +213,7 @@ async function complete(prompt: string): Promise<string> {
 export const openAiProvider: LlmProvider = {
   name: 'openai-compatible',
   complete,
-  async *stream(prompt) {
+  async *stream(prompt: string) {
     // Non-streaming for simplicity/robustness: yield the full reply at once. The
     // director path uses complete() anyway; the jail narrator just appears whole.
     const text = await complete(prompt);

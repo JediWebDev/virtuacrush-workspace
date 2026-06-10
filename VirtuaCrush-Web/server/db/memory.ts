@@ -17,6 +17,7 @@ import { embed } from '../inworld/embedder';
 import {
   rankMemories,
   parseFacts,
+  seemsFactBearing,
   DEFAULT_MEMORY_TOP_K,
   type UserMemory,
 } from './memory_util';
@@ -83,6 +84,10 @@ export async function extractAndStoreFacts(params: {
   assistantMessage: string;
 }): Promise<void> {
   try {
+    // Token conservation: skip the extraction LLM call entirely when the user
+    // message clearly carries nothing durable (most messages don't).
+    if (!seemsFactBearing(params.userMessage)) return;
+
     const facts = await extractFacts(params.userMessage, params.assistantMessage);
     if (facts.length === 0) return;
 

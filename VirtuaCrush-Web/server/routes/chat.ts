@@ -47,6 +47,7 @@ import { describeKnownPlayer, observePlayer, describeAppearance } from '../sim/p
 import { describeLastSeenOutfit, itemsById, wornItems, describeOutfit, describeGrooming } from '../sim/wardrobe';
 import { upsertNpcState } from '../db/npc_state';
 import { looksDegenerate } from '../llm/quality';
+import { budgetHistory } from '../llm/budget';
 
 // Recent turns fed to the LLM for local coherence. Long-term recall comes from
 // RAG memory (db/memory.ts), not from replaying a long transcript.
@@ -170,11 +171,11 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     return res.status(400).json({ error: 'message_too_long', max: 4000 });
   }
 
-  // Small recent window for local coherence; long-term recall is handled by RAG.
-  const turns: ChatMessage[] = await loadRecentTurns(
-    req.user!.id,
-    characterId,
-    RECENT_TURNS_FOR_PROMPT,
+  // Recent window for local coherence; long-term recall is handled by RAG.
+  // budgetHistory keeps the newest turns verbatim and snips older ones so the
+  // window never blows up the per-message token bill.
+  const turns: ChatMessage[] = budgetHistory(
+    await loadRecentTurns(req.user!.id, characterId, RECENT_TURNS_FOR_PROMPT),
   );
 
   // Retrieve long-term memories relevant to this message, and score hostility,
@@ -374,10 +375,20 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       // the in-character recovery line below instead of showing garbage.
       const badReply = (p: { turns: { text: string }[] }) =>
         p.turns.length === 0 || p.turns.some((t) => looksDegenerate(t.text));
-      let parsed = parseScene(await completePrompt(directorPrompt!), displayName);
-      if (badReply(parsed)) parsed = parseScene(await completePrompt(directorPrompt!), displayName); // retry once
+      const raw1 = await completePrompt(directorPrompt!);
+      let parsed = parseScene(raw1, displayName);
+      if (badReply(parsed)) {
+        // Retry once; if that also fails, log a snippet so the cause (truncated
+        // JSON, token salad, refusal, ...) is visible in the server logs.
+        const raw2 = await completePrompt(directorPrompt!);
+        parsed = parseScene(raw2, displayName);
+        if (badReply(parsed)) {
+          console.warn(
+            `[chat] director output unusable twice (${characterId}); raw tail: …${(raw2 || raw1 || '').slice(-220)}`,
+          );
+        }
+      }
       if (parsed.turns.some((t) => looksDegenerate(t.text))) {
-        console.warn('[chat] degenerate model output twice — serving recovery line');
         parsed = { ...parsed, turns: [] };
       }
       const effIntent: PlayerIntent = parsed.intent ?? { type: 'observation', subtype: 'wait' };

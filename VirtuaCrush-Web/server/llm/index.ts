@@ -1,7 +1,7 @@
 // Provider selector + the two convenience entry points the app uses everywhere.
 import { inworldProvider } from './inworld';
 import { openAiProvider } from './openai';
-import type { LlmProvider } from './types';
+import type { LlmProvider, CompleteOpts } from './types';
 
 export type ProviderName = 'inworld' | 'openai';
 
@@ -15,8 +15,8 @@ export function getProvider(): LlmProvider {
   return selectProviderName() === 'openai' ? openAiProvider : inworldProvider;
 }
 
-export function completePrompt(prompt: string): Promise<string> {
-  return getProvider().complete(prompt);
+export function completePrompt(prompt: string, opts?: CompleteOpts): Promise<string> {
+  return getProvider().complete(prompt, opts);
 }
 export function streamPrompt(prompt: string): AsyncGenerator<string> {
   return getProvider().stream(prompt);
