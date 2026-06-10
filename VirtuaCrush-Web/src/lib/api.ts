@@ -27,6 +27,8 @@ export async function fetchGreeting(
   hasHistory: boolean;
   greeting?: string;
   history?: { role: 'user' | 'assistant'; content: string }[];
+  /** VN-style opening narration composed by the scene engine. */
+  sceneHeader?: string;
 }> {
   const res = await fetch('/api/chat/greet', {
     method: 'POST',

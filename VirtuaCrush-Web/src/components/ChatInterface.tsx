@@ -208,15 +208,24 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
 
         if (cancelled) return;
 
+        // Scene header: VN-style opening narration from the scene engine,
+        // rendered as a narrator bubble above the conversation.
+        const sceneMsgs = result.sceneHeader
+          ? [{ id: 'scene-header', role: 'assistant' as const, content: `[NARRATOR] ${result.sceneHeader}` }]
+          : [];
+
         if (result.hasHistory) {
           if (result.history?.length) {
-            setMessages(
-              result.history.map((m, i) => ({
+            setMessages([
+              ...sceneMsgs,
+              ...result.history.map((m, i) => ({
                 id: `history-${i}`,
                 role: m.role,
                 content: m.content,
               })),
-            );
+            ]);
+          } else if (sceneMsgs.length) {
+            setMessages(sceneMsgs);
           }
           setGreetingLoading(false);
           return;
@@ -224,6 +233,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
 
         if (result.greeting) {
           setMessages([
+            ...sceneMsgs,
             {
               id: 'greeting',
               role: 'assistant',
@@ -678,7 +688,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
             className="no-scrollbar flex-1 space-y-4 overflow-y-auto p-4 md:space-y-5 md:p-8"
             style={chatBackdropStyle}
         >
-          {messages.length === 1 && (
+          {messages.filter((m) => m.id !== "scene-header").length === 1 && (
             <div className="flex flex-col items-center justify-center space-y-6 py-16 text-center md:py-24">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10">
                     <Sparkles className="text-accent" size={26} />

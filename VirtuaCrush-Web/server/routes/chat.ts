@@ -27,6 +27,8 @@ import { formatPersonaTraitsBlock, shouldRevealSecret } from '../sim/traits';
 import { getDrives, initDrives, advanceDrives, surfacedDrive, flavorBlock, eventCard, type DriveEventCard } from '../sim/drives';
 import { getSituation, setScene, setMood } from '../db/state';
 import { driveDeltasForIntent, applyDriveDeltas, moodShiftForIntent } from '../sim/vitals';
+import { getOrComposeScene, renderSceneHeader, renderSceneFactsBlock } from '../db/scene_composition';
+import type { SceneCastMember } from '../sim/scene_composer';
 import { formatSituationBlock, scenePhase } from '../db/scene_util';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
 import { detectPlanCue, detectAgreedVenue, shouldOfferDateChoice } from '../db/cue_util';
@@ -66,6 +68,18 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
   }
 
   try {
+    // Compose the opening scene (engine-authoritative: time, setting, outfit,
+    // who's around). Fail-soft: a composer hiccup must never block the chat.
+    let sceneHeader: string | undefined;
+    try {
+      const character = getCharacter(characterId);
+      const situation = await getSituation(req.user!.id, characterId);
+      const comp = await getOrComposeScene(req.user!.id, characterId, character.displayName, situation);
+      if (comp) sceneHeader = renderSceneHeader(comp, character.displayName);
+    } catch (sceneErr) {
+      console.warn('[chat] scene composition failed:', sceneErr);
+    }
+
     // Check for existing history
     const { rows } = await pool.query(
       `SELECT 1 FROM chat_messages
@@ -76,7 +90,7 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
 
     if (rows.length > 0) {
       const history = await loadHistory(req.user!.id, characterId);
-      return res.json({ hasHistory: true, history });
+      return res.json({ hasHistory: true, history, sceneHeader });
     }
 
     // First contact: send the character's unique, hand-written greeting verbatim
@@ -91,7 +105,7 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
       [req.user!.id, characterId, greetingText],
     );
 
-    return res.json({ hasHistory: false, greeting: greetingText });
+    return res.json({ hasHistory: false, greeting: greetingText, sceneHeader });
   } catch (err) {
     console.error('[chat] greet error:', err);
     return res.status(500).json({ error: 'greet_failed' });
@@ -219,6 +233,28 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       npcs.push(authorityActor(authority, 'venue staff/security — bring them in only if the player causes a scene or commits a crime'));
     }
 
+    // Composed scene: authoritative time/setting/outfit facts + anyone else
+    // present (e.g. her friend) registered as a voiceable actor. Fail-soft.
+    let sceneFacts = '';
+    let sceneCast: SceneCastMember[] = [];
+    try {
+      const comp = await getOrComposeScene(req.user!.id, characterId, displayName, situation);
+      if (comp) {
+        sceneFacts = renderSceneFactsBlock(comp, displayName);
+        sceneCast = comp.cast;
+      }
+    } catch (sceneErr) {
+      console.warn('[chat] scene facts failed:', sceneErr);
+    }
+    for (const m of sceneCast) {
+      npcs.push({
+        tag: m.name.toUpperCase(),
+        name: m.name,
+        kind: 'npc',
+        brief: `${displayName}'s ${m.role} — ${m.vibe}; right now she ${m.agenda}`,
+      });
+    }
+
     // NPC agency: autonomous, goal-driven actions this tick (not scripted).
     let agencyHint = '';
     for (const act of advanceNpcs(world, { next: () => Math.random() })) {
@@ -272,6 +308,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
     const directives =
       formatSituationBlock(situation.state, scene, displayName, affinity) +
+      sceneFacts +
       formatCharacterFactsBlock(getLore(characterId)) +
       formatPersonaTraitsBlock(getLore(characterId), { discovered: secretDiscovered, revealNow: revealSecretNow }) +
       ROLEPLAY_INPUT_DIRECTIVE +
