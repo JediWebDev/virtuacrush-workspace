@@ -47,6 +47,7 @@ import { describeKnownPlayer, observePlayer, describeAppearance } from '../sim/p
 import { describeLastSeenOutfit, itemsById, wornItems, describeOutfit, describeGrooming } from '../sim/wardrobe';
 import { upsertNpcState } from '../db/npc_state';
 import { looksDegenerate } from '../llm/quality';
+import { vetoVictimCrime } from '../sim/victim';
 import { budgetHistory } from '../llm/budget';
 
 // Recent turns fed to the LLM for local coherence. Long-term recall comes from
@@ -391,7 +392,12 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       if (parsed.turns.some((t) => looksDegenerate(t.text))) {
         parsed = { ...parsed, turns: [] };
       }
-      const effIntent: PlayerIntent = parsed.intent ?? { type: 'observation', subtype: 'wait' };
+      // Victim guard: being kidnapped/robbed/attacked in the fiction is the
+      // player suffering a crime, not committing one — never arrest the victim.
+      const effIntent: PlayerIntent = vetoVictimCrime(
+        parsed.intent ?? { type: 'observation', subtype: 'wait' },
+        message,
+      );
       // Engine stays authoritative: apply consequences from the classification.
       const plan = planEffects(consequencesFor(effIntent, world!));
       const applied = await applyEffects(req.user!.id, characterId, plan);

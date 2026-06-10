@@ -54,6 +54,8 @@ export function directorDisciplineDirective(characterName: string): string {
     `music, or facts, only reference ones you are confident are real — do NOT invent titles, plots, quotes, or details; ` +
     `speak in general terms if you are unsure. NEVER repeat sentences, pet names, or signature phrases you already ` +
     `used earlier in this conversation — re-read your previous lines and say something NEW each time; advance the ` +
-    `conversation instead of restating it.`
+    `conversation instead of restating it. PERSPECTIVE: only address the player as "you" when they are present in ` +
+    `the scene (or you are texting them). If the player has stepped away or left the scene, refer to them in the ` +
+    `THIRD person ("he"/"she"/"they") in narration and dialogue until they return.`
   );
 }

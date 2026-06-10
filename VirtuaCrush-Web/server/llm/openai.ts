@@ -190,7 +190,22 @@ async function complete(prompt: string, opts?: CompleteOpts): Promise<string> {
     }
 
     if (res.ok) {
-      const json = await res.json();
+      // Some providers occasionally return malformed JSON bodies (seen on
+      // Featherless): treat as transient and retry instead of crashing.
+      const bodyText = await res.text();
+      let json: unknown;
+      try {
+        json = JSON.parse(bodyText);
+      } catch {
+        lastErr = new Error(`[llm] ${cfg.model} returned a malformed JSON body`);
+        if (attempt < maxRetries) {
+          const waitMs = backoffMs(attempt);
+          console.warn(`[llm] ${cfg.model} malformed JSON body [attempt ${attempt + 1}/${maxRetries + 1}] — retrying in ${waitMs}ms`);
+          await sleep(waitMs);
+          continue;
+        }
+        throw lastErr;
+      }
       recordUsage(parseChatUsage(json));
       return parseChatResponse(json);
     }
