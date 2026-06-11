@@ -74,3 +74,14 @@ test('detectAgreedVenue: no commitment or no venue -> null', () => {
   assert.equal(detectAgreedVenue("we should hang out sometime", 'haha maybe!'), null);
   assert.equal(detectAgreedVenue('sounds good', 'glad you liked the song!'), null);
 });
+
+test('detectAgreedVenue: venue must live in a plan-flavored message, not just nearby', () => {
+  // Agreement in one message + an incidental venue word in the other: no plan.
+  assert.equal(detectAgreedVenue('sounds good', 'the park was so crowded in my dream lol'), null);
+  assert.equal(detectAgreedVenue('ok deal', 'my sister works at a restaurant downtown'), null);
+});
+
+test('detectAgreedVenue: reminiscing about a venue is not a plan', () => {
+  assert.equal(detectAgreedVenue("yes!! that was amazing", 'remember when we went to the arcade last week?'), null);
+  assert.equal(detectAgreedVenue('i was at the mall yesterday, it sounds good though', 'haha nice'), null);
+});

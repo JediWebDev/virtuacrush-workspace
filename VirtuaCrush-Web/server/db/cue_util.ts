@@ -102,22 +102,38 @@ const AGREEMENT_CUES: RegExp[] = [
   /\bmeet (me|you) (there|at)\b/i,
 ];
 
+// A venue mentioned while reminiscing isn't a plan ("remember that concert?").
+const PAST_HINTS = /\b(went|was at|were at|last (night|week|time|year)|yesterday|earlier|that time|remember when|used to|once)\b/i;
+
 /**
  * Detects "we just agreed to go to <venue>" in the latest exchange.
- * Returns the location slug, or null when there's no clear venue + commitment.
+ * Strict pairing: the venue must appear in a message that is ITSELF
+ * plan/commitment-flavored (not merely anywhere across both messages), there
+ * must be an explicit agreement somewhere, and reminiscing doesn't count.
+ * Loose matching here silently flipped the scene into "planning" and made the
+ * "show up for your date" button appear out of nowhere.
  */
 export function detectAgreedVenue(userText: string, assistantText: string): string | null {
-  const agreed =
-    AGREEMENT_CUES.some((re) => re.test(assistantText)) ||
-    AGREEMENT_CUES.some((re) => re.test(userText));
-  if (!agreed) return null;
-  const combined = `${userText}\n${assistantText}`;
+  const agreedUser = AGREEMENT_CUES.some((re) => re.test(userText));
+  const agreedAsst = AGREEMENT_CUES.some((re) => re.test(assistantText));
+  if (!agreedUser && !agreedAsst) return null;
+
+  // A message is a venue candidate when it's forward-looking: it carries the
+  // agreement itself, a plan cue, or a home invitation.
+  const candidateUser =
+    !PAST_HINTS.test(userText) &&
+    (agreedUser || detectPlanCue(userText) || COME_OVER.test(userText) || HOME_MINE.test(userText));
+  const candidateAsst =
+    !PAST_HINTS.test(assistantText) &&
+    (agreedAsst || detectPlanCue('', assistantText) || COME_OVER.test(assistantText) || HOME_MINE.test(assistantText));
+
   for (const [re, slug] of VENUE_KEYWORDS) {
-    if (re.test(combined)) return slug;
+    if (candidateUser && re.test(userText)) return slug;
+    if (candidateAsst && re.test(assistantText)) return slug;
   }
-  if (HOME_MINE.test(userText) || HOME_YOURS.test(assistantText)) return 'user_home';
-  if (HOME_MINE.test(assistantText) || HOME_YOURS.test(userText)) return 'character_home';
-  if (COME_OVER.test(assistantText)) return 'character_home';
-  if (COME_OVER.test(userText)) return 'user_home';
+  if (candidateUser && (HOME_MINE.test(userText) || COME_OVER.test(userText))) return 'user_home';
+  if (candidateAsst && (HOME_MINE.test(assistantText) || COME_OVER.test(assistantText))) return 'character_home';
+  if (candidateUser && HOME_YOURS.test(userText)) return 'character_home';
+  if (candidateAsst && HOME_YOURS.test(assistantText)) return 'user_home';
   return null;
 }

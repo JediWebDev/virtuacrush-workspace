@@ -19,8 +19,9 @@ const PRICING_TIERS = [
     highlight: false,
     features: [
       "Limited chats",
-      "Feed browsing",
-      "Basic interaction",
+      "Feed previews",
+      "Censored chat",
+      "Limited character selections",
     ],
   },
   {
@@ -29,11 +30,11 @@ const PRICING_TIERS = [
     period: "/ month",
     highlight: true,
     features: [
-      "Enhanced memory",
-      "Voice messages",
+      "Unlimited chats",
       "Premium feed access",
-      "Limited image and video generation",
-      "Higher message cap",
+      "Enhanced memory",
+      "Uncensored chat",
+      "All characters unlocked",
     ],
   },
   {
@@ -42,11 +43,11 @@ const PRICING_TIERS = [
     period: "/ month",
     highlight: false,
     features: [
-      "Personalized messages",
+      "Personalized voice and text messages",
       "Special character arcs",
       "Seasonal story drops",
       "Exclusive voice & video drops",
-      "Expanded image and video generation cap",
+      "Image generation integration",
       "Create custom characters",
     ],
   },
@@ -77,13 +78,13 @@ export default function HomePage({ onSelect, userTier }: HomePageProps) {
             </motion.p>
 
             <div className="flex flex-wrap justify-center gap-4 lg:justify-start">
-              <button
-                type="button"
+              <Link
+                to="/characters"
                 className="flex items-center gap-2 rounded-2xl bg-accent px-8 py-4 font-semibold text-white shadow-lg shadow-accent/25 transition-all hover:bg-accent-deep active:scale-95"
               >
                 <Sparkles size={18} />
-                Join Now
-              </button>
+                Try Now
+              </Link>
               <Link
                 to="/how-it-works"
                 className="glass flex items-center gap-2 rounded-2xl border-stone-500/15 px-8 py-4 font-semibold text-stone-900 transition-all hover:bg-black/[0.06] active:scale-95 dark:text-stone-100 dark:hover:bg-white/[0.07]"
@@ -136,7 +137,7 @@ export default function HomePage({ onSelect, userTier }: HomePageProps) {
           <div className="mb-10 text-center">
             <h2 className="font-serif text-3xl font-bold text-stone-900 dark:text-stone-50 md:text-4xl">Pricing</h2>
             <p className="mx-auto mt-3 max-w-xl text-stone-600 dark:text-stone-400">
-              Start free, then unlock deeper connection and exclusive content with a paid subscription.
+              Start free, then unlock all characters, deeper connections and exclusive content with a paid subscription.
             </p>
           </div>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">

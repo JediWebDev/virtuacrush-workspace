@@ -21,13 +21,16 @@ const CRIME_DAMAGE: Record<string, number> = {
 };
 const CRIME_RESPONDERS: Record<string, string> = { arson: 'the fire department and police', theft: 'store security and the police', shoplift: 'store security' };
 const SPEND_AMOUNTS: Record<SpendTier, number> = { modest: 80, big: 300, lavish: 850 };
+// Tuned so a warm 15-20 message session moves affinity a VISIBLE +4-8 points
+// (the old values rounded away to nothing in the UI), while negatives still
+// bite harder than positives reward.
 const SOCIAL_AFFINITY: Record<string, number> = {
-  smalltalk: 0.2, compliment: 0.6, tease: 0.2, joke: 0.3, share: 0.2,
-  apologize: 0.5, comfort: 0.8, help: 0.8, boast: 0, lie: -0.5, manipulate: -1,
+  smalltalk: 0.3, compliment: 1, tease: 0.4, joke: 0.5, share: 0.4,
+  apologize: 0.7, comfort: 1.2, help: 1.2, boast: 0, lie: -0.8, manipulate: -1.5,
 };
 const ROMANCE_AFFINITY: Record<string, number> = {
-  flirt: 0.5, affection: 1, confession: 1.5, date_request: 0.3,
-  kiss_attempt: 0.8, proposition: 0.3, breakup: -3, reject: -1,
+  flirt: 0.8, affection: 1.5, confession: 2, date_request: 0.6,
+  kiss_attempt: 1.2, proposition: 0.4, breakup: -5, reject: -2,
 };
 const CONFLICT: Record<string, { delta: number; warn: boolean }> = {
   insult: { delta: -3, warn: false }, provoke: { delta: -1.5, warn: false },
@@ -69,10 +72,10 @@ export function consequencesFor(intent: PlayerIntent, world: WorldState): Conseq
     // NB: social/lie is verbal-only (talk space). Deception with systemic impact
     // (fraud/scam) is classified as `crime` and handled above — see intent.ts.
     case 'social':
-      return [{ type: 'affinity', npc: target, delta: SOCIAL_AFFINITY[intent.subtype] ?? 0.2, reason: intent.subtype }];
+      return [{ type: 'affinity', npc: target, delta: SOCIAL_AFFINITY[intent.subtype] ?? 0.3, reason: intent.subtype }];
 
     case 'romance':
-      return [{ type: 'affinity', npc: target, delta: ROMANCE_AFFINITY[intent.subtype] ?? 0.3, reason: intent.subtype }];
+      return [{ type: 'affinity', npc: target, delta: ROMANCE_AFFINITY[intent.subtype] ?? 0.6, reason: intent.subtype }];
 
     case 'transaction': {
       if (intent.subtype === 'gift') {

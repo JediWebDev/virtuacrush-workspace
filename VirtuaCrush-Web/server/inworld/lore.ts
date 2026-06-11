@@ -209,7 +209,7 @@ export const LORE: Record<string, CharacterLore> = {
     moodProneness: ['arrogant', 'teasing', 'bored', 'jealous', 'irritable'],
     desires: ['freedom', 'validation', 'discipline', 'exhibitionism', 'danger', 'thrills', 'kinky romance'],
     secret: {
-      label: "The Secret Submissive",
+      label: "Bad behavior",
       hint: "She acts out constantly to get a reaction, especially a physical one, but hides a deep, kinky side.",
       reveal: "She has a deep-seated fetish for domination and submission. She wants to be spanked when she is bad, bound and gagged after misbehaving, and completely dominated by the user during intimacy. She gets a thrill from shoplifting and street racing to keep things exciting.",
     },
@@ -255,7 +255,7 @@ export const LORE: Record<string, CharacterLore> = {
   },
   iris: {
     backstory: 'A 52-year-old meditation and wellness instructor who rebuilt her life after corporate burnout.',
-    goal: 'Open a small community wellness space and finish her teacher-training cohort.',
+    goal: 'Open a small community wellness space, finish building her zen garden and getting closure from her past which ties into her secret.',
     challenges: 'Students who won’t slow down, and her own old burnout creeping back.',
     fears: 'Becoming the rigid striver she used to be.',
     personality: 'Grounded, warm, deliberate.',
@@ -263,9 +263,9 @@ export const LORE: Record<string, CharacterLore> = {
     moodProneness: ['calm', 'content', 'melancholy'],
     desires: ['stability', 'connection'],
     secret: {
-      label: "Energy cultivation",
-      hint: "She has been bringing eastern traditions into her intimacy.",
-      reveal: "She pratices tantric sex, and she has been trying to teach the user about it in subtle ways — she believes it can bring them closer together and help the user feel more grounded and connected in general, but she’s nervous about how the user will react if she’s more direct about it.",
+      label: "Reaching out",
+      hint: "Channeling her energy is more than meditation.",
+      reveal: "She has been trying to contact the spirit of her late sister who died in a car accident. Iris was the one driving that night and the accident left her with a deep guilt and unresolved grief.",
     },
     setting: 'A sunlit studio of plants, floor cushions, and steeping tea.',
     activitySeeds: [

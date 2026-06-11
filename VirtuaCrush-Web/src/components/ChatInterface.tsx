@@ -846,7 +846,9 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
               disabled={beginningDate}
               className="mx-auto flex w-full max-w-3xl items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent/[0.06] px-4 py-2.5 text-sm font-semibold text-accent transition-all hover:bg-accent/10 disabled:opacity-50"
             >
-              {beginningDate ? "On your way…" : "Show up for your date 🚪"}
+              {beginningDate
+                ? "On your way…"
+                : `Show up for your date${storyState?.sceneLabel ? ` at the ${storyState.sceneLabel.toLowerCase()}` : ""} 🚪`}
             </button>
           </div>
         ) : null}
