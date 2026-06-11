@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
+import { api, fetchUsage } from "../lib/api";
 import {
   Brain,
   Network,
@@ -49,6 +51,46 @@ const TIERS = [
     ],
   },
 ];
+
+/** Checkout button on the PRO card. Signed-out visitors are sent to /auth. */
+function UpgradeProButton() {
+  const [busy, setBusy] = useState(false);
+  const [isPro, setIsPro] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchUsage()
+      .then((u) => setIsPro(u.subscribed))
+      .catch(() => {}); // signed-out: stays false
+  }, []);
+
+  if (isPro) {
+    return (
+      <p className="mt-5 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-center text-sm font-semibold text-accent">
+        You&apos;re PRO ✓
+      </p>
+    );
+  }
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const { url } = await api<{ url: string }>("/api/stripe/checkout", { method: "POST" });
+          window.location.href = url;
+        } catch {
+          setBusy(false);
+          navigate("/auth"); // not signed in (or checkout failed) — start there
+        }
+      }}
+      className="mt-5 w-full rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-md shadow-accent/25 transition-colors hover:bg-accent-deep disabled:opacity-60"
+    >
+      {busy ? "Opening checkout…" : "Get PRO — $14.99/mo"}
+    </button>
+  );
+}
 
 function SectionShell({
   title,
@@ -246,6 +288,7 @@ export default function HowItWorksPage() {
                       and we&apos;ll email you when VIP opens.
                     </p>
                   ) : null}
+                  {tier.highlight ? <UpgradeProButton /> : null}
                 </GlassPanel>
               ))}
             </div>

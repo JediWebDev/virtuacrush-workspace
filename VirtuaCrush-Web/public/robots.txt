@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /chat/
+Disallow: /account
+Disallow: /avatar
+Disallow: /billing/
+
+Sitemap: https://virtuacrush.com/sitemap.xml

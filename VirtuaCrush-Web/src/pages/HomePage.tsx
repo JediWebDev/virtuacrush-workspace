@@ -4,7 +4,7 @@ import { Sparkles, Shield, Check } from "lucide-react";
 import { CHARACTERS, Character } from "../types/character";
 import { matchesCharacterName, SPOTLIGHT_CHARS, type UserTier } from "../types/subscription";
 import CompanionCard from "../components/CompanionCard";
-import { InteractionDemo } from "../components/InteractionDemo";
+import HeroShowcase from "../components/HeroShowcase";
 
 interface HomePageProps {
   onSelect: (c: Character) => void;
@@ -101,7 +101,7 @@ export default function HomePage({ onSelect, userTier }: HomePageProps) {
               animate={{ opacity: 1, scale: 1, x: 0 }}
               transition={{ duration: 0.8, ease: "easeOut" }}
             >
-              <InteractionDemo />
+              <HeroShowcase />
             </motion.div>
           </div>
         </div>

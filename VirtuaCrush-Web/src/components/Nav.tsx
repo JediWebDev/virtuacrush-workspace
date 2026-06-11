@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Sparkles, User, Mail, Menu, X, Sun, Moon, Shirt } from "lucide-react";
+import { useSession } from "../lib/auth-client";
 
 const navLinkClass = (active: boolean) =>
   `text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 ${
@@ -13,6 +14,8 @@ const iconButtonClass =
 export default function Nav() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const { data: session } = useSession();
+  const authed = Boolean(session?.user);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -105,6 +108,15 @@ export default function Nav() {
           </nav>
 
           <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
+            {!authed ? (
+              <Link
+                to="/auth"
+                className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white shadow-md shadow-accent/25 transition-all hover:bg-accent-deep active:scale-95"
+              >
+                Sign in
+              </Link>
+            ) : null}
+            {authed ? (
             <div ref={notificationsRef} className="relative">
               <button
                 type="button"
@@ -147,6 +159,7 @@ export default function Nav() {
                 </div>
               ) : null}
             </div>
+            ) : null}
 
             <button
               type="button"
@@ -157,9 +170,11 @@ export default function Nav() {
               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
-            <Link to="/account" className={iconButtonClass} aria-label="Account and profile">
-              <User size={20} />
-            </Link>
+            {authed ? (
+              <Link to="/account" className={iconButtonClass} aria-label="Account and profile">
+                <User size={20} />
+              </Link>
+            ) : null}
 
             <button
               type="button"

@@ -51,7 +51,7 @@ export function openAiConfig(env: NodeJS.ProcessEnv = process.env): OpenAiCfg {
 }
 
 /** Pure: the chat-completions request body. */
-export function buildChatBody(prompt: string, cfg: OpenAiCfg) {
+export function buildChatBody(prompt: string, cfg: OpenAiCfg, json = false) {
   return {
     model: cfg.model,
     messages: [{ role: 'user', content: prompt }],
@@ -60,6 +60,9 @@ export function buildChatBody(prompt: string, cfg: OpenAiCfg) {
     // Only sent when explicitly configured — some providers mishandle them.
     ...(cfg.frequencyPenalty ? { frequency_penalty: cfg.frequencyPenalty } : {}),
     ...(cfg.presencePenalty ? { presence_penalty: cfg.presencePenalty } : {}),
+    // JSON mode (OpenAI/DeepSeek-compatible): constrains output to one valid
+    // JSON object. Used by callers that pass { json: true }.
+    ...(json ? { response_format: { type: 'json_object' as const } } : {}),
   };
 }
 

@@ -218,6 +218,20 @@ export async function fetchDiary(characterId: string): Promise<DiaryEntry[]> {
   return res.entries;
 }
 
+// --- Usage / subscription -------------------------------------------------------
+
+export interface UsageInfo {
+  subscribed: boolean;
+  used: number;
+  limit: number | null;
+  remaining: number | null;
+}
+
+/** Daily message usage + subscription state for the signed-in user. */
+export function fetchUsage(): Promise<UsageInfo> {
+  return api<UsageInfo>('/api/usage');
+}
+
 /** Joins the VIP interest list ("notify me when it launches"). */
 export async function joinInterestList(email: string): Promise<void> {
   await api('/api/interest', { method: 'POST', body: JSON.stringify({ email, source: 'vip_waitlist' }) });

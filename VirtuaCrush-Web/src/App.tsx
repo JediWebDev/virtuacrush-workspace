@@ -1,9 +1,9 @@
 ﻿import { useState, useEffect, useMemo, type FormEvent } from "react";
-import { Routes, Route, Navigate, useMatch, useNavigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, Link, useMatch, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Lock } from "lucide-react";
 import { Character, CHARACTERS } from "./types/character";
-import { type UserTier } from "./types/subscription";
+import { hasPremiumAccess, isFreeCharacter, type UserTier } from "./types/subscription";
 import ChatInterface from "./components/ChatInterface";
 import Footer from "./components/Footer";
 import Nav from "./components/Nav";
@@ -18,7 +18,7 @@ import termsMd from "./content/legal/terms.md?raw";
 import privacyMd from "./content/legal/privacy.md?raw";
 import acceptableUseMd from "./content/legal/acceptable-use.md?raw";
 import aiDisclaimerMd from "./content/legal/ai-disclaimer.md?raw";
-import { joinInterestList } from "./lib/api";
+import { joinInterestList, fetchUsage } from "./lib/api";
 import { useSession, signOut } from './lib/auth-client';
 
 type AppLocationState = {
@@ -30,8 +30,15 @@ export default function App() {
   const location = useLocation();
   const { data: session, isPending } = useSession();
 
-  // Defaulting to "pro" for testing phase to bypass all locks/modals
-  const [userTier, setUserTier] = useState<UserTier>("pro");
+  // Tier comes from the server's subscription state (the Stripe webhook flips
+  // it). Re-checked on navigation so returning from checkout updates the UI.
+  const [userTier, setUserTier] = useState<UserTier>("free");
+  useEffect(() => {
+    if (!session?.user) return;
+    fetchUsage()
+      .then((u) => setUserTier(u.subscribed ? "pro" : "free"))
+      .catch(() => {});
+  }, [session?.user?.id, location.pathname]);
   
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
@@ -46,7 +53,11 @@ export default function App() {
   const autoOpenMessageId = (location.state as AppLocationState | null)?.openMessage;
 
   const handleSelect = (char: Character) => {
-    // Auth and Upgrade checks bypassed for testing
+    // Free tier: only the starter roster is chattable; others pitch the upgrade.
+    if (!hasPremiumAccess(userTier) && !isFreeCharacter(char.name)) {
+      setShowUpgradeModal(true);
+      return;
+    }
     navigate(`/chat/${char.id}`);
   };
 
@@ -68,23 +79,37 @@ export default function App() {
     );
   }
   if (!session?.user) {
-    // Legal pages must be reachable WITHOUT an account (the signup checkbox
-    // links to the Terms, and app stores/regulators expect public policies).
-    const PUBLIC_LEGAL: Record<string, string> = {
-      "/terms": termsMd,
-      "/privacy": privacyMd,
-      "/acceptable-use": acceptableUseMd,
-      "/ai-disclaimer": aiDisclaimerMd,
-    };
-    const legalDoc = PUBLIC_LEGAL[location.pathname];
-    if (legalDoc) {
-      return (
-        <div className="min-h-screen bg-stone-50 py-10 dark:bg-surface">
-          <LegalPage markdown={legalDoc} />
+    // PUBLIC SITE: the landing page, pricing, and legal docs are crawlable and
+    // viewable without an account (this is what Google indexes). Anything
+    // interactive falls through to the auth page.
+    const PUBLIC_PATHS = ["/", "/how-it-works", "/terms", "/privacy", "/acceptable-use", "/ai-disclaimer"];
+    const isPublicPage = PUBLIC_PATHS.includes(location.pathname);
+    return (
+      <div className="flex min-h-screen flex-col bg-stone-50 dark:bg-surface">
+        {isPublicPage ? <Nav /> : null}
+        <div className="relative flex flex-1 flex-col">
+          <Routes>
+            <Route path="/" element={<HomePage onSelect={() => navigate("/auth")} userTier="guest" />} />
+            <Route path="/how-it-works" element={<HowItWorksPage />} />
+            <Route path="/terms" element={<LegalPage markdown={termsMd} />} />
+            <Route path="/privacy" element={<LegalPage markdown={privacyMd} />} />
+            <Route path="/acceptable-use" element={<LegalPage markdown={acceptableUseMd} />} />
+            <Route path="/ai-disclaimer" element={<LegalPage markdown={aiDisclaimerMd} />} />
+            <Route path="*" element={<AuthPage />} />
+          </Routes>
+          {isPublicPage ? (
+            <>
+              <CTASection />
+              <Footer />
+            </>
+          ) : null}
         </div>
-      );
-    }
-    return <AuthPage />;
+        <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+          <div className="absolute -left-1/4 top-0 h-[800px] w-[800px] rounded-full bg-accent/10 blur-[120px]" />
+          <div className="absolute -right-1/4 bottom-0 h-[600px] w-[600px] rounded-full bg-violet-warm/10 blur-[100px]" />
+        </div>
+      </div>
+    );
   }
   // -------------------------------------------------------------------------
 
@@ -120,6 +145,9 @@ export default function App() {
               <Route path="/privacy" element={<LegalPage markdown={privacyMd} />} />
               <Route path="/acceptable-use" element={<LegalPage markdown={acceptableUseMd} />} />
               <Route path="/ai-disclaimer" element={<LegalPage markdown={aiDisclaimerMd} />} />
+              <Route path="/auth" element={<Navigate to="/" replace />} />
+              <Route path="/billing/success" element={<BillingResult success />} />
+              <Route path="/billing/cancel" element={<BillingResult />} />
             </Routes>
 
             {/* Upgrade Modal kept structurally just in case it is triggered elsewhere, but shouldn't fire with 'pro' tier */}
@@ -195,6 +223,28 @@ export default function App() {
     </div>
   );
 }
+
+// Landing pages for the Stripe checkout redirect targets.
+const BillingResult = ({ success = false }: { success?: boolean }) => (
+  <section className="flex flex-1 items-center justify-center px-6 py-24">
+    <div className="max-w-md rounded-3xl border border-black/10 glass p-10 text-center dark:border-white/10">
+      <h2 className="mb-3 font-serif text-3xl font-bold text-stone-900 dark:text-stone-50">
+        {success ? "Welcome to PRO 💖" : "Checkout canceled"}
+      </h2>
+      <p className="mb-8 text-stone-600 dark:text-stone-400">
+        {success
+          ? "Payment received. Your PRO features unlock within a few seconds — unlimited chats, full feeds, every companion."
+          : "No charge was made. You can upgrade anytime from the pricing page."}
+      </p>
+      <Link
+        to="/"
+        className="rounded-2xl bg-accent px-8 py-4 font-semibold text-white shadow-lg shadow-accent/25 transition-colors hover:bg-accent-deep"
+      >
+        Back to your companions
+      </Link>
+    </div>
+  </section>
+);
 
 const CTASection = () => {
   const [email, setEmail] = useState("");
