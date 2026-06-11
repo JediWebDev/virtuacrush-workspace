@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from "react";
+﻿import { useState, useEffect, useMemo, type FormEvent } from "react";
 import { Routes, Route, Navigate, useMatch, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Lock } from "lucide-react";
@@ -18,6 +18,7 @@ import termsMd from "./content/legal/terms.md?raw";
 import privacyMd from "./content/legal/privacy.md?raw";
 import acceptableUseMd from "./content/legal/acceptable-use.md?raw";
 import aiDisclaimerMd from "./content/legal/ai-disclaimer.md?raw";
+import { joinInterestList } from "./lib/api";
 import { useSession, signOut } from './lib/auth-client';
 
 type AppLocationState = {
@@ -67,6 +68,22 @@ export default function App() {
     );
   }
   if (!session?.user) {
+    // Legal pages must be reachable WITHOUT an account (the signup checkbox
+    // links to the Terms, and app stores/regulators expect public policies).
+    const PUBLIC_LEGAL: Record<string, string> = {
+      "/terms": termsMd,
+      "/privacy": privacyMd,
+      "/acceptable-use": acceptableUseMd,
+      "/ai-disclaimer": aiDisclaimerMd,
+    };
+    const legalDoc = PUBLIC_LEGAL[location.pathname];
+    if (legalDoc) {
+      return (
+        <div className="min-h-screen bg-stone-50 py-10 dark:bg-surface">
+          <LegalPage markdown={legalDoc} />
+        </div>
+      );
+    }
     return <AuthPage />;
   }
   // -------------------------------------------------------------------------
@@ -179,28 +196,63 @@ export default function App() {
   );
 }
 
-const CTASection = () => (
-  <section className="bg-gradient-to-b from-transparent to-accent/5 px-6 py-24 md:px-12">
-    <div className="relative mx-auto max-w-4xl overflow-hidden rounded-[3rem] border border-black/10 dark:border-white/10 glass p-12 text-center">
-      <div className="absolute left-1/2 top-0 h-40 w-40 -translate-x-1/2 -translate-y-1/2 bg-accent/15 blur-3xl" />
-      <h2 className="mb-6 font-serif text-4xl font-bold md:text-5xl">Secure Early Access</h2>
-      <p className="mx-auto mb-10 max-w-xl text-stone-600 dark:text-stone-400">
-        Sign up to receive immediate priority access for the limited Beta release.
-      </p>
-      <div className="mx-auto flex max-w-md flex-col gap-4 sm:flex-row">
-        <input
-          type="email"
-          placeholder="Enter your email"
-          className="flex-1 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.04] dark:bg-white/[0.04] px-6 py-4 text-stone-800 dark:text-stone-100 outline-none transition-colors placeholder:text-stone-500 focus:border-accent/40 focus:ring-2 focus:ring-accent/15"
-        />
-        <button
-          type="button"
-          className="rounded-2xl bg-accent px-8 py-4 font-semibold text-white shadow-lg shadow-accent/25 transition-all hover:bg-accent-deep active:scale-95"
-        >
-          Subscribe
-        </button>
+const CTASection = () => {
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setStatus("sending");
+    try {
+      await joinInterestList(email.trim());
+      setStatus("done");
+    } catch {
+      setStatus("error");
+    }
+  };
+
+  return (
+    <section className="bg-gradient-to-b from-transparent to-accent/5 px-6 py-24 md:px-12">
+      <div className="relative mx-auto max-w-4xl overflow-hidden rounded-[3rem] border border-black/10 dark:border-white/10 glass p-12 text-center">
+        <div className="absolute left-1/2 top-0 h-40 w-40 -translate-x-1/2 -translate-y-1/2 bg-accent/15 blur-3xl" />
+        <span className="mb-4 inline-flex rounded-full bg-accent/15 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-accent">
+          Coming soon
+        </span>
+        <h2 className="mb-6 font-serif text-4xl font-bold md:text-5xl">Join the VIP Interest List</h2>
+        <p className="mx-auto mb-10 max-w-xl text-stone-600 dark:text-stone-400">
+          We&apos;re launching with Free and PRO. VIP — personalized audio &amp; video drops, SMS
+          messages, and custom characters — opens soon. Leave your email and you&apos;ll be the
+          first to know.
+        </p>
+        {status === "done" ? (
+          <p className="mx-auto max-w-md rounded-2xl border border-accent/30 bg-accent/10 px-6 py-4 font-medium text-accent">
+            You&apos;re on the list — we&apos;ll email you when VIP opens. 💌
+          </p>
+        ) : (
+          <form onSubmit={submit} className="mx-auto flex max-w-md flex-col gap-4 sm:flex-row">
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email"
+              className="flex-1 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.04] dark:bg-white/[0.04] px-6 py-4 text-stone-800 dark:text-stone-100 outline-none transition-colors placeholder:text-stone-500 focus:border-accent/40 focus:ring-2 focus:ring-accent/15"
+            />
+            <button
+              type="submit"
+              disabled={status === "sending"}
+              className="rounded-2xl bg-accent px-8 py-4 font-semibold text-white shadow-lg shadow-accent/25 transition-all hover:bg-accent-deep active:scale-95 disabled:opacity-60"
+            >
+              {status === "sending" ? "Joining…" : "Notify me"}
+            </button>
+          </form>
+        )}
+        {status === "error" ? (
+          <p className="mt-4 text-sm text-red-500">Something went wrong — please try again.</p>
+        ) : null}
       </div>
-    </div>
-  </section>
-);
+    </section>
+  );
+};
 

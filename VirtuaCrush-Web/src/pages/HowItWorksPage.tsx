@@ -38,6 +38,7 @@ const TIERS = [
     price: "$29.99",
     period: "/ month",
     highlight: false,
+    comingSoon: true,
     features: [
       "All features from PRO",
       "Personalized audio and video message drops",
@@ -219,6 +220,10 @@ export default function HowItWorksPage() {
                     <span className="mb-3 inline-flex w-fit rounded-full bg-accent/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent">
                       Most popular
                     </span>
+                  ) : (tier as { comingSoon?: boolean }).comingSoon ? (
+                    <span className="mb-3 inline-flex w-fit rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                      Coming soon
+                    </span>
                   ) : (
                     <span className="mb-3 h-5" />
                   )}
@@ -235,6 +240,12 @@ export default function HowItWorksPage() {
                       </li>
                     ))}
                   </ul>
+                  {(tier as { comingSoon?: boolean }).comingSoon ? (
+                    <p className="mt-5 rounded-xl border border-amber-500/25 bg-amber-500/[0.08] px-3 py-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                      Not available at launch — join the interest list at the bottom of any page
+                      and we&apos;ll email you when VIP opens.
+                    </p>
+                  ) : null}
                 </GlassPanel>
               ))}
             </div>

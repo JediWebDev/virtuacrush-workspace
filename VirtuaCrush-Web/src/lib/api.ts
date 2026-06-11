@@ -217,3 +217,8 @@ export async function fetchDiary(characterId: string): Promise<DiaryEntry[]> {
   const res = await api<{ entries: DiaryEntry[] }>(`/api/diary/${encodeURIComponent(characterId)}`);
   return res.entries;
 }
+
+/** Joins the VIP interest list ("notify me when it launches"). */
+export async function joinInterestList(email: string): Promise<void> {
+  await api('/api/interest', { method: 'POST', body: JSON.stringify({ email, source: 'vip_waitlist' }) });
+}

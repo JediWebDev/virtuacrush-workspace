@@ -80,6 +80,19 @@ test('renderSceneHeader: readable narration with time + outfit', () => {
   assert.ok(!h.includes('undefined'));
 });
 
+test('activity sanitizer: away/engine-leak activities are replaced at home', () => {
+  const c = composeScene({
+    ...BASE,
+    state: { ...BASE.state, activity: 'Stealing a lipstick from a high-end store just to annoy the user.' },
+  });
+  assert.ok(!/user/i.test(c.activity));
+  assert.ok(!/steal/i.test(c.activity));
+  assert.ok(!/\.$/.test(c.activity)); // no trailing period (avoids "..")
+  // Compatible activities survive, lowercased and unpunctuated.
+  const ok = composeScene({ ...BASE, state: { ...BASE.state, activity: 'Sketching in her notebook.' } });
+  assert.equal(ok.activity, 'sketching in her notebook');
+});
+
 test('first meeting: meet-cute hook, no friend, stranger facts', () => {
   const c = composeScene({ ...BASE, firstMeeting: true });
   assert.equal(c.firstMeeting, true);

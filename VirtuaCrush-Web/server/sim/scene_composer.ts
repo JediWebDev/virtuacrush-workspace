@@ -50,6 +50,29 @@ export interface SceneComposition {
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+// Daily-engine activities can contradict the composed scene ("stealing a
+// lipstick from a high-end store" while she's home at 2 AM) or leak engine
+// phrasing ("...to annoy the user"). Reject those and fall back to a calm,
+// hour-appropriate home activity.
+const AWAY_HINTS =
+  /\b(steal|shoplift|shopping|at (the|a)\b|store|mall|gym|class|driving|out with|heading|errand|hik(e|ing)|club|bar\b|restaurant|caf[eé]|concert|beach|park\b|office|commut)/i;
+const ENGINE_LEAK = /\b(the user|the player)\b/i;
+const HOME_FALLBACK_ACTIVITIES: Record<'day' | 'evening' | 'late', readonly string[]> = {
+  day: ['half-watching something', 'scrolling her phone', 'picking at a late breakfast', 'tidying up without much conviction'],
+  evening: ['winding down with her phone', 'half-watching something', 'picking at leftover takeout', 'curled up scrolling'],
+  late: ['up way too late, scrolling her phone', 'fighting sleep and losing', 'watching something with the volume low'],
+};
+
+/** Sanitized activity line that can't contradict the composed setting. */
+export function sceneActivity(raw: string, hour: number, atHome: boolean, r: () => number): string {
+  let a = (raw ?? '').trim().replace(/[.!?\s]+$/, '');
+  if (a) a = a.charAt(0).toLowerCase() + a.slice(1);
+  const incompatible = !a || ENGINE_LEAK.test(a) || (atHome && AWAY_HINTS.test(a));
+  if (!incompatible) return a;
+  const slot = hour >= 23 || hour < 6 ? 'late' : hour >= 18 ? 'evening' : 'day';
+  return pickFrom(HOME_FALLBACK_ACTIVITIES[slot], r);
+}
+
 function timeLabelFor(now: Date): string {
   const day = DAY_NAMES[now.getDay()];
   const h = now.getHours();
@@ -120,7 +143,7 @@ export function composeScene(p: ComposeParams): SceneComposition {
     setting,
     details,
     outfit,
-    activity: p.state.activity || 'taking it easy',
+    activity: sceneActivity(p.state.activity, hour, p.phase !== 'on_date', r),
     cast,
     firstMeeting: Boolean(p.firstMeeting),
     meetHook: p.firstMeeting ? pickFrom(FIRST_MEET_HOOKS, r) : undefined,

@@ -34,6 +34,7 @@ import worldRouter from './server/routes/world';
 import desireRouter from './server/routes/desire';
 import assetsRouter from './server/routes/assets';
 import diaryRouter from './server/routes/diary';
+import interestRouter from './server/routes/interest';
 import { syncCuratedPosts } from './server/jobs/curated_posts';
 import { summarizePendingDiaries } from './server/db/diary';
 
@@ -93,6 +94,7 @@ app.use('/api/profile', profileRouter);
 app.use('/api/world', worldRouter);
 app.use('/api/desire', desireRouter);
 app.use('/api/diary', diaryRouter);
+app.use('/api/interest', interestRouter);
 
 // Images/media proxied from the private R2 bucket (falls back to /public).
 // No auth: these are the same assets the site ships publicly, and skipping

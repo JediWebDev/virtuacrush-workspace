@@ -172,7 +172,9 @@ export default function AvatarPage() {
             <input className={input} value={niName} onChange={(e) => setNiName(e.target.value)} placeholder="Black Leather Jacket" /></div>
           <div><label className={label}>Category</label>
             <select className={input} value={niCat} onChange={(e) => setNiCat(e.target.value as api.ItemCategory)}>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {/* Native dropdown lists render on a light panel on most OSes, so
+                  options need explicitly dark text or they're illegible. */}
+              {CATEGORIES.map((c) => <option key={c} value={c} className="bg-white text-stone-900">{c}</option>)}
             </select></div>
           <div className="min-w-[140px] flex-1"><label className={label}>Style tags</label>
             <input className={input} value={niTags} onChange={(e) => setNiTags(e.target.value)} placeholder="alternative, rock, edgy" /></div>

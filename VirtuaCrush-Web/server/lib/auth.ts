@@ -15,6 +15,19 @@ export const auth = betterAuth({
     minPasswordLength: 8,
   },
 
+  // Social sign-in: each provider activates only when its credentials are set.
+  // Remember to list active providers in VITE_OAUTH_PROVIDERS so the client
+  // shows the buttons, and to register the callback URL
+  // (<PUBLIC_APP_URL>/api/auth/callback/<provider>) in the provider console.
+  socialProviders: {
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? { google: { clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET } }
+      : {}),
+    ...(process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET
+      ? { discord: { clientId: process.env.DISCORD_CLIENT_ID, clientSecret: process.env.DISCORD_CLIENT_SECRET } }
+      : {}),
+  },
+
   session: {
     expiresIn: 60 * 60 * 24 * 30,
     updateAge: 60 * 60 * 24,
