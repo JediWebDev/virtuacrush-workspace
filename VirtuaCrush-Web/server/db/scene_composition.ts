@@ -31,6 +31,15 @@ export async function getOrComposeScene(
   const phase = scenePhase(situation.scene);
   if (phase === 'jailed') return null;
 
+  // Stranger switch: it stays a "first meeting" until the user has sent their
+  // first message ever to this character. (The hand-written greeting is an
+  // assistant row, so merely opening the chat doesn't flip it — replying does.)
+  const { rows: metRows } = await pool.query(
+    `SELECT 1 FROM chat_messages WHERE user_id = $1 AND character_id = $2 AND role = 'user' LIMIT 1`,
+    [userId, characterId],
+  );
+  const firstMeeting = metRows.length === 0;
+
   const today = utcDateString();
   const target =
     phase === 'on_date'
@@ -49,7 +58,11 @@ export async function getOrComposeScene(
     existing.forDate === today &&
     existing.phase === phase &&
     (existing.locationSlug ?? null) === (target ?? null) &&
-    Date.now() - new Date(existing.composedAt).getTime() < MAX_AGE_MS;
+    Date.now() - new Date(existing.composedAt).getTime() < MAX_AGE_MS &&
+    // A meet-cute composition stays valid through the whole first session even
+    // after the user's first message flips the stranger switch; but a normal
+    // composition can never satisfy a wanted first meeting.
+    (Boolean(existing.firstMeeting) === firstMeeting || existing.firstMeeting === true);
   if (fresh) return existing;
 
   const now = new Date();
@@ -63,7 +76,10 @@ export async function getOrComposeScene(
     state: situation.state,
     now,
     forDate: today,
-    seed: hashSeed(`${userId}:${characterId}:${today}:${phase}:${target ?? ''}:${Math.floor(now.getHours() / 8)}`),
+    firstMeeting,
+    seed: hashSeed(
+      `${userId}:${characterId}:${today}:${phase}:${target ?? ''}:${Math.floor(now.getHours() / 8)}${firstMeeting ? ':first' : ''}`,
+    ),
   });
 
   await pool

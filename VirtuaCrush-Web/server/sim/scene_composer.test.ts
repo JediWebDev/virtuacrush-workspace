@@ -80,6 +80,28 @@ test('renderSceneHeader: readable narration with time + outfit', () => {
   assert.ok(!h.includes('undefined'));
 });
 
+test('first meeting: meet-cute hook, no friend, stranger facts', () => {
+  const c = composeScene({ ...BASE, firstMeeting: true });
+  assert.equal(c.firstMeeting, true);
+  assert.ok(c.meetHook && c.meetHook.length > 10);
+  assert.equal(c.cast.length, 0); // first meetings stay one-on-one
+  const header = renderSceneHeader(c, 'Becca');
+  assert.ok(header.includes("You've never spoken before"));
+  const facts = renderSceneFactsBlock(c, 'Becca');
+  assert.ok(facts.includes('FIRST MEETING'));
+  assert.ok(facts.includes('do not invent any'));
+});
+
+test('returning visit: no meet-cute, normal narration', () => {
+  const c = composeScene({ ...BASE, firstMeeting: false });
+  assert.equal(c.firstMeeting, false);
+  assert.equal(c.meetHook, undefined);
+  const header = renderSceneHeader(c, 'Becca');
+  assert.ok(!header.includes('never spoken'));
+  const facts = renderSceneFactsBlock(c, 'Becca');
+  assert.ok(!facts.includes('FIRST MEETING'));
+});
+
 test('renderSceneFactsBlock: authoritative facts incl. outfit lock + cast rules', () => {
   const c = composeScene(BASE);
   const f = renderSceneFactsBlock(c, 'Becca');

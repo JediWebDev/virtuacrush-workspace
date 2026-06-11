@@ -20,6 +20,7 @@ import {
   outfitContextFor,
   friendFor,
   FRIEND_AGENDAS,
+  FIRST_MEET_HOOKS,
 } from './scene_registry';
 
 export interface SceneCastMember {
@@ -41,6 +42,10 @@ export interface SceneComposition {
   outfit: string;
   activity: string;            // from the daily story state
   cast: SceneCastMember[];     // others present (besides companion + user)
+  /** True only for the very first conversation between this user + character. */
+  firstMeeting?: boolean;
+  /** How the match happened (first meetings only). */
+  meetHook?: string;
 }
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -66,6 +71,8 @@ export interface ComposeParams {
   now: Date;
   forDate: string; // YYYY-MM-DD (sim day this composition belongs to)
   seed: number;
+  /** First conversation ever between this user and character. */
+  firstMeeting?: boolean;
 }
 
 export function composeScene(p: ComposeParams): SceneComposition {
@@ -96,8 +103,8 @@ export function composeScene(p: ComposeParams): SceneComposition {
 
     // A friend may be over (home scenes only): canonical identity, rolled
     // presence + agenda. The friend is an engine fact the LLM can voice but
-    // never rename or replace.
-    if (r() < 0.35) {
+    // never rename or replace. First meetings stay one-on-one.
+    if (!p.firstMeeting && r() < 0.35) {
       const friend = friendFor(p.characterId);
       cast.push({ ...friend, agenda: pickFrom(FRIEND_AGENDAS, r) });
     }
@@ -115,6 +122,8 @@ export function composeScene(p: ComposeParams): SceneComposition {
     outfit,
     activity: p.state.activity || 'taking it easy',
     cast,
+    firstMeeting: Boolean(p.firstMeeting),
+    meetHook: p.firstMeeting ? pickFrom(FIRST_MEET_HOOKS, r) : undefined,
   };
 }
 
@@ -122,6 +131,15 @@ export function composeScene(p: ComposeParams): SceneComposition {
 export function renderSceneHeader(c: SceneComposition, displayName: string): string {
   const bits: string[] = [];
   bits.push(`${c.timeLabel} — ${c.weather}.`);
+  if (c.firstMeeting) {
+    // First encounter: set up the meet-cute, then place her in the world.
+    bits.push(`${c.meetHook ?? `You and ${displayName} just matched`}.`);
+    bits.push(`Right now ${displayName} is ${c.setting.replace(' in frame of the story', '')}, ${c.activity}.`);
+    if (c.details.length) bits.push(`${c.details.join('; ')}.`);
+    bits.push(`She's in ${c.outfit}.`);
+    bits.push(`You've never spoken before — this is where it starts.`);
+    return bits.join(' ');
+  }
   if (c.phase === 'on_date') {
     bits.push(`You're ${c.setting} with ${displayName}.`);
   } else if (c.phase === 'planning') {
@@ -146,6 +164,13 @@ export function renderSceneFactsBlock(c: SceneComposition, displayName: string):
     c.details.length ? `Scene details: ${c.details.join('; ')}.` : '',
     `She is wearing ${c.outfit} — do not change or re-invent her outfit this scene.`,
   ];
+  if (c.firstMeeting) {
+    lines.push(
+      `FIRST MEETING: You and the player have NEVER spoken before — ${c.meetHook?.toLowerCase() ?? 'you just matched on the app'}. ` +
+        `There is no shared history: no past conversations, dates, nicknames, or inside jokes — do not invent any. ` +
+        `Play genuine first-impressions energy: curious, feeling them out, a little guarded but interested.`,
+    );
+  }
   if (c.cast.length) {
     for (const m of c.cast) {
       lines.push(

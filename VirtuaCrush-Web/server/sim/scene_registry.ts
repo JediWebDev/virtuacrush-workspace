@@ -244,3 +244,18 @@ export function friendFor(characterId: string): FriendCanon {
     vibe: pickFrom(FRIEND_VIBES, r),
   };
 }
+
+// --- First meetings ---------------------------------------------------------------
+// How the match happened, used ONLY for the very first conversation between a
+// user and a character (consistent with the app's "you just matched" fiction).
+// After the first chat exists, openings describe a pair who already know
+// each other.
+
+export const FIRST_MEET_HOOKS = [
+  'You two matched barely an hour ago — and she sent the first like',
+  'You matched this afternoon; her profile made you stop scrolling, and apparently yours did the same to her',
+  'She liked your profile three days ago; tonight the match finally went through',
+  'You matched late last night, and she clearly noticed you came back to her profile twice',
+  'The app flagged you two as a near-perfect match this morning — neither of you has said a word yet',
+] as const;
+
