@@ -61,8 +61,11 @@ export function buildChatBody(prompt: string, cfg: OpenAiCfg, json = false) {
     ...(cfg.frequencyPenalty ? { frequency_penalty: cfg.frequencyPenalty } : {}),
     ...(cfg.presencePenalty ? { presence_penalty: cfg.presencePenalty } : {}),
     // JSON mode (OpenAI/DeepSeek-compatible): constrains output to one valid
-    // JSON object. Used by callers that pass { json: true }.
-    ...(json ? { response_format: { type: 'json_object' as const } } : {}),
+    // JSON object. Used by callers that pass { json: true }. Kill switch:
+    // LLM_JSON_MODE=0 for providers that reject response_format.
+    ...(json && process.env.LLM_JSON_MODE !== '0'
+      ? { response_format: { type: 'json_object' as const } }
+      : {}),
   };
 }
 

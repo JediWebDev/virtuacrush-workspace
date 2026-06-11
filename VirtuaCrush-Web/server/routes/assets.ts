@@ -4,48 +4,15 @@
 // private (no public r2.dev URL needed) and lets the browser cache aggressively.
 //
 // GET /api/assets/<key>            e.g. /api/assets/scenes/coffee_shop.jpg
-//
-// Env (see .env.example):
-//   R2_ENDPOINT          https://<account-id>.r2.cloudflarestorage.com
-//   R2_BUCKET            virtuacrush
-//   R2_ACCESS_KEY_ID     from an "Object Read Only" R2 API token
-//   R2_SECRET_ACCESS_KEY from the same token
+// Config + diagnostics live in server/lib/r2.ts.
 import { Router, type Request, type Response } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import type { Readable } from 'node:stream';
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { GetObjectCommand } from '@aws-sdk/client-s3';
+import { r2, R2_BUCKET } from '../lib/r2';
 
 const router = Router();
-
-const R2_BUCKET = process.env.R2_BUCKET?.trim() || '';
-// Accept either the bare account endpoint or one with "/<bucket>" pasted on
-// the end (the dashboard shows the latter) — the SDK wants it WITHOUT bucket.
-const R2_ENDPOINT = (() => {
-  let ep = process.env.R2_ENDPOINT?.trim() || '';
-  ep = ep.replace(/\/+$/, '');
-  if (R2_BUCKET && ep.toLowerCase().endsWith(`/${R2_BUCKET.toLowerCase()}`)) {
-    ep = ep.slice(0, -(R2_BUCKET.length + 1));
-  }
-  return ep;
-})();
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID?.trim() || '';
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY?.trim() || '';
-
-const r2Enabled = Boolean(R2_ENDPOINT && R2_BUCKET && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY);
-
-const s3 = r2Enabled
-  ? new S3Client({
-      region: 'auto',
-      endpoint: R2_ENDPOINT,
-      forcePathStyle: true,
-      credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY },
-    })
-  : null;
-
-if (!r2Enabled) {
-  console.warn('[assets] R2 not configured — serving bundled /public files only');
-}
 
 const CACHE_CONTROL = 'public, max-age=86400, stale-while-revalidate=604800';
 
@@ -105,9 +72,9 @@ router.get('/*', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'invalid_key' });
   }
 
-  if (s3) {
+  if (r2) {
     try {
-      const obj = await s3.send(
+      const obj = await r2.send(
         new GetObjectCommand({
           Bucket: R2_BUCKET,
           Key: key,

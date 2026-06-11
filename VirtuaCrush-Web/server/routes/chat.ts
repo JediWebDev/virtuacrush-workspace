@@ -407,12 +407,12 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       // the in-character recovery line below instead of showing garbage.
       const badReply = (p: { turns: { text: string }[] }) =>
         p.turns.length === 0 || p.turns.some((t) => looksDegenerate(t.text));
-      const raw1 = await completePrompt(directorPrompt!);
+      const raw1 = await completePrompt(directorPrompt!, { json: true });
       let parsed = parseScene(raw1, displayName);
       if (badReply(parsed)) {
         // Retry once; if that also fails, log a snippet so the cause (truncated
         // JSON, token salad, refusal, ...) is visible in the server logs.
-        const raw2 = await completePrompt(directorPrompt!);
+        const raw2 = await completePrompt(directorPrompt!, { json: true });
         parsed = parseScene(raw2, displayName);
         if (badReply(parsed)) {
           console.warn(

@@ -64,7 +64,9 @@ async function extractFacts(userMessage: string, assistantMessage: string): Prom
       '{{ASSISTANT}}',
       assistantMessage.slice(0, 4000),
     );
-    const result = await completePrompt(prompt);
+    // JSON mode keeps extraction parseable; parseFacts also tolerates an
+    // object wrapper like {"facts": [...]} since it pulls the first array.
+    const result = await completePrompt(prompt, { json: true });
     return parseFacts(result);
   } catch (err) {
     console.warn('[memory] fact extraction failed:', err);

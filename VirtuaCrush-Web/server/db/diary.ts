@@ -75,7 +75,7 @@ async function summarizeOne(userId: string, characterId: string, since: string |
     .replace('{{MAX}}', String(MAX_BEATS))
     .replace('{{TRANSCRIPT}}', transcript);
 
-  const beats = parseFacts(await completePrompt(prompt)).slice(0, MAX_BEATS);
+  const beats = parseFacts(await completePrompt(prompt, { json: true })).slice(0, MAX_BEATS);
   for (const beat of beats) {
     await pool.query(
       `INSERT INTO chat_diary (user_id, character_id, beat) VALUES ($1, $2, $3)`,
