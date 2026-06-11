@@ -534,7 +534,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
           
           <DriveMeters drives={storyState?.drives} />
           <SecretCard secret={storyState?.secret} name={character.name} />
-          <ActivityLog />
+          <ActivityLog characterId={character.id} name={character.name} />
 
           <PrivateMessagesInbox onPlayAudio={openAudioMessage} userTier={userTier} />
         </div>
@@ -639,50 +639,8 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
           </div>
         ) : (
           <>
-        {storyState ? (
-          <div className="shrink-0 border-b border-black/[0.06] dark:border-white/[0.06] bg-accent/[0.04] px-4 py-2 md:px-8">
-            <div className="mx-auto flex max-w-3xl items-center gap-2 text-[12px]">
-              <span className="relative flex h-2 w-2 shrink-0" aria-hidden>
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent/60" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
-              </span>
-              <span className="min-w-0 truncate text-stone-600 dark:text-stone-300">
-                {storyState.phase === "jailed" ? (
-                  <>
-                    <span className="font-semibold text-stone-800 dark:text-stone-100">You&apos;re</span>{" "}
-                    in a holding cell 🚔 — {character.name} is your one call
-                  </>
-                ) : (
-                  <>
-                    <span className="font-semibold text-stone-800 dark:text-stone-100">{character.name}</span>{" "}
-                    {storyState.phase === "on_date" && storyState.sceneLabel
-                      ? `· on a date at the ${storyState.sceneLabel.toLowerCase()}`
-                      : storyState.phase === "planning" && storyState.sceneLabel
-                        ? `· planning a date at the ${storyState.sceneLabel.toLowerCase()}`
-                        : `is ${storyState.activity || "around"}`}
-                  </>
-                )}
-              </span>
-              {storyState.phase === "jailed" ? (
-                <span className="ml-auto hidden shrink-0 rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 sm:inline">
-                  ⏳ {jailMmss}
-                </span>
-              ) : storyState.phase === "on_date" ? (
-                <span className="ml-auto hidden shrink-0 rounded-full border border-accent/30 bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent sm:inline">
-                  On a date 💞
-                </span>
-              ) : storyState.phase === "planning" ? (
-                <span className="ml-auto hidden shrink-0 rounded-full border border-accent/30 bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent sm:inline">
-                  Planning a date 🗓️
-                </span>
-              ) : storyState.mood ? (
-                <span className="ml-auto hidden shrink-0 rounded-full border border-accent/20 bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent sm:inline">
-                  {storyState.mood}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
+        {/* Status strip removed: the daily-engine activity rarely matched the
+            live conversation. The scene header narration owns scene-setting now. */}
         <div
             ref={scrollRef}
             className="no-scrollbar flex-1 space-y-4 overflow-y-auto p-4 md:space-y-5 md:p-8"
@@ -1042,7 +1000,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
                   </span>
                   <DriveMeters drives={storyState?.drives} />
           <SecretCard secret={storyState?.secret} name={character.name} />
-          <ActivityLog />
+          <ActivityLog characterId={character.id} name={character.name} />
                   <PrivateMessagesInbox
                     userTier={userTier}
                     onPlayAudio={() => {

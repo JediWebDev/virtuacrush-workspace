@@ -127,6 +127,8 @@ function dynamicToSocialPost(p: DynamicPost): SocialPost {
     isAboutUser: false,
     requiredAffinity: 0,
     comments: [],
+    // Curated posts (synced from the R2 bucket) ship with an image.
+    media: p.imageUrl ? { type: "image", src: p.imageUrl } : undefined,
   };
 }
 

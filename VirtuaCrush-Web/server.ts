@@ -33,6 +33,9 @@ import profileRouter from './server/routes/profile';
 import worldRouter from './server/routes/world';
 import desireRouter from './server/routes/desire';
 import assetsRouter from './server/routes/assets';
+import diaryRouter from './server/routes/diary';
+import { syncCuratedPosts } from './server/jobs/curated_posts';
+import { summarizePendingDiaries } from './server/db/diary';
 
 // --- Startup config checks (provider-aware) ---------------------------------
 const LLM_PROVIDER = selectProviderName();
@@ -89,6 +92,7 @@ app.use('/api/jail', jailRouter);
 app.use('/api/profile', profileRouter);
 app.use('/api/world', worldRouter);
 app.use('/api/desire', desireRouter);
+app.use('/api/diary', diaryRouter);
 
 // Images/media proxied from the private R2 bucket (falls back to /public).
 // No auth: these are the same assets the site ships publicly, and skipping
@@ -120,6 +124,13 @@ const server = app.listen(PORT, HOST, () => {
   // Run DB migrations AFTER binding the port so a slow/unready database can
   // never block startup or fail the healthcheck. Idempotent + non-fatal.
   void applyMigrations().catch((e) => console.error('[migrate] background run failed:', e));
+
+  // Background jobs (fail-soft, off the request path):
+  //  - curated feed sync: picks up new image+caption pairs from the R2 bucket
+  //  - diary sweep: summarizes idle chat sessions into story-so-far beats
+  setTimeout(() => void syncCuratedPosts(), 15_000);
+  setInterval(() => void syncCuratedPosts(), 60 * 60_000).unref();
+  setInterval(() => void summarizePendingDiaries(), 15 * 60_000).unref();
 });
 
 // Friendly handling for the common "port already taken" case (usually a stale

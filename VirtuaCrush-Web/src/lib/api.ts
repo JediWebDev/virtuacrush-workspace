@@ -82,7 +82,7 @@ export interface CharacterState {
   scene?: SceneInfo;
   phase?: ScenePhase;
   sceneLabel?: string | null;
-  secret?: { label: string; discovered: boolean; reveal: string | null };
+  secret?: { label: string; discovered: boolean; reveal: string | null; progress?: number };
   drives?: { key: string; label: string; value: number }[];
   pendingEvent?: { drive: string; prompt: string; options: { id: string; label: string }[] } | null;
 }
@@ -195,9 +195,25 @@ export interface DynamicPost {
   id: string;
   text: string;
   createdAt: string;
+  /** Curated posts (synced from the R2 bucket) carry an image. */
+  imageUrl?: string | null;
 }
 
 export async function fetchDynamicPosts(characterId: string): Promise<DynamicPost[]> {
   const res = await api<{ posts: DynamicPost[] }>(`/api/posts/${encodeURIComponent(characterId)}`);
   return res.posts;
+}
+
+// --- Chat diary ----------------------------------------------------------------
+
+export interface DiaryEntry {
+  id: string;
+  beat: string;
+  createdAt: string;
+}
+
+/** Story-so-far beats for this user/character (newest first). */
+export async function fetchDiary(characterId: string): Promise<DiaryEntry[]> {
+  const res = await api<{ entries: DiaryEntry[] }>(`/api/diary/${encodeURIComponent(characterId)}`);
+  return res.entries;
 }

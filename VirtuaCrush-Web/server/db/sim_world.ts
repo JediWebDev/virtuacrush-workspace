@@ -99,7 +99,9 @@ export async function applyTick(userId: string, world: WorldState, result: TickR
       memories: n.memories.slice(-50), // cap; salience-decay/compression is a later pass
       knowledge: n.knowledge as unknown as Record<string, unknown>,
     });
-    const post = result.patches[id].post;
+    // Tick-generated posts are OFF by default — they flooded feeds with noise.
+    // The feed is curated via the R2 sync job now; re-enable with TICK_POSTS=1.
+    const post = process.env.TICK_POSTS === '1' ? result.patches[id].post : undefined;
     if (post) {
       try { await createPost(userId, id, post); } catch (e) { console.warn('[tick] post failed:', e); }
     }

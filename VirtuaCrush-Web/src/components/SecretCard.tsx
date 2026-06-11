@@ -1,10 +1,11 @@
-// Shows a character's secret on their profile rail: a locked teaser until the
-// player uncovers it (high trust + probing, server-decided), then the reveal.
+// Shows a character's secret on their profile rail: a locked teaser with a
+// trust-progress bar until the player uncovers it (high trust + probing,
+// server-decided), then the reveal.
 import { motion } from "motion/react";
 import { Lock, Sparkles } from "lucide-react";
 
 interface SecretCardProps {
-  secret?: { label: string; discovered: boolean; reveal: string | null };
+  secret?: { label: string; discovered: boolean; reveal: string | null; progress?: number };
   name: string;
 }
 
@@ -12,6 +13,7 @@ export default function SecretCard({ secret, name }: SecretCardProps) {
   if (!secret) return null;
 
   if (!secret.discovered) {
+    const progress = Math.max(0, Math.min(99, Math.round(secret.progress ?? 0)));
     return (
       <div className="mb-5 w-full rounded-2xl border border-black/10 bg-black/[0.03] p-4 text-left dark:border-white/10 dark:bg-white/[0.03]">
         <div className="flex items-center gap-2">
@@ -21,8 +23,22 @@ export default function SecretCard({ secret, name }: SecretCardProps) {
           <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Secret · locked</span>
         </div>
         <p className="mt-2 text-sm font-medium text-stone-700 dark:text-stone-300">{secret.label}</p>
-        <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-          {name} is hiding something. Earn their trust and ask the right questions to uncover it.
+        <div className="mt-3">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-stone-500">Trust earned</span>
+            <span className="text-[10px] tabular-nums text-stone-400">{progress}%</span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-amber-400/70 to-accent transition-[width] duration-700"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
+          {progress >= 99
+            ? `${name} trusts you — ask the right question and the truth might come out.`
+            : `${name} is hiding something. Earn their trust and ask the right questions to uncover it.`}
         </p>
       </div>
     );
