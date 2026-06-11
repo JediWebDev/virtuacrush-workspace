@@ -92,3 +92,21 @@ export async function getOrComposeScene(
 
   return composed;
 }
+
+/** Records a fired disruption id on the stored composition. */
+export async function markDisruptionFired(
+  userId: string,
+  characterId: string,
+  id: string,
+): Promise<void> {
+  await pool.query(
+    `UPDATE character_state
+       SET scene_composition = jsonb_set(
+         COALESCE(scene_composition, '{}'::jsonb),
+         '{firedDisruptions}',
+         COALESCE(scene_composition->'firedDisruptions', '[]'::jsonb) || to_jsonb($3::text)
+       )
+     WHERE user_id = $1 AND character_id = $2`,
+    [userId, characterId, id],
+  );
+}

@@ -1,0 +1,192 @@
+// Mid-scene interruptions. The scene composer pre-rolls a seeded disruption
+// budget when a scene is composed; the chat loop fires each one when its turn
+// arrives by injecting an engine-bounded directive ("she reacts, deflects if
+// asked, do NOT resolve — it's a hook"). The sim decides outcome bounds; the
+// LLM performs inside them. Severity ladder (MVP): texture (no redirect),
+// beat interrupts (momentary redirect that deposits content), friend beats
+// (only when her friend is in the scene). Cast changes & scene breaks later.
+import { friendFor } from './scene_registry';
+import { pickFrom } from './scene_registry';
+
+export type DisruptionKind = 'texture' | 'beat';
+
+export interface PlannedDisruption {
+  id: string;       // unique within the composition ("d1", "d2", ...)
+  poolId: string;   // which authored spec to render
+  kind: DisruptionKind;
+  atTurn: number;   // fires on the first user turn >= this, once
+}
+
+interface DisruptionSpec {
+  poolId: string;
+  kind: DisruptionKind;
+  /** 'home' = texting scenes, 'on_date' = venue scenes, 'any' = both. */
+  phase: 'home' | 'on_date' | 'any';
+  requiresFriend?: boolean;
+  directive: (name: string, friend: string) => string;
+  /** Durable memory written after the beat fires (texture leaves none). */
+  residue?: (name: string, friend: string) => string;
+}
+
+// --- Authored pools -----------------------------------------------------------
+
+const TEXTURES: DisruptionSpec[] = [
+  {
+    poolId: 'notification_swipe', kind: 'texture', phase: 'any',
+    directive: (n) => `${n}'s phone buzzes with some notification; she glances and swipes it away without comment.`,
+  },
+  {
+    poolId: 'ambient_sound', kind: 'texture', phase: 'home',
+    directive: () => `Somewhere outside, a car alarm starts and gives up after a few seconds.`,
+  },
+  {
+    poolId: 'tv_moment', kind: 'texture', phase: 'home',
+    directive: (n) => `Whatever's on her TV gets suddenly loud for a second — ${n} mutes it without looking.`,
+  },
+  {
+    poolId: 'drink_refill', kind: 'texture', phase: 'home',
+    directive: (n) => `${n} pads off mid-thought to refill her drink and comes back settling deeper into the couch.`,
+  },
+  {
+    poolId: 'venue_bustle', kind: 'texture', phase: 'on_date',
+    directive: () => `A small commotion nearby — someone's order went wrong, or a chair scraped too loud. It passes.`,
+  },
+  {
+    poolId: 'venue_song', kind: 'texture', phase: 'on_date',
+    directive: (n) => `The music shifts to something ${n} clearly knows — it tugs her attention for a beat.`,
+  },
+];
+
+const BEATS: DisruptionSpec[] = [
+  {
+    poolId: 'friend_text', kind: 'beat', phase: 'any',
+    directive: (n, f) =>
+      `${n}'s phone lights up — a text from ${f}. She reads it, reacts visibly (a snort, an eye-roll, a flicker of worry — your choice, in character), and puts the phone face-down. ` +
+      `If the player asks, she gives a vague half-answer ("${f} being ${f}") and changes the subject. Do NOT explain what the text said — it's a hook for later.`,
+    residue: (n, f) => `${f} texted ${n} mid-conversation; ${n} got cagey about what it said.`,
+  },
+  {
+    poolId: 'mom_call', kind: 'beat', phase: 'any',
+    directive: (n) =>
+      `${n}'s phone rings: "Mom". She stares at it for a second too long, then declines the call. Her mood dips — distracted, a little tight. ` +
+      `If the player asks, she deflects ("it's nothing — family stuff") but doesn't fully recover this turn. Do NOT resolve why; leave the thread hanging.`,
+    residue: (n) => `${n}'s mom called during the conversation; ${n} declined it and went quiet about why.`,
+  },
+  {
+    poolId: 'delivery_knock', kind: 'beat', phase: 'home',
+    directive: (n) =>
+      `A knock — a delivery she forgot she ordered. ${n} is gone for a moment and comes back with a package she's clearly pleased about but won't open right now. ` +
+      `If the player asks what it is, she teases ("you'll see... maybe") and moves on. Do NOT reveal the contents.`,
+    residue: (n) => `A mystery package arrived for ${n} mid-chat; she refused to say what's inside.`,
+  },
+  {
+    poolId: 'work_ping', kind: 'beat', phase: 'any',
+    directive: (n) =>
+      `${n} gets a message that is obviously about work or her main hustle — she groans, types a fast reply, and tosses the phone aside. ` +
+      `It costs her a beat of attention and earns the player a small apology. If asked, one tired sentence about it, then she firmly changes the subject to the player.`,
+    residue: (n) => `Work pinged ${n} mid-conversation; whatever it was annoyed her.`,
+  },
+  {
+    poolId: 'friend_ride_arrives', kind: 'beat', phase: 'home', requiresFriend: true,
+    directive: (n, f) =>
+      `${f}'s ride is outside — she has to go. She makes a small production of leaving (one last pointed remark aimed at ${n} about the player, in character), then she's gone and the room is suddenly quieter. ` +
+      `${n} reacts to the new privacy however fits her current feelings. ${f} is now GONE from the scene — do not voice her again after this reply.`,
+    residue: (n, f) => `${f} left partway through; on the way out she made a pointed remark about the player to ${n}.`,
+  },
+];
+
+const ALL_SPECS = [...TEXTURES, ...BEATS];
+
+export function disruptionSpec(poolId: string): DisruptionSpec | null {
+  return ALL_SPECS.find((s) => s.poolId === poolId) ?? null;
+}
+
+// --- Planner (pure, seeded) ----------------------------------------------------
+
+export interface PlanOpts {
+  phase: 'home' | 'planning' | 'on_date' | 'jailed';
+  hasFriend: boolean;
+  firstMeeting: boolean;
+}
+
+const phaseKey = (p: PlanOpts['phase']): 'home' | 'on_date' => (p === 'on_date' ? 'on_date' : 'home');
+
+function pickSpec(pool: DisruptionSpec[], opts: PlanOpts, r: () => number): DisruptionSpec | null {
+  const ok = pool.filter(
+    (s) => (s.phase === 'any' || s.phase === phaseKey(opts.phase)) && (!s.requiresFriend || opts.hasFriend),
+  );
+  return ok.length ? pickFrom(ok, r) : null;
+}
+
+/**
+ * Pre-rolls the scene's disruption budget: textures every ~5-7 turns, ONE beat
+ * around turns 7-12 (none on first meetings — don't sabotage the meet-cute),
+ * and the friend's exit a few turns after the beat when she's present.
+ */
+export function planDisruptions(r: () => number, opts: PlanOpts): PlannedDisruption[] {
+  if (opts.phase === 'jailed') return [];
+  const out: PlannedDisruption[] = [];
+  let n = 0;
+  const push = (spec: DisruptionSpec | null, atTurn: number) => {
+    if (spec) out.push({ id: `d${++n}`, poolId: spec.poolId, kind: spec.kind, atTurn });
+  };
+
+  // Texture cadence: first around turn 4-6, second ~6 turns later.
+  const t1 = 4 + Math.floor(r() * 3);
+  push(pickSpec(TEXTURES, opts, r), t1);
+  push(pickSpec(TEXTURES, opts, r), t1 + 6 + Math.floor(r() * 3));
+
+  // One meaningful beat per scene (the workhorse), skipped on first meetings.
+  if (!opts.firstMeeting) {
+    const beatTurn = 7 + Math.floor(r() * 6);
+    push(pickSpec(BEATS.filter((b) => !b.requiresFriend), opts, r), beatTurn);
+    if (opts.hasFriend) {
+      push(pickSpec(BEATS.filter((b) => b.requiresFriend), opts, r), beatTurn + 4 + Math.floor(r() * 3));
+    }
+  }
+
+  return out.sort((a, b) => a.atTurn - b.atTurn);
+}
+
+/** The next unfired disruption due at or before this turn (lowest turn first). */
+export function nextDueDisruption(
+  comp: { disruptions?: PlannedDisruption[]; firedDisruptions?: string[] },
+  turn: number,
+): PlannedDisruption | null {
+  const fired = new Set(comp.firedDisruptions ?? []);
+  const due = (comp.disruptions ?? [])
+    .filter((d) => !fired.has(d.id) && d.atTurn <= turn)
+    .sort((a, b) => a.atTurn - b.atTurn);
+  return due[0] ?? null;
+}
+
+// --- Rendering -------------------------------------------------------------------
+
+/** Engine-bounded directive injected into the prompt the turn a disruption fires. */
+export function renderDisruptionDirective(
+  d: PlannedDisruption,
+  displayName: string,
+  characterId: string,
+): string {
+  const spec = disruptionSpec(d.poolId);
+  if (!spec) return '';
+  const friend = friendFor(characterId).name;
+  return (
+    `\n\n=== DISRUPTION THIS TURN (engine event — weave it into your reply) ===\n` +
+    `[${spec.kind}] ${spec.directive(displayName, friend)}\n` +
+    `Rules: it happens DURING this reply, woven in naturally — never ignore it, never treat it as the player's doing. ` +
+    `It interrupts the moment but does not derail the scene unless the player engages with it. ` +
+    `Do not resolve any tension it introduces this turn, and keep every established scene fact intact.`
+  );
+}
+
+/** Durable memory text for beats (empty for texture). */
+export function disruptionResidue(
+  d: PlannedDisruption,
+  displayName: string,
+  characterId: string,
+): string {
+  const spec = disruptionSpec(d.poolId);
+  if (!spec?.residue) return '';
+  return spec.residue(displayName, friendFor(characterId).name);
+}

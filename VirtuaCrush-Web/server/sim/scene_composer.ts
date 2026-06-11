@@ -7,6 +7,7 @@
 import { getLocation } from '../inworld/scenes';
 import type { DailyState } from '../db/story_util';
 import type { SceneState, ScenePhase } from '../db/scene_util';
+import { planDisruptions, type PlannedDisruption } from './interruptions';
 import {
   rng,
   pickFrom,
@@ -46,6 +47,10 @@ export interface SceneComposition {
   firstMeeting?: boolean;
   /** How the match happened (first meetings only). */
   meetHook?: string;
+  /** Pre-rolled mid-scene disruption budget (fired by the chat loop). */
+  disruptions?: PlannedDisruption[];
+  /** Ids of disruptions that already fired this scene. */
+  firedDisruptions?: string[];
 }
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -147,6 +152,12 @@ export function composeScene(p: ComposeParams): SceneComposition {
     cast,
     firstMeeting: Boolean(p.firstMeeting),
     meetHook: p.firstMeeting ? pickFrom(FIRST_MEET_HOOKS, r) : undefined,
+    disruptions: planDisruptions(r, {
+      phase: p.phase,
+      hasFriend: cast.length > 0,
+      firstMeeting: Boolean(p.firstMeeting),
+    }),
+    firedDisruptions: [],
   };
 }
 

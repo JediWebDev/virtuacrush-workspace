@@ -36,8 +36,14 @@ import {
 } from '../sim/emotions';
 import { getSituation, setScene, setMood } from '../db/state';
 import { moodShiftForIntent } from '../sim/vitals';
-import { getOrComposeScene, renderSceneHeader, renderSceneFactsBlock } from '../db/scene_composition';
+import { getOrComposeScene, renderSceneHeader, renderSceneFactsBlock, markDisruptionFired } from '../db/scene_composition';
 import type { SceneCastMember } from '../sim/scene_composer';
+import {
+  nextDueDisruption,
+  renderDisruptionDirective,
+  disruptionResidue,
+  type PlannedDisruption,
+} from '../sim/interruptions';
 import { formatSituationBlock, scenePhase } from '../db/scene_util';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
 import { detectPlanCue, detectAgreedVenue, shouldOfferDateChoice } from '../db/cue_util';
@@ -220,6 +226,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let revealSecretNow = false;
   let emotions: EmotionState | undefined;
   let drivePressure = false;
+  let firedDisruption: PlannedDisruption | null = null;
   let newPendingEvent: DriveEventCard | undefined;
   let arrested = false;
   let appliedAffinity: number | null = null;
@@ -249,11 +256,27 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     // present (e.g. her friend) registered as a voiceable actor. Fail-soft.
     let sceneFacts = '';
     let sceneCast: SceneCastMember[] = [];
+    let disruptionDirective = '';
     try {
       const comp = await getOrComposeScene(req.user!.id, characterId, displayName, situation);
       if (comp) {
         sceneFacts = renderSceneFactsBlock(comp, displayName);
         sceneCast = comp.cast;
+
+        // Mid-scene interruptions: fire the next pre-rolled disruption when
+        // its turn arrives. Turn index = user messages since this scene was
+        // composed, plus the message being answered right now.
+        const { rows: turnRows } = await pool.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM chat_messages
+           WHERE user_id = $1 AND character_id = $2 AND role = 'user' AND created_at > $3::timestamptz`,
+          [req.user!.id, characterId, comp.composedAt],
+        );
+        const turn = Number(turnRows[0]?.n ?? 0) + 1;
+        const due = nextDueDisruption(comp, turn);
+        if (due) {
+          disruptionDirective = renderDisruptionDirective(due, displayName, characterId);
+          firedDisruption = due;
+        }
       }
     } catch (sceneErr) {
       console.warn('[chat] scene facts failed:', sceneErr);
@@ -319,6 +342,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     const directives =
       formatSituationBlock(situation.state, scene, displayName, affinity) +
       sceneFacts +
+      disruptionDirective +
       formatCharacterFactsBlock(getLore(characterId)) +
       formatPersonaTraitsBlock(getLore(characterId), { discovered: secretDiscovered, revealNow: revealSecretNow }) +
       ROLEPLAY_INPUT_DIRECTIVE +
@@ -465,6 +489,14 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           }).catch((e) => console.warn('[chat] plan sync failed:', e));
           void storeSignificantEvent(req.user!.id, characterId, `Agreed to meet up at the ${agreedVenue.replace(/_/g, ' ')}.`);
         }
+      }
+
+      // Disruption bookkeeping: mark it fired and persist any residue so the
+      // world remembers the beat (the mystery text exists now).
+      if (firedDisruption) {
+        void markDisruptionFired(req.user!.id, characterId, firedDisruption.id).catch(() => {});
+        const residue = disruptionResidue(firedDisruption, displayName, characterId);
+        if (residue) void storeSignificantEvent(req.user!.id, characterId, residue);
       }
     }
 
