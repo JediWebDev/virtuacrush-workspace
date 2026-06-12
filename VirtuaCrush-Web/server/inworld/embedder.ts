@@ -1,45 +1,73 @@
-// Singleton text-embedding client for RAG memory.
-// Uses the Inworld Runtime TextEmbedder primitive with a remote OpenAI-backed
-// model, authenticated with the same INWORLD_API_KEY as the chat LLM. One
-// instance is reused across requests; TextEmbedder.create() is expensive.
+// Text-embedding client for RAG memory — OpenAI-compatible endpoint.
+// Works with OpenRouter (https://openrouter.ai/api/v1/embeddings) or any
+// provider that speaks the /v1/embeddings wire format.
 //
-// The '@inworld/runtime' native addon is imported LAZILY so a deploy without an
-// INWORLD_API_KEY (e.g. OpenRouter-only) never loads the native binary — memory
-// just turns off and everything below fails soft to null.
-import type { TextEmbedder } from '@inworld/runtime/primitives/embeddings';
+// Reuses the same LLM_BASE_URL / LLM_API_KEY that the chat LLM already uses.
+// Configure the embedding model separately with EMBED_MODEL (defaults to
+// openai/text-embedding-3-small, which OpenRouter routes to OpenAI).
+//
+// Fails soft: both entry points return null/null-array on any error so a
+// missing key or provider hiccup never breaks chat.
 
-let embedderPromise: Promise<TextEmbedder> | null = null;
+function clean(v: string | undefined): string {
+  return (v ?? '').trim().replace(/^["']+|["']+$/g, '').trim();
+}
 
-function getEmbedder(): Promise<TextEmbedder> {
-  if (!embedderPromise) {
-    if (!process.env.INWORLD_API_KEY) {
-      throw new Error('INWORLD_API_KEY is not set');
-    }
-    embedderPromise = import('@inworld/runtime/primitives/embeddings').then(({ TextEmbedder }) =>
-      TextEmbedder.create({
-        remoteConfig: {
-          provider: process.env.INWORLD_EMBED_PROVIDER ?? 'openai',
-          modelName: process.env.INWORLD_EMBED_MODEL ?? 'text-embedding-3-small',
-          apiKey: process.env.INWORLD_API_KEY,
-        },
-      }),
-    );
+function embedConfig() {
+  return {
+    baseUrl: (clean(process.env.LLM_BASE_URL) || 'https://openrouter.ai/api/v1').replace(/\/+$/, ''),
+    apiKey: clean(process.env.LLM_API_KEY),
+    model: clean(process.env.EMBED_MODEL) || 'openai/text-embedding-3-small',
+  };
+}
+
+type EmbedResponse = {
+  data?: { embedding?: number[] }[];
+};
+
+async function fetchEmbeddings(input: string | string[]): Promise<(number[] | null)[]> {
+  const cfg = embedConfig();
+  if (!cfg.apiKey) {
+    console.warn('[embedder] LLM_API_KEY not set — memory disabled');
+    const len = Array.isArray(input) ? input.length : 1;
+    return Array(len).fill(null);
   }
-  return embedderPromise;
+
+  const res = await fetch(`${cfg.baseUrl}/embeddings`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${cfg.apiKey}`,
+      'HTTP-Referer': clean(process.env.PUBLIC_APP_URL),
+      'X-Title': 'VirtuaCrush',
+    },
+    body: JSON.stringify({ model: cfg.model, input }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`[embedder] HTTP ${res.status}: ${body.slice(0, 200)}`);
+  }
+
+  const json = (await res.json()) as EmbedResponse;
+  const items = json?.data ?? [];
+  const inputs = Array.isArray(input) ? input : [input];
+  return inputs.map((_, i) => {
+    const vec = items[i]?.embedding;
+    return Array.isArray(vec) && vec.length > 0 ? vec : null;
+  });
 }
 
 /**
- * Embeds a single string into a vector. Returns null on failure so callers can
- * degrade gracefully (skip storing/retrieving a memory) instead of breaking chat.
+ * Embeds a single string into a vector. Returns null on failure so callers
+ * degrade gracefully instead of breaking chat.
  */
 export async function embed(text: string): Promise<number[] | null> {
   const trimmed = text?.trim();
   if (!trimmed) return null;
   try {
-    const embedder = await getEmbedder();
-    const res = await embedder.embed(trimmed);
-    const vec = (res as { embedding?: number[] })?.embedding;
-    return Array.isArray(vec) && vec.length > 0 ? vec : null;
+    const [vec] = await fetchEmbeddings(trimmed);
+    return vec ?? null;
   } catch (err) {
     console.warn('[embedder] embed failed:', err);
     return null;
@@ -47,21 +75,14 @@ export async function embed(text: string): Promise<number[] | null> {
 }
 
 /**
- * Embeds many strings at once (more efficient than embed() in a loop).
- * Returns an array aligned with the input; entries are null on per-item failure.
+ * Embeds many strings in one request. Returns an array aligned with the
+ * input; entries are null on per-item failure.
  */
 export async function embedBatch(texts: string[]): Promise<(number[] | null)[]> {
   const cleaned = texts.map((t) => t?.trim() ?? '');
   if (cleaned.every((t) => !t)) return texts.map(() => null);
   try {
-    const embedder = await getEmbedder();
-    const res = await embedder.embedBatch(cleaned);
-    const vecs = (res as { embeddings?: number[][] })?.embeddings;
-    if (!Array.isArray(vecs)) return texts.map(() => null);
-    return cleaned.map((_, i) => {
-      const v = vecs[i];
-      return Array.isArray(v) && v.length > 0 ? v : null;
-    });
+    return await fetchEmbeddings(cleaned);
   } catch (err) {
     console.warn('[embedder] embedBatch failed:', err);
     return texts.map(() => null);
