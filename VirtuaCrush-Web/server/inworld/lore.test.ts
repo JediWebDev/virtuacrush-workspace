@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { LORE, getLore, formatCharacterFactsBlock } from './lore';
 import { LOCATIONS, coerceDateLocation } from './scenes';
 
-const NO_CAR = ['mina', 'becca', 'serena', 'jun', 'avery', 'riot'];
-const HAS_CAR = ['madison', 'jordan', 'iris', 'ash'];
+const NO_CAR = ['mina', 'becca', 'serena', 'jun', 'avery', 'riot', 'lin'];
+const HAS_CAR = ['madison', 'jordan', 'iris', 'ash', 'lexi'];
 
 test('every character has complete, valid logistics + date prefs', () => {
   for (const [id, lore] of Object.entries(LORE)) {
