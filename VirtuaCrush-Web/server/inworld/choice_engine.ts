@@ -112,10 +112,21 @@ Respond with ONLY this JSON (no prose/fences):
     const llm = await llmComplete();
     const parsed = parseGeneratedChoice(await llm.generateContentComplete({ prompt }));
     if (!parsed) return null;
-    // Coerce each option's location: keep it if it's one the character prefers,
-    // otherwise fall back to a sensible dateable slug.
-    const pick = (loc: string | undefined) =>
-      loc && allowed.includes(loc) ? loc : coerceDateLocation(loc ?? allowed[0]);
+    // Coerce each option's location. The LLM may return a non-exact slug
+    // (e.g. "The park" instead of "park"), so we normalize before giving up.
+    const pick = (loc: string | undefined): string => {
+      if (!loc) return coerceDateLocation(allowed[0]);
+      // Exact match against the character's preferred slugs.
+      if (allowed.includes(loc)) return loc;
+      // Normalize: lowercase + collapse spaces/hyphens to underscores.
+      const normalized = loc.trim().toLowerCase().replace(/[\s-]+/g, '_');
+      if (allowed.includes(normalized)) return normalized;
+      // Fuzzy: find a preferred slug that the normalized string contains.
+      const fuzzy = allowed.find((s) => normalized.includes(s) || s.includes(normalized));
+      if (fuzzy) return fuzzy;
+      // Fall back to coerce (which accepts any known dateable slug).
+      return coerceDateLocation(normalized !== loc ? normalized : allowed[0]);
+    };
     parsed.options[0].location = pick(parsed.options[0].location);
     parsed.options[1].location = pick(parsed.options[1].location);
     return parsed;

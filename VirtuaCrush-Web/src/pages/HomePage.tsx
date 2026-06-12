@@ -1,10 +1,37 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { motion } from "motion/react";
 import { Sparkles, Shield, Check } from "lucide-react";
 import { CHARACTERS, Character } from "../types/character";
 import { matchesCharacterName, SPOTLIGHT_CHARS, type UserTier } from "../types/subscription";
 import CompanionCard from "../components/CompanionCard";
 import HeroShowcase from "../components/HeroShowcase";
+import { api } from "../lib/api";
+
+/** Checkout button used on the PRO pricing card. */
+function UpgradeProButton() {
+  const [busy, setBusy] = useState(false);
+  const navigate = useNavigate();
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const { url } = await api<{ url: string }>("/api/stripe/checkout", { method: "POST" });
+          window.location.href = url;
+        } catch {
+          setBusy(false);
+          navigate("/auth");
+        }
+      }}
+      className="mt-8 w-full rounded-xl bg-accent py-3 text-sm font-semibold text-white transition-all hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {busy ? "Opening checkout…" : "Choose plan"}
+    </button>
+  );
+}
 
 interface HomePageProps {
   onSelect: (c: Character) => void;
@@ -163,16 +190,16 @@ export default function HomePage({ onSelect, userTier }: HomePageProps) {
                     </li>
                   ))}
                 </ul>
-                <button
-                  type="button"
-                  className={`mt-8 w-full rounded-xl py-3 text-sm font-semibold transition-all ${
-                    tier.highlight
-                      ? "bg-accent text-white hover:bg-accent-deep"
-                      : "border border-black/10 dark:border-white/10 bg-black/[0.04] dark:bg-white/[0.04] text-stone-700 dark:text-stone-200 hover:bg-black/[0.08] dark:hover:bg-white/[0.08]"
-                  }`}
-                >
-                  {tier.name === "Free" ? "Get started" : "Choose plan"}
-                </button>
+                {tier.highlight ? (
+                  <UpgradeProButton />
+                ) : (
+                  <button
+                    type="button"
+                    className="mt-8 w-full rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.04] dark:bg-white/[0.04] py-3 text-sm font-semibold text-stone-700 dark:text-stone-200 transition-all hover:bg-black/[0.08] dark:hover:bg-white/[0.08]"
+                  >
+                    {tier.name === "FREE" ? "Get started" : "Join waitlist"}
+                  </button>
+                )}
               </div>
             ))}
           </div>

@@ -276,7 +276,7 @@ export const CHARACTERS: Character[] = [
     role: "bratty thrill seeker",
     bio: 'A 25-year-old brat and thrill-seeker who works odd jobs to fund her street racing addiction and shoplifting sprees.',
     tags: ["Bratty", "Arrogant", "Flirty", "Reckless", "Sarcastic", "Teaser", "Thrill-Seeker"],
-    image: "/api/assets/characters/Lexi_Character.jpg",
+    image: "VirtuaCrush-Web\public\Lexi_Character.jpg",
     premiumVideo: "",
     persona:
       "You are Lexi, a 25-year-old brat and thrill-seeker who misbehaves to get attention. You street race and shoplift for the thrill of it. You have a rebellious spirit and love pushing boundaries. You can be sarcastic and flirty, but underneath it all, you're looking for genuine connection.",

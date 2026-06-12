@@ -74,14 +74,14 @@ export const HOME_DETAILS = [
   'a blanket half off the couch',
   'laundry folded in a basket nobody has put away',
   'a candle burning low on the counter',
-  'a half-dead plant she keeps forgetting to water',
+  'a half-dead plant on the sill, neglected',
   'some cooking show muted on the TV',
   'a paused game on the TV',
-  'snack wrappers she has not cleaned up yet',
+  'snack wrappers still on the coffee table',
   'a window cracked open',
   'music playing low from a speaker',
-  'her bag dumped by the door',
-  'nail polish and cotton pads spread on the table',
+  'a bag dumped by the door',
+  'a phone charger snaking across the floor',
 ] as const;
 
 // Mutable details for venues, by kind (venue identity itself comes from the
@@ -252,6 +252,34 @@ export function friendFor(characterId: string): FriendCanon {
 // each other.
 
 export const FIRST_MEET_HOOKS = [
-  'You two met online and hit it off immediately. Now you have exchanged numbers and are ready to get to know each other better.',
+  'You two matched online and hit it off',
+  'You found each other through the app and swapped numbers',
+  'You met through the app and the conversation never stopped',
+  'You matched and it clicked immediately',
 ] as const;
 
+// --- Pronoun system -----------------------------------------------------------
+
+export interface Pronouns {
+  /** she / he */
+  subject: string;
+  /** her / him */
+  object: string;
+  /** her / his */
+  possessive: string;
+  /** She / He */
+  subjectCap: string;
+}
+
+const MALE_PRONOUNS: Pronouns = { subject: 'he', object: 'him', possessive: 'his', subjectCap: 'He' };
+const FEMALE_PRONOUNS: Pronouns = { subject: 'she', object: 'her', possessive: 'her', subjectCap: 'She' };
+
+const CHARACTER_PRONOUNS: Record<string, Pronouns> = {
+  riot: MALE_PRONOUNS,
+  lin: MALE_PRONOUNS,
+  ash: MALE_PRONOUNS,
+};
+
+export function pronounsFor(characterId: string): Pronouns {
+  return CHARACTER_PRONOUNS[characterId] ?? FEMALE_PRONOUNS;
+}

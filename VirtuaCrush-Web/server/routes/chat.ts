@@ -93,7 +93,7 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
       const character = getCharacter(characterId);
       const situation = await getSituation(req.user!.id, characterId);
       const comp = await getOrComposeScene(req.user!.id, characterId, character.displayName, situation);
-      if (comp) sceneHeader = renderSceneHeader(comp, character.displayName);
+      if (comp) sceneHeader = renderSceneHeader(comp, character.displayName, characterId);
     } catch (sceneErr) {
       console.warn('[chat] scene composition failed:', sceneErr);
     }
@@ -260,7 +260,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     try {
       const comp = await getOrComposeScene(req.user!.id, characterId, displayName, situation);
       if (comp) {
-        sceneFacts = renderSceneFactsBlock(comp, displayName);
+        sceneFacts = renderSceneFactsBlock(comp, displayName, characterId);
         sceneCast = comp.cast;
 
         // Mid-scene interruptions: fire the next pre-rolled disruption when
@@ -638,6 +638,7 @@ async function persistTurn(p: {
   } finally {
     client.release();
   }
+
 }
 
 export default router;
