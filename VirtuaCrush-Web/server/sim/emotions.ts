@@ -1,11 +1,9 @@
 // Emotion engine. Each companion carries an 8-axis emotional state (0-100)
 // that moves with every classified player action, decays toward a per-character
 // baseline over time, and is fed BACK into the prompt so the character's tone
-// matches the gauges the user sees. Replaces the old per-character drive
-// meters in the UI; the desire-event cards survive, now driven by emotions.
-// Pure + testable.
+// matches the gauges the user sees. Event cards (encourage/redirect/decline)
+// fire from emotion thresholds. Pure + testable.
 import type { PlayerIntent } from './intent';
-import { getDrives, eventCard, type DriveEventCard } from './drives';
 
 export const EMOTIONS = [
   'aroused',
@@ -163,18 +161,145 @@ export function emotionToneBlock(state: EmotionState, name: string): string {
   );
 }
 
-// --- Desire-event bridge ----------------------------------------------------------
-// The encourage/redirect/decline event cards survive, now fired by emotions:
-// high arousal -> the desire card, high playfulness -> the playful card.
+// --- Emotion event cards (encourage / redirect / decline) -----------------------
+export type ChoiceKind = 'encourage' | 'redirect' | 'decline';
 
-const EVENT_THRESHOLDS: Partial<Record<EmotionKey, { driveKey: string; min: number }>> = {
-  aroused: { driveKey: 'desire', min: 85 },
-  playful: { driveKey: 'playful', min: 88 },
+/** Legacy `drive` id kept for API compatibility with pendingDriveEvent payloads. */
+export interface DriveEventCard {
+  drive: string;
+  prompt: string;
+  options: { id: ChoiceKind; label: string }[];
+}
+
+interface EmotionEventDef {
+  emotion: EmotionKey;
+  min: number;
+  driveId: string;
+  promptSuffix: string;
+  encourage: string;
+  redirect: string;
+  decline: string;
+}
+
+const COMMON_EVENTS: EmotionEventDef[] = [
+  {
+    emotion: 'aroused',
+    min: 85,
+    driveId: 'desire',
+    promptSuffix: 'has been thinking about you all evening and wants to get closer tonight.',
+    encourage: 'Lean in',
+    redirect: 'Slow down',
+    decline: 'Not tonight',
+  },
+  {
+    emotion: 'playful',
+    min: 88,
+    driveId: 'playful',
+    promptSuffix: 'is in a wicked mood and wants to play a daring little game with you.',
+    encourage: 'Play along',
+    redirect: 'Maybe later',
+    decline: 'Behave',
+  },
+];
+
+const CHARACTER_EVENTS: Record<string, EmotionEventDef[]> = {
+  ash: [{
+    emotion: 'aroused',
+    min: 80,
+    driveId: 'thirst',
+    promptSuffix: 'pulls you close as the night deepens and bares the edge of his hunger, asking for a taste.',
+    encourage: 'Offer your wrist',
+    redirect: 'Just hold me',
+    decline: 'Not that',
+  }],
+  serena: [{
+    emotion: 'playful',
+    min: 85,
+    driveId: 'mischief',
+    promptSuffix: 'wants to try a little real spellwork — with you as her willing volunteer.',
+    encourage: 'Be her volunteer',
+    redirect: 'Show me first',
+    decline: 'Hard pass',
+  }],
+  madison: [{
+    emotion: 'happy',
+    min: 85,
+    driveId: 'spotlight',
+    promptSuffix: 'wants you to make her feel like the only person in the room tonight.',
+    encourage: 'Hype her up',
+    redirect: 'Tease her',
+    decline: 'Stay cool',
+  }],
+  jordan: [{
+    emotion: 'playful',
+    min: 85,
+    driveId: 'challenge',
+    promptSuffix: 'throws down a flirty dare and bets you will not keep up.',
+    encourage: 'Take the bet',
+    redirect: 'Name the stakes',
+    decline: 'Pass',
+  }],
 };
+
+function eventCardFromDef(def: EmotionEventDef, name: string): DriveEventCard {
+  return {
+    drive: def.driveId,
+    prompt: `${name} ${def.promptSuffix}`,
+    options: [
+      { id: 'encourage', label: def.encourage },
+      { id: 'redirect', label: def.redirect },
+      { id: 'decline', label: def.decline },
+    ],
+  };
+}
+
+export interface EmotionChoiceOutcome {
+  emotions: EmotionState;
+  affinityDelta: number;
+  moodHint: string;
+  reaction: string;
+}
+
+/** Apply a player's response to a surfaced emotion event. Pure. */
+export function applyEmotionChoice(
+  emotions: EmotionState,
+  driveId: string,
+  choice: ChoiceKind,
+  name: string,
+): EmotionChoiceOutcome {
+  const emoKey = emotionKeyForDrive(driveId);
+  const v = emotions[emoKey] ?? 0;
+  const next = { ...emotions };
+  let affinityDelta = 0;
+  let moodHint = 'content';
+  let reaction = '';
+  switch (choice) {
+    case 'encourage':
+      next[emoKey] = clamp(v - 45);
+      affinityDelta = 3;
+      moodHint = 'flushed';
+      reaction = `The player welcomed it warmly — ${name} is delighted and a little breathless; lean into the moment, tasteful and warm.`;
+      break;
+    case 'redirect':
+      next[emoKey] = clamp(v - 20);
+      moodHint = 'playful';
+      reaction = `The player wants to take it slower — ${name} happily eases off but keeps the spark, teasing about later.`;
+      break;
+    case 'decline':
+      next[emoKey] = clamp(v - 30);
+      affinityDelta = -2;
+      moodHint = 'sheepish';
+      reaction = `The player passed — ${name} plays it off but is a touch deflated; recover gracefully, no guilt-tripping.`;
+      break;
+  }
+  return { emotions: next, affinityDelta, moodHint, reaction };
+}
 
 /** Maps event-card drive keys back to the emotion that powers them. */
 export function emotionKeyForDrive(driveKey: string): EmotionKey {
-  return driveKey === 'desire' ? 'aroused' : 'playful';
+  if (driveKey === 'desire' || driveKey === 'thirst') return 'aroused';
+  if (driveKey === 'spotlight') return 'happy';
+  return 'playful';
 }
 
 export function pendingEventFromEmotions(
@@ -182,14 +307,11 @@ export function pendingEventFromEmotions(
   characterId: string,
   displayName: string,
 ): DriveEventCard | null {
-  const defs = getDrives(characterId);
-  let best: { key: EmotionKey; driveKey: string; v: number } | null = null;
-  for (const k of Object.keys(EVENT_THRESHOLDS) as EmotionKey[]) {
-    const t = EVENT_THRESHOLDS[k]!;
-    const v = state[k] ?? 0;
-    if (v >= t.min && (!best || v > best.v)) best = { key: k, driveKey: t.driveKey, v };
+  const defs = [...COMMON_EVENTS, ...(CHARACTER_EVENTS[characterId] ?? [])];
+  let best: { def: EmotionEventDef; v: number } | null = null;
+  for (const def of defs) {
+    const v = state[def.emotion] ?? 0;
+    if (v >= def.min && (!best || v > best.v)) best = { def, v };
   }
-  if (!best) return null;
-  const def = defs.find((d) => d.key === best!.driveKey);
-  return def ? eventCard(def, displayName) : null;
+  return best ? eventCardFromDef(best.def, displayName) : null;
 }

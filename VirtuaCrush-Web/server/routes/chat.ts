@@ -9,7 +9,7 @@ import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { enforceMessageQuota } from '../middleware/rateLimit';
 import { streamChat, completePrompt, type ChatMessage } from '../inworld/chat';
-import { buildScenePrompt, parseScene, companionTagFor, turnsToTranscript, type Actor } from '../inworld/director';
+import { buildDirectorPrompt, parseDirectorTurns, companionTagFor, turnsToTranscript, type Actor } from '../inworld/director';
 import { authorityActor } from '../inworld/npcs';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
@@ -24,7 +24,6 @@ import {
 import { getCharacter, type CharacterId } from '../inworld/characters';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
 import { formatPersonaTraitsBlock, shouldRevealSecret } from '../sim/traits';
-import { type DriveEventCard } from '../sim/drives';
 import {
   initEmotions,
   decayEmotions,
@@ -33,6 +32,7 @@ import {
   emotionToneBlock,
   pendingEventFromEmotions,
   type EmotionState,
+  type DriveEventCard,
 } from '../sim/emotions';
 import { getSituation, setScene, setMood } from '../db/state';
 import { moodShiftForIntent } from '../sim/vitals';
@@ -50,12 +50,14 @@ import { detectPlanCue, detectAgreedVenue, shouldOfferDateChoice } from '../db/c
 import { jailNarratorPrompt, jailContextBlock } from '../db/jail_util';
 import { getLocation } from '../inworld/scenes';
 import { maybeCreateChoice } from '../db/choices';
-import { runLightTick } from '../db/sim_world';
-import { assembleWorld } from '../db/sim_world';
+import { runLightTick, assembleWorld, assembleFullWorld, applyTick, getWorldClock, MIN_IDLE_MINUTES, MAX_CATCHUP_MINUTES } from '../db/sim_world';
 import type { PlayerIntent } from '../sim/intent';
+import { validateIntent } from '../sim/intent';
+import { extractIntent, refereeInputFromWorld } from '../sim/referee';
+import { simulateElapsed, stepWorld } from '../sim/tick';
 import type { WorldState, NpcEntity } from '../sim/world';
 import { consequencesFor } from '../sim/rules';
-import { planEffects } from '../sim/effects';
+import { planEffects, formatEngineFactsBlock, type EffectPlan } from '../sim/effects';
 import { applyEffects } from '../db/sim_apply';
 import { advanceNpcs } from '../sim/agency';
 import { describeKnownPlayer, observePlayer, describeAppearance } from '../sim/player';
@@ -232,6 +234,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let appliedAffinity: number | null = null;
   let worldEventFired = false;
   let rippleRumor: string | null = null;
+  let effIntent: PlayerIntent | undefined;
+  let effectPlan: EffectPlan | undefined;
 
   if (phase === 'jailed') {
     // The user is in a holding cell. A strict jail NARRATOR takes over (the date
@@ -239,13 +243,42 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     systemOverride = jailNarratorPrompt(displayName, !!scene.bailCallUsed);
     memoryContext = jailContextBlock();
   } else {
-    // === Single merged call: classify the player's action AND narrate the scene
-    // in one LLM round (the consequences are applied below, from that
-    // classification — the engine stays authoritative on state). Halves calls.
+    // === Two-step LLM: referee classifies intent first; director narrates after
+    // engine consequences are known (warnings, arrests, responders stay causal).
     world = await assembleWorld(req.user!.id, characterId);
     companionEntity = world.npcs[characterId];
     onDate = phase === 'on_date';
     const authority = onDate ? (getLocation(scene.location)?.authority ?? 'a security guard') : 'the authorities';
+
+    // Macro-world catch-up: advance the full roster while the player was away.
+    try {
+      const { rows: lastMsgRows } = await pool.query<{ created_at: Date }>(
+        `SELECT created_at FROM chat_messages
+         WHERE user_id = $1 AND character_id = $2 AND role = 'user'
+         ORDER BY created_at DESC LIMIT 1`,
+        [req.user!.id, characterId],
+      );
+      const lastMsgAt = lastMsgRows[0]?.created_at;
+      const elapsedMin = lastMsgAt ? (Date.now() - new Date(lastMsgAt).getTime()) / 60000 : 0;
+      if (elapsedMin >= MIN_IDLE_MINUTES) {
+        const elapsed = Math.min(elapsedMin, MAX_CATCHUP_MINUTES);
+        const [clock, fullWorld] = await Promise.all([
+          getWorldClock(req.user!.id),
+          assembleFullWorld(req.user!.id),
+        ]);
+        const macroResult = simulateElapsed(fullWorld, clock.simMinutes, elapsed, { next: () => Math.random() });
+        const companionPatch = macroResult.patches[characterId];
+        if (companionPatch) {
+          const patch = onDate ? { ...companionPatch, location: undefined } : companionPatch;
+          world = stepWorld(world, { [characterId]: patch });
+          companionEntity = world.npcs[characterId];
+        }
+        void applyTick(req.user!.id, fullWorld, macroResult, clock.simMinutes + elapsed)
+          .catch((e) => console.warn('[chat] macro catch-up persist failed:', e));
+      }
+    } catch (macroErr) {
+      console.warn('[chat] macro catch-up failed:', macroErr);
+    }
 
     const npcs: Actor[] = [];
     if (onDate) {
@@ -339,6 +372,18 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     }
     const driveReaction = (companionEntity?.knowledge.pendingDriveReaction as string | undefined) || '';
 
+    // Step 1 — Referee: classify the player's action (cheap, fast LLM call).
+    const refereeOut = await extractIntent(
+      refereeInputFromWorld(world, message, turns),
+      (prompt) => completePrompt(prompt, { json: true }),
+    );
+    effIntent = vetoVictimCrime(
+      validateIntent(refereeOut.intent) ?? { type: 'observation', subtype: 'wait' },
+      message,
+    );
+    effectPlan = planEffects(consequencesFor(effIntent, world));
+    const engineFacts = formatEngineFactsBlock(effectPlan, authority);
+
     const directives =
       formatSituationBlock(situation.state, scene, displayName, affinity) +
       sceneFacts +
@@ -352,9 +397,10 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       agencyHint +
       emotionTone +
       (driveReaction ? `\n\n${driveReaction}` : '') +
+      engineFacts +
       formatMemoryBlock(memories);
 
-    directorPrompt = buildScenePrompt({
+    directorPrompt = buildDirectorPrompt({
       companionSystem: getCharacter(characterId).systemPrompt,
       companionTag: companionTagFor(displayName),
       companionName: displayName,
@@ -401,57 +447,45 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         }
       }
     } else {
-      // ONE call classifies the player's action AND narrates the scene.
-      // Degenerate output (token salad from a flaky provider) triggers the same
-      // single retry as an unparseable reply; twice in a row falls through to
-      // the in-character recovery line below instead of showing garbage.
-      const badReply = (p: { turns: { text: string }[] }) =>
-        p.turns.length === 0 || p.turns.some((t) => looksDegenerate(t.text));
+      // Step 2 — Director: narrate the scene (intent already classified; engine
+      // facts are injected into the prompt). Degenerate output triggers one retry.
+      const badReply = (lines: { text: string }[]) =>
+        lines.length === 0 || lines.some((t) => looksDegenerate(t.text));
       const raw1 = await completePrompt(directorPrompt!, { json: true });
-      let parsed = parseScene(raw1, displayName);
-      if (badReply(parsed)) {
-        // Retry once; if that also fails, log a snippet so the cause (truncated
-        // JSON, token salad, refusal, ...) is visible in the server logs.
+      let dturns = parseDirectorTurns(raw1, displayName);
+      if (badReply(dturns)) {
         const raw2 = await completePrompt(directorPrompt!, { json: true });
-        parsed = parseScene(raw2, displayName);
-        if (badReply(parsed)) {
+        dturns = parseDirectorTurns(raw2, displayName);
+        if (badReply(dturns)) {
           console.warn(
             `[chat] director output unusable twice (${characterId}); raw tail: …${(raw2 || raw1 || '').slice(-220)}`,
           );
         }
       }
-      if (parsed.turns.some((t) => looksDegenerate(t.text))) {
-        parsed = { ...parsed, turns: [] };
+      if (dturns.some((t) => looksDegenerate(t.text))) {
+        dturns = [];
       }
-      // Victim guard: being kidnapped/robbed/attacked in the fiction is the
-      // player suffering a crime, not committing one — never arrest the victim.
-      const effIntent: PlayerIntent = vetoVictimCrime(
-        parsed.intent ?? { type: 'observation', subtype: 'wait' },
-        message,
-      );
-      // Engine stays authoritative: apply consequences from the classification.
-      const plan = planEffects(consequencesFor(effIntent, world!));
+      const plan = effectPlan!;
+      const intent = effIntent!;
       const applied = await applyEffects(req.user!.id, characterId, plan);
       arrested = applied.arrested;
       appliedAffinity = applied.affinityScore;
       worldEventFired = plan.arrest || plan.warnings.length > 0;
 
-      // Conversation-driven emotions: the classified action moves the gauges
-      // immediately — wall-clock drift alone is imperceptible in a session.
       if (companionEntity && emotions) {
-        emotions = applyEmotionDeltas(emotions, emotionDeltasForIntent(effIntent));
+        emotions = applyEmotionDeltas(emotions, emotionDeltasForIntent(intent));
       }
-      const moodShift = moodShiftForIntent(effIntent);
+      const moodShift = moodShiftForIntent(intent);
       if (moodShift) {
         void setMood(req.user!.id, characterId, moodShift).catch((e) => console.warn('[chat] mood update failed:', e));
       }
       if (plan.arrest) {
-        const crimeLabel = effIntent.subtype.replace(/_/g, ' ');
+        const crimeLabel = intent.subtype.replace(/_/g, ' ');
         rippleRumor = `the player got arrested for ${crimeLabel}`;
         void storeSignificantEvent(req.user!.id, characterId, `Player was ARRESTED for ${crimeLabel}.`);
       }
-      const dturns = parsed.turns.length ? parsed.turns : [{ speaker: displayName, text: 'Mm — say that again? You had me for a second there.' }];
-      assistantFull = turnsToTranscript(dturns);
+      const replyTurns = dturns.length ? dturns : [{ speaker: displayName, text: 'Mm — say that again? You had me for a second there.' }];
+      assistantFull = turnsToTranscript(replyTurns);
       if (!abortController.signal.aborted) send('chunk', { text: assistantFull });
 
       // Perception update for NEXT turn: companion learns name/bio, and outfit when co-present.

@@ -43,6 +43,7 @@ Rules:
 - Write each fact as a short, self-contained third-person statement, e.g. "User's name is Andrew." or "User adopted a dog named Biscuit."
 - Extract facts about the USER, not the assistant/character.
 - Ignore small talk, transient mood, opinions about the conversation, and anything not durable.
+- IGNORE environmental interruptions, phone notifications, sudden NPC exits, mid-scene disruptions, authority warnings, police arrivals, and other scripted world events — the simulation engine records those separately. Do not extract them as user facts even if they appear in the assistant reply.
 - If there is nothing worth remembering, return an empty array.
 - Respond with ONLY a JSON array of strings. No prose, no markdown fences.
 

@@ -13,6 +13,8 @@ import { ROSTER_IDS, baseNpcEntity } from '../sim/roster';
 import { upsertNpcState, seedRumor } from './npc_state';
 import { createPost } from './posts';
 import { insertWorldEvents, setWorldClock, getWorldClock, type ActivityEvent } from './world_sim';
+
+export { getWorldClock };
 import { PLAYER, type WorldState, type NpcEntity, type Relationship } from '../sim/world';
 
 export async function assembleWorld(userId: string, companionId: string): Promise<WorldState> {
@@ -114,8 +116,8 @@ export async function applyTick(userId: string, world: WorldState, result: TickR
 
 const makeRng = () => ({ next: () => Math.random() });
 export const MINUTES_PER_MESSAGE = 10;        // world time advanced per user message
-const MIN_IDLE_MINUTES = 15;                  // below this, no catch-up
-const MAX_CATCHUP_MINUTES = 3 * 24 * 60;      // cap a long absence (3 in-world days)
+export const MIN_IDLE_MINUTES = 15;           // below this, no catch-up
+export const MAX_CATCHUP_MINUTES = 3 * 24 * 60; // cap a long absence (3 in-world days)
 
 export interface RippleSeed {
   rumors?: { npcId: string; rumor: { text: string; credibility: number; virality: number; age: number; source?: string } }[];

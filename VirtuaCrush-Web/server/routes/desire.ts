@@ -6,8 +6,12 @@ import { requireAuth } from '../middleware/auth';
 import { getNpcStates, upsertNpcState } from '../db/npc_state';
 import { incrementAffinity } from '../db/affinity';
 import { getCharacter } from '../inworld/characters';
-import { getDrives, applyChoice, type ChoiceKind } from '../sim/drives';
-import { initEmotions, emotionKeyForDrive, type EmotionState } from '../sim/emotions';
+import {
+  initEmotions,
+  applyEmotionChoice,
+  type ChoiceKind,
+  type EmotionState,
+} from '../sim/emotions';
 
 const router = Router();
 const KINDS: ChoiceKind[] = ['encourage', 'redirect', 'decline'];
@@ -23,27 +27,16 @@ router.post('/:characterId/respond', requireAuth, async (req: Request, res: Resp
     const pending = k.pendingDriveEvent as { drive: string } | null | undefined;
     if (!pending) return res.status(409).json({ error: 'no_pending_event' });
 
-    const defs = getDrives(characterId);
-    const def = defs.find((d) => d.key === pending.drive);
     let displayName = characterId;
     try { displayName = getCharacter(characterId).displayName; } catch { /* keep id */ }
 
-    if (!def) {
-      await upsertNpcState(req.user!.id, characterId, { knowledge: { ...k, pendingDriveEvent: null } });
-      return res.json({ ok: true });
-    }
-
-    // The card copy/reaction logic lives in drives.applyChoice; the meter it
-    // moves is now the corresponding EMOTION (desire -> aroused, etc.).
     const emotions: EmotionState = { ...initEmotions(characterId), ...((k.emotions as EmotionState | undefined) ?? {}) };
-    const emoKey = emotionKeyForDrive(def.key);
-    const outcome = applyChoice({ [def.key]: emotions[emoKey] }, def, choice, displayName);
-    emotions[emoKey] = outcome.values[def.key];
+    const outcome = applyEmotionChoice(emotions, pending.drive, choice, displayName);
 
     await upsertNpcState(req.user!.id, characterId, {
       knowledge: {
         ...k,
-        emotions,
+        emotions: outcome.emotions,
         emotionsUpdatedAt: new Date().toISOString(),
         pendingDriveEvent: null,
         pendingDriveReaction: outcome.reaction,
