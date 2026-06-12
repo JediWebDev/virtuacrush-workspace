@@ -252,10 +252,6 @@ export function friendFor(characterId: string): FriendCanon {
 // each other.
 
 export const FIRST_MEET_HOOKS = [
-  'You two matched barely an hour ago — and she sent the first like',
-  'You matched this afternoon; her profile made you stop scrolling, and apparently yours did the same to her',
-  'She liked your profile three days ago; tonight the match finally went through',
-  'You matched late last night, and she clearly noticed you came back to her profile twice',
-  'The app flagged you two as a near-perfect match this morning — neither of you has said a word yet',
+  'You two met online and hit it off immediately. Now you have exchanged numbers and are ready to get to know each other better.',
 ] as const;
 

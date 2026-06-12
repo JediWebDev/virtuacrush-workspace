@@ -116,50 +116,6 @@ export default function Nav() {
                 Sign in
               </Link>
             ) : null}
-            {authed ? (
-            <div ref={notificationsRef} className="relative">
-              <button
-                type="button"
-                onClick={toggleNotifications}
-                className={`relative ${iconButtonClass}`}
-                aria-label="Messages and notifications"
-                aria-expanded={isNotificationsOpen}
-              >
-                <Mail size={20} />
-                {hasUnread ? (
-                  <span
-                    className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white ring-2 ring-stone-50 dark:ring-surface"
-                    aria-hidden
-                  >
-                    1
-                  </span>
-                ) : null}
-              </button>
-
-              {isNotificationsOpen ? (
-                <div
-                  className="absolute right-0 top-full z-50 mt-2 w-80 rounded-2xl border border-black/10 dark:border-white/10 bg-stone-50 dark:bg-surface shadow-2xl"
-                  role="menu"
-                >
-                  <div className="border-b border-black/[0.06] dark:border-white/[0.06] px-4 py-3">
-                    <h3 className="text-sm font-semibold text-stone-800 dark:text-stone-100">Notifications</h3>
-                  </div>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={openCallieChat}
-                    className="flex w-full flex-col gap-0.5 px-4 py-3 text-left transition-colors hover:bg-black/[0.04] dark:bg-white/[0.04]"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-stone-800 dark:text-stone-100">Callie Spencer</span>
-                      <span className="shrink-0 text-[11px] text-stone-900 dark:text-stone-500">Just now</span>
-                    </div>
-                    <span className="text-sm text-stone-600 dark:text-stone-400">Are you awake? 🥺</span>
-                  </button>
-                </div>
-              ) : null}
-            </div>
-            ) : null}
 
             <button
               type="button"
