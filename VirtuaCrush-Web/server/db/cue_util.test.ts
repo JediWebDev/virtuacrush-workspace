@@ -4,7 +4,6 @@ import {
   detectPlanCue,
   detectAgreedVenue,
   shouldOfferDateChoice,
-  CHOICE_MIN_GAP,
   CHOICE_MAX_GAP,
 } from './cue_util';
 
@@ -27,31 +26,33 @@ test('detectPlanCue: ordinary chat is not a cue', () => {
   assert.equal(detectPlanCue('that movie was wild'), false);
 });
 
-test('shouldOfferDateChoice: early hook before any choice', () => {
-  assert.equal(shouldOfferDateChoice({ userMsgCount: 1, msgsSinceLastChoice: 1, hadPriorChoice: false, cue: false }), false);
-  assert.equal(shouldOfferDateChoice({ userMsgCount: 2, msgsSinceLastChoice: 2, hadPriorChoice: false, cue: false }), true);
-});
-
-test('shouldOfferDateChoice: cooldown blocks back-to-back', () => {
+test('shouldOfferDateChoice: no cue and no drive pressure -> never', () => {
   assert.equal(
-    shouldOfferDateChoice({ userMsgCount: 5, msgsSinceLastChoice: CHOICE_MIN_GAP - 1, hadPriorChoice: true, cue: true }),
+    shouldOfferDateChoice({ userMsgCount: 2, msgsSinceLastChoice: 2, hadPriorChoice: false, cue: false }),
+    false,
+  );
+  assert.equal(
+    shouldOfferDateChoice({ userMsgCount: 20, msgsSinceLastChoice: 20, hadPriorChoice: true, cue: false }),
     false,
   );
 });
 
-test('shouldOfferDateChoice: cue fires after cooldown', () => {
+test('shouldOfferDateChoice: conversational cue fires immediately', () => {
   assert.equal(
-    shouldOfferDateChoice({ userMsgCount: 8, msgsSinceLastChoice: CHOICE_MIN_GAP, hadPriorChoice: true, cue: true }),
+    shouldOfferDateChoice({ userMsgCount: 1, msgsSinceLastChoice: 1, hadPriorChoice: false, cue: true }),
+    true,
+  );
+  assert.equal(
+    shouldOfferDateChoice({ userMsgCount: 8, msgsSinceLastChoice: 1, hadPriorChoice: true, cue: true }),
     true,
   );
 });
 
-test('shouldOfferDateChoice: lull fallback needs drive pressure', () => {
+test('shouldOfferDateChoice: lull fallback needs drive pressure at max gap', () => {
   assert.equal(
     shouldOfferDateChoice({ userMsgCount: 20, msgsSinceLastChoice: CHOICE_MAX_GAP, hadPriorChoice: true, cue: false, drivePressure: true }),
     true,
   );
-  // No surfaced drive: a cue-less lull never forces a card (no more random offers).
   assert.equal(
     shouldOfferDateChoice({ userMsgCount: 20, msgsSinceLastChoice: CHOICE_MAX_GAP, hadPriorChoice: true, cue: false }),
     false,

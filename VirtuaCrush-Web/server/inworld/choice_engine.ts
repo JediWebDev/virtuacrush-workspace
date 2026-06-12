@@ -206,7 +206,7 @@ export interface GeneratedBill {
   prompt: string;
   bill: BillData;
   payReaction: string; // when the USER pays (grateful/teasing)
-  ventReaction: string; // when the CHARACTER gets stuck paying (annoyed, viral)
+  characterPaysReaction: string; // when the CHARACTER pays — tone driven by personality
   timeoutReaction: string;
 }
 
@@ -238,16 +238,20 @@ export async function generateItemizedBill(params: {
   const billSummary =
     bill.items.map((it) => `${it.label}: $${it.amount}`).join(', ') + ` (total $${bill.total})`;
 
+  const lore = getLore(params.characterId);
   const fallback: GeneratedBill = {
     prompt: `The bill for ${venue} lands on the table — $${bill.total}.`,
     bill,
     payReaction: "Oh — you're getting this? Look at you. I'm impressed, honestly.",
-    ventReaction: `Wait, I'm paying? Again? Unbelievable. I'm putting this on my story, everyone needs to know.`,
+    characterPaysReaction: `My treat — I wanted tonight to feel special. Don't argue.`,
     timeoutReaction: '*awkwardly slides the bill back and forth across the table*',
   };
 
   const prompt = `Write the in-character beat for the end-of-date bill arriving. ${params.displayName} and the user were ${venueDesc}.
 The bill total and line items are FIXED by the venue and what happened — do NOT invent or change any amounts. The bill is: ${billSummary}.
+
+CHARACTER personality: ${lore.personality}
+CHARACTER lore/backstory (for tone): ${lore.backstory}
 
 RECENT CONVERSATION (for tone only):
 """
@@ -258,7 +262,7 @@ Respond with ONLY this JSON (no prose/fences). Do NOT state any dollar amount th
 {
   "prompt": "<1 sentence, in-character, the bill arrives>",
   "payReaction": "<${params.displayName}, grateful/teasing, when the USER pays>",
-  "ventReaction": "<${params.displayName}, genuinely annoyed and venting in a funny, shareable way, when THEY get stuck with the bill>",
+  "characterPaysReaction": "<${params.displayName} when THEY pay the bill — reaction MUST match their personality, lore, and current mood. A generous or wealthy character happily treats the user; a flirty character might tease about owing a favor; only a selfish or cheap character complains. Do NOT force venting or annoyance unless it fits this character.>",
   "timeoutReaction": "<brief stage action if the user freezes>"
 }`;
 
@@ -275,7 +279,7 @@ Respond with ONLY this JSON (no prose/fences). Do NOT state any dollar amount th
       prompt: str(obj?.prompt, fallback.prompt),
       bill, // engine-computed, never from the LLM
       payReaction: str(obj?.payReaction, fallback.payReaction),
-      ventReaction: str(obj?.ventReaction, fallback.ventReaction),
+      characterPaysReaction: str(obj?.characterPaysReaction ?? obj?.ventReaction, fallback.characterPaysReaction),
       timeoutReaction: str(obj?.timeoutReaction, fallback.timeoutReaction).slice(0, 200),
     };
   } catch (err) {

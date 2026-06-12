@@ -82,6 +82,10 @@ test('parseScene: repairs truncated JSON and extracts the line', () => {
   assert.equal(turns[0].text, 'hi there!');
 });
 
-test('parseDirectorTurns: refuses to leak JSON-looking garbage', () => {
-  assert.deepEqual(parseDirectorTurns('intent": "observation", "lines":', 'Madison'), []);
+test('parseDirectorTurns: strips leaked JSON speaker keys from line text', () => {
+  const turns = parseDirectorTurns('[{"speaker":"Ash","text":"Ash\\": \\"hey there\\""}]', 'Ash');
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].text, 'hey there');
+  const salvaged = parseDirectorTurns('ash":"looks up from the photo"', 'Ash');
+  assert.equal(salvaged[0]?.text, 'looks up from the photo');
 });

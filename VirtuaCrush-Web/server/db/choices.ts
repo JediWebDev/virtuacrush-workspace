@@ -346,7 +346,7 @@ export async function createEndDateBill(
 
   const options: ChoiceOption[] = [
     { label: "I've got this 💳", advancesGoal: false, reaction: gen.payReaction },
-    { label: `Let ${displayName} pay`, advancesGoal: false, reaction: gen.ventReaction },
+    { label: `Let ${displayName} pay`, advancesGoal: false, reaction: gen.characterPaysReaction },
   ];
 
   const expiresAt = new Date(Date.now() + CHOICE_TTL_SECONDS * 1000).toISOString();

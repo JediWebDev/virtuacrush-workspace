@@ -59,7 +59,7 @@ export const LOCATIONS: Record<string, SceneLocation> = {
     description: 'walking through the park',
     cues: 'fresh air, rustling trees, a bench in the sun, ducks on the pond',
     authority: 'a park ranger',
-    basePrice: 8,
+    basePrice: 0,
   },
   concert: {
     slug: 'concert',

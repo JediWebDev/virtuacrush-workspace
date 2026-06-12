@@ -49,23 +49,17 @@ export function detectPlanCue(userText: string, assistantText = ''): boolean {
 
 /**
  * Decides whether to surface a date choice now.
- *  - never before the user has engaged a little (2 messages),
- *  - the first one fires early as a hook,
- *  - afterward only on a cue (with a cooldown), or after a long lull WHEN the
- *    character has a surfaced drive giving her a reason to want out — a date
- *    card with no conversational or internal motivation reads as random.
+ * Only when the conversation naturally turns toward plans (a cue), OR when the
+ * character's emotions/desires are peaking after a long gap since the last choice.
  */
 export function shouldOfferDateChoice(params: {
   userMsgCount: number;
   msgsSinceLastChoice: number;
   hadPriorChoice: boolean;
   cue: boolean;
-  /** A drive meter is over its flavor threshold (the character is restless). */
+  /** Emotion gauges are high (the character is restless / wanting closeness). */
   drivePressure?: boolean;
 }): boolean {
-  if (params.userMsgCount < 2) return false;
-  if (!params.hadPriorChoice) return true; // early hook
-  if (params.msgsSinceLastChoice < CHOICE_MIN_GAP) return false; // cooldown
   if (params.cue) return true;
   return params.msgsSinceLastChoice >= CHOICE_MAX_GAP && params.drivePressure === true;
 }

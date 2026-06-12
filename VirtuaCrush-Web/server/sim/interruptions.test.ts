@@ -81,3 +81,10 @@ test('friend beats render the canonical friend name', () => {
   const residue = disruptionResidue(beat, 'Serena', 'serena');
   assert.ok(residue.includes('texted'));
 });
+
+test('disruption directives use character pronouns (male characters)', () => {
+  const beat = { id: 'm', poolId: 'mom_call', kind: 'beat' as const, atTurn: 8 };
+  const dir = renderDisruptionDirective(beat, 'Ash', 'ash');
+  assert.ok(dir.includes('He stares'), dir);
+  assert.ok(!dir.includes('She stares'), dir);
+});

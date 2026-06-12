@@ -34,10 +34,12 @@ function asStr(v: unknown): string {
   return typeof v === 'string' ? v.trim() : '';
 }
 
-/** Strips leaked JSON artifacts (`" }, {`, trailing braces/quotes) from a line. */
+/** Strips leaked JSON artifacts (`" }, {`, trailing braces/quotes, speaker keys) from a line. */
 function cleanLine(t: string): string {
   return (t ?? '')
     .replace(/^[\s"'`{\[]+/, '')
+    .replace(/^[A-Za-z][A-Za-z0-9]*"\s*:\s*"?/i, '') // leaked JSON key, e.g. Ash": " or ash":
+    .replace(/^[A-Za-z][A-Za-z0-9]*:\s*/i, '')       // plain name prefix, e.g. Ash:
     .replace(/[\s"'`}\],]+$/, '')
     .replace(/"\s*[}\]]\s*,?\s*[{\[]?\s*"?/g, ' ')
     .replace(/\s+/g, ' ')

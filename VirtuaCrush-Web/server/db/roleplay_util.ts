@@ -48,6 +48,9 @@ export function directorDisciplineDirective(characterName: string): string {
   return (
     `\n\nVOICE DISCIPLINE: In a [${characterName.toUpperCase()}] line, speak in FIRST person as ${characterName} ` +
     `only — do not describe yourself in the third person there (use a [NARRATOR] line for third-person description). ` +
+    `NEVER prefix your dialogue with your own name (do not write "${characterName}:" or "${characterName}\":"). ` +
+    `If you perform a physical action in your own line, you MUST wrap it entirely in asterisks (e.g. *looks up from the photo*). ` +
+    `Do not write actions as plain text outside asterisks. ` +
     `Keep ${characterName} fully in character. Only reference people, pets, objects, and places that are actually ` +
     `established in this conversation, your memory, or the current scene — never invent new ones (for example, do not ` +
     `claim a pet, friend, or item is present unless it was actually established). When you mention real movies, shows, ` +
@@ -56,6 +59,9 @@ export function directorDisciplineDirective(characterName: string): string {
     `used earlier in this conversation — re-read your previous lines and say something NEW each time; advance the ` +
     `conversation instead of restating it. PERSPECTIVE: only address the player as "you" when they are present in ` +
     `the scene (or you are texting them). If the player has stepped away or left the scene, refer to them in the ` +
-    `THIRD person ("he"/"she"/"they") in narration and dialogue until they return.`
+    `THIRD person ("he"/"she"/"they") in narration and dialogue until they return.\n\n` +
+    `ENVIRONMENTAL GROUNDING: You MUST frequently ground your narration in the physical setting. Interact with the ` +
+    `specific props, weather, location cues, and time of day provided in your CURRENT SETTING. Do not ignore the ` +
+    `environment. Make the scene feel alive and lived-in.`
   );
 }

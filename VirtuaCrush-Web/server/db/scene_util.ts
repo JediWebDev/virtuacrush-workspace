@@ -86,6 +86,7 @@ export function formatSituationBlock(
       `\n\n=== CURRENT SETTING ===\n` +
       `You and the user have JUST agreed to go to ${venue} together, but you are NOT there yet. ` +
       `You're at your own place getting ready; the user will head over and meet you there shortly. ` +
+      `When a date is agreed, narrate leaving the house, getting ready, or heading out — travel is NOT instantaneous. ` +
       `You're texting while you wait. React directly and substantively to what they say; never give a one-word non-answer.` +
       LOGISTICS_REALISM +
       closeness
@@ -97,7 +98,9 @@ export function formatSituationBlock(
     `\n\n=== CURRENT SETTING ===\n` +
     `You are at your OWN place, ${activity} (mood: ${state.mood || 'easy'}). ` +
     `You and the user are NOT in the same room — you're texting from a distance. ` +
-    `If asked, you are at home doing your own thing, chatting with them remotely.${closeness}`
+    `If asked, you are at home doing your own thing, chatting with them remotely. ` +
+    `When you agree to meet up, narrate getting ready or heading out — do not teleport to the venue.` +
+    closeness
   );
 }
 
