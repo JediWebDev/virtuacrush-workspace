@@ -50,8 +50,6 @@ export default function App() {
     () => (chatMatch ? CHARACTERS.find((c) => c.id === chatMatch.params.characterId) ?? null : null),
     [chatMatch],
   );
-  const autoOpenMessageId = (location.state as AppLocationState | null)?.openMessage;
-
   const handleSelect = (char: Character) => {
     // Free tier: only the starter roster is chattable; others pitch the upgrade.
     if (!hasPremiumAccess(userTier) && !isFreeCharacter(char.name)) {
@@ -60,13 +58,6 @@ export default function App() {
     }
     navigate(`/chat/${char.id}`);
   };
-
-  // Consume one-shot location state (e.g. "open this audio message") so a
-  // refresh doesn't replay it.
-  useEffect(() => {
-    if (!autoOpenMessageId) return;
-    navigate(location.pathname, { replace: true, state: null });
-  }, [autoOpenMessageId, location.pathname, navigate]);
 
   // --- Auth gate -----------------------------------------------------------
   // Block the whole app until there's a session. Locally you can still set
@@ -127,7 +118,6 @@ export default function App() {
           <ChatInterface
             character={activeChat}
             userTier={userTier}
-            autoOpenMessageId={autoOpenMessageId}
             onBack={() => navigate("/")}
           />
         ) : (

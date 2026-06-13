@@ -6,32 +6,14 @@ import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, Play, Lock, History, Search, Info } from "lucide-react";
+import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info } from "lucide-react";
 import { Character } from "../types/character";
-import { hasPremiumAccess, type UserTier } from "../types/subscription";
+import type { UserTier } from "../types/subscription";
 import SocialFeed from "./SocialFeed";
 import UpgradeToast from "./UpgradeToast";
 import SecretCard from "./SecretCard";
 import DriveMeters from "./DriveMeters";
 import DesireEventCard from "./DesireEventCard";
-
-type PrivateMessage = {
-  id: string;
-  title: string;
-  locked: boolean;
-  duration?: string;
-};
-
-const PRIVATE_MESSAGES: PrivateMessage[] = [
-  { id: "audio-1", title: "Audio Message - 0:14", locked: false, duration: "0:14" },
-  { id: "video-1", title: "Video Update", locked: true },
-  { id: "pic-1", title: "Picture", locked: true },
-];
-
-const DEMO_AUDIO_MESSAGE = {
-  title: "Audio Message - 0:14",
-  caption: "I couldn't sleep, so I just wanted to say hi...",
-};
 
 function formatHistoryDate(day: string): string {
   // day is YYYY-MM-DD; anchor at noon to avoid timezone date shifts.
@@ -70,73 +52,10 @@ interface Props {
   character: Character;
   onBack: () => void;
   onAffinityChange?: (characterId: string, affinity: number) => void;
-  autoOpenMessageId?: string;
   userTier: UserTier;
 }
 
-function PrivateMessagesInbox({
-  onPlayAudio,
-  userTier,
-}: {
-  onPlayAudio: () => void;
-  userTier: UserTier;
-}) {
-  const premiumUnlocked = hasPremiumAccess(userTier);
-
-  return (
-    <div className="mb-6 w-full rounded-2xl border border-black/[0.06] dark:border-white/[0.06] bg-black/[0.03] dark:bg-white/[0.03] p-4 text-left">
-      <h4 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500">
-        Private Messages
-      </h4>
-      <ul className="space-y-2">
-        {PRIVATE_MESSAGES.map((item) => {
-          const isLocked = premiumUnlocked ? false : item.locked;
-          return (
-          <li key={item.id}>
-            <button
-              type="button"
-              disabled={isLocked}
-              title={isLocked ? "Subscription Required" : undefined}
-              onClick={() => {
-                if (!isLocked) {
-                  onPlayAudio();
-                }
-              }}
-              className={`relative flex w-full items-center gap-3 rounded-xl border border-black/[0.06] dark:border-white/[0.06] px-3 py-2.5 text-left transition-colors ${
-                isLocked
-                  ? "cursor-not-allowed"
-                  : "hover:border-accent/25 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
-              }`}
-            >
-              {isLocked ? (
-                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl backdrop-blur-sm">
-                  <Lock size={16} className="text-stone-600 dark:text-stone-400" />
-                </div>
-              ) : null}
-              <span
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                  isLocked ? "bg-stone-200 dark:bg-stone-800/60" : "bg-accent/15 text-accent"
-                }`}
-              >
-                {isLocked ? (
-                  <Lock size={14} className="text-stone-900 dark:text-stone-500" />
-                ) : (
-                  <Play size={14} fill="currentColor" />
-                )}
-              </span>
-              <span className={`text-sm font-medium ${isLocked ? "text-stone-900 dark:text-stone-500" : "text-stone-700 dark:text-stone-200"}`}>
-                {item.title}
-              </span>
-            </button>
-          </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-export default function ChatInterface({ character, onBack, onAffinityChange, autoOpenMessageId, userTier }: Props) {
+export default function ChatInterface({ character, onBack, onAffinityChange, userTier }: Props) {
   const [affinity, setAffinity] = useState(character.currentAffinity);
   const [quotaToast, setQuotaToast] = useState(false);
   const [quotaLimit, setQuotaLimit] = useState<number | null>(null);
@@ -165,7 +84,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
   const [historyLoading, setHistoryLoading] = useState(false);
   const [feedOpen, setFeedOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [activeMessage, setActiveMessage] = useState<typeof DEMO_AUDIO_MESSAGE | null>(null);
   const [storyState, setStoryState] = useState<CharacterState | null>(null);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
   const navigate = useNavigate();
@@ -251,17 +169,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
   }, [character.id]);
 
   const characterWithAffinity: Character = { ...character, currentAffinity: affinity };
-
-  const openAudioMessage = () => setActiveMessage(DEMO_AUDIO_MESSAGE);
-
-  useEffect(() => {
-    if (!autoOpenMessageId) return;
-    const item = PRIVATE_MESSAGES.find((m) => m.id === autoOpenMessageId);
-    const isLocked = item?.locked && !hasPremiumAccess(userTier);
-    if (item && !isLocked) {
-      setActiveMessage(DEMO_AUDIO_MESSAGE);
-    }
-  }, [autoOpenMessageId, userTier]);
 
   useEffect(() => {
     setAffinity(character.currentAffinity);
@@ -404,8 +311,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
           <DriveMeters drives={storyState?.drives} />
           <SecretCard secret={storyState?.secret} name={character.name} />
           <ActivityLog characterId={character.id} name={character.name} />
-
-          <PrivateMessagesInbox onPlayAudio={openAudioMessage} userTier={userTier} />
         </div>
 
         <div className="mt-auto border-t border-black/[0.06] dark:border-white/[0.06] pt-6">
@@ -804,85 +709,11 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
                   <DriveMeters drives={storyState?.drives} />
           <SecretCard secret={storyState?.secret} name={character.name} />
           <ActivityLog characterId={character.id} name={character.name} />
-                  <PrivateMessagesInbox
-                    userTier={userTier}
-                    onPlayAudio={() => {
-                      setProfileOpen(false);
-                      openAudioMessage();
-                    }}
-                  />
                 </div>
               </div>
             </motion.div>
           </>
         )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {activeMessage ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-            onClick={() => setActiveMessage(null)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96, y: 12 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 12 }}
-              className="relative w-full max-w-md rounded-3xl border border-black/10 dark:border-white/10 bg-stone-50 dark:bg-surface p-6 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                type="button"
-                onClick={() => setActiveMessage(null)}
-                className="absolute right-4 top-4 rounded-lg p-1.5 text-stone-600 dark:text-stone-400 transition-colors hover:bg-black/[0.06] dark:hover:bg-white/[0.06] hover:text-stone-800 dark:hover:text-stone-100"
-                aria-label="Close message"
-              >
-                <X size={20} />
-              </button>
-
-              <div className="mb-5 flex items-center gap-3 pr-8">
-                <img
-                  src={character.image}
-                  alt=""
-                  className="h-12 w-12 rounded-full object-cover ring-2 ring-accent/25"
-                />
-                <div className="text-left">
-                  <p className="font-semibold text-stone-900 dark:text-stone-50">{character.name}</p>
-                  <p className="text-xs text-stone-900 dark:text-stone-500">{activeMessage.title}</p>
-                </div>
-              </div>
-
-              <div className="mb-5 flex h-14 items-end justify-center gap-1 rounded-2xl border border-black/[0.06] dark:border-white/[0.06] bg-black/[0.03] dark:bg-white/[0.03] px-4 py-3">
-                {Array.from({ length: 28 }, (_, i) => (
-                  <span
-                    key={i}
-                    className="w-1 rounded-full bg-accent/70"
-                    style={{ height: `${28 + Math.sin(i * 0.55) * 22}%` }}
-                  />
-                ))}
-              </div>
-
-              <div className="mb-4 flex items-center gap-3">
-                <button
-                  type="button"
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-white shadow-md shadow-accent/25"
-                  aria-label="Play audio message"
-                >
-                  <Play size={18} fill="currentColor" />
-                </button>
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
-                  <div className="h-full w-1/3 rounded-full bg-accent" />
-                </div>
-                <span className="text-xs tabular-nums text-stone-900 dark:text-stone-500">0:14</span>
-              </div>
-
-              <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-300">{activeMessage.caption}</p>
-            </motion.div>
-          </motion.div>
-        ) : null}
       </AnimatePresence>
 
     </motion.div>
