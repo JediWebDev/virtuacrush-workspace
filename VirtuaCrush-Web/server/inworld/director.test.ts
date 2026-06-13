@@ -89,3 +89,12 @@ test('parseDirectorTurns: strips leaked JSON speaker keys from line text', () =>
   const salvaged = parseDirectorTurns('ash":"looks up from the photo"', 'Ash');
   assert.equal(salvaged[0]?.text, 'looks up from the photo');
 });
+
+test('parseDirectorTurns: strips leaked character_actions and character_lines keys', () => {
+  const actions = parseDirectorTurns('[{"speaker":"Serena","text":"serena_actions\\": [\\"*smirks*\\"]"}]', 'Serena');
+  assert.equal(actions[0]?.text, '*smirks*');
+  const lines = parseDirectorTurns('serena_lines": "hey, you made it"', 'Serena');
+  assert.equal(lines[0]?.text, 'hey, you made it');
+  const trailing = parseDirectorTurns('[{"speaker":"Serena","text":"*waves*"]"}]', 'Serena');
+  assert.equal(trailing[0]?.text, '*waves*');
+});

@@ -37,11 +37,15 @@ function asStr(v: unknown): string {
 /** Strips leaked JSON artifacts (`" }, {`, trailing braces/quotes, speaker keys) from a line. */
 function cleanLine(t: string): string {
   return (t ?? '')
+    // Leaked per-character JSON keys (e.g. serena_actions": [ or serena_lines":)
+    .replace(/"?[a-zA-Z0-9_]+_actions"?\s*:\s*\[?\s*/gi, '')
+    .replace(/"?[a-zA-Z0-9_]+_lines"?\s*:\s*"?/gi, '')
     .replace(/^[\s"'`{\[]+/, '')
     .replace(/^[A-Za-z][A-Za-z0-9]*"\s*:\s*"?/i, '') // leaked JSON key, e.g. Ash": " or ash":
     .replace(/^[A-Za-z][A-Za-z0-9]*:\s*/i, '')       // plain name prefix, e.g. Ash:
     .replace(/[\s"'`}\],]+$/, '')
     .replace(/"\s*[}\]]\s*,?\s*[{\[]?\s*"?/g, ' ')
+    .replace(/\]\s*"?$/g, '')   // stray ] or "] left from leaked action arrays
     .replace(/\s+/g, ' ')
     .trim();
 }

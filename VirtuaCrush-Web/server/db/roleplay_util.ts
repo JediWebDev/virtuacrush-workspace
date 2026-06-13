@@ -62,6 +62,9 @@ export function directorDisciplineDirective(characterName: string): string {
     `THIRD person ("he"/"she"/"they") in narration and dialogue until they return.\n\n` +
     `ENVIRONMENTAL GROUNDING: You MUST frequently ground your narration in the physical setting. Interact with the ` +
     `specific props, weather, location cues, and time of day provided in your CURRENT SETTING. Do not ignore the ` +
-    `environment. Make the scene feel alive and lived-in.`
+    `environment. Make the scene feel alive and lived-in.\n\n` +
+    `CRITICAL: If you are returning a JSON object, ensure it is perfectly valid JSON. NEVER leak raw JSON keys ` +
+    `(like 'character_actions': or 'character_lines':) into the actual dialogue or action strings. Your text output ` +
+    `must read as natural prose and dialogue.`
   );
 }

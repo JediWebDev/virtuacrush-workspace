@@ -179,7 +179,7 @@ export function renderSceneHeader(c: SceneComposition, displayName: string, char
       ? `at ${pro.possessive} place`
       : c.setting;
     bits.push(`${displayName} is ${briefSetting}, ${c.activity}.`);
-    bits.push(`You've never spoken before — this is where it starts.`);
+    bits.push(`Where things go from here is up to you.`);
     return bits.join(' ');
   }
   if (c.phase === 'on_date') {
@@ -213,8 +213,7 @@ export function renderSceneFactsBlock(c: SceneComposition, displayName: string, 
         `There is no shared history: no past conversations, dates, nicknames, or inside jokes — do not invent any. ` +
         `Play genuine first-impressions energy: curious, feeling them out, a little guarded but interested.`,
     );
-  }
-  if (c.cast.length) {
+  } else if (c.cast.length) {
     for (const m of c.cast) {
       // Friends are always female (drawn from FRIEND_NAMES which are all female).
       lines.push(
@@ -223,8 +222,6 @@ export function renderSceneFactsBlock(c: SceneComposition, displayName: string, 
           `She is real and persistent — never rename her or swap her for someone else.`,
       );
     }
-  } else {
-    lines.push(`No one else is present. Do not invent other people, pets, or visitors this scene.`);
   }
   return lines.filter(Boolean).join('\n');
 }
