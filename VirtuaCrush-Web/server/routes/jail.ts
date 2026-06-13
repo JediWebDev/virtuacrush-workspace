@@ -2,7 +2,7 @@
 // call to ask the date for bail.
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/auth';
-import { requestBail } from '../db/choices';
+import { requestBail } from '../db/bail';
 
 const router = Router();
 

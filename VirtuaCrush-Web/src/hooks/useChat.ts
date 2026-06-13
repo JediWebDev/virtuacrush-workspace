@@ -26,7 +26,6 @@ interface UseChatOptions {
   onDone?: (remaining: number | null) => void;
   onQuotaExceeded?: (info?: { limit?: number; used?: number }) => void;
   onAffinityUpdate?: (score: number) => void;
-  onChoice?: (choice: any) => void;
 }
 
 interface SSEEvent {
@@ -76,7 +75,6 @@ export function useChat({
   onDone,
   onQuotaExceeded,
   onAffinityUpdate,
-  onChoice,
 }: UseChatOptions) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [streaming, setStreaming] = useState(false);
@@ -157,8 +155,6 @@ export function useChat({
               setAffinityScore(evt.data.affinityScore);
               onAffinityUpdate?.(evt.data.affinityScore);
             }
-          } else if (evt.event === 'choice') {
-            onChoice?.(evt.data);
           } else if (evt.event === 'error') {
             setError(evt.data.message ?? 'stream_error');
           }
@@ -173,7 +169,7 @@ export function useChat({
         abortRef.current = null;
       }
     },
-    [characterId, streaming, onDone, onQuotaExceeded, onAffinityUpdate, onChoice],
+    [characterId, streaming, onDone, onQuotaExceeded, onAffinityUpdate],
   );
 
   const clearQuotaFlag = useCallback(() => setQuotaExceeded(false), []);

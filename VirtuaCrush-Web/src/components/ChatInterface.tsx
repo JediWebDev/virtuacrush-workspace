@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
-import { fetchGreeting, fetchCharacterState, fetchActiveChoice, respondToDesire, fetchChatHistory, assetUrl, type CharacterState, type DialogueChoice, type ChoiceResolution, type ChatHistoryDay } from "../lib/api";
-import ChoiceCard from "./ChoiceCard";
-import { endDate, beginDate, shareViralMoment, requestBail } from "../lib/api";
+import { fetchGreeting, fetchCharacterState, respondToDesire, fetchChatHistory, assetUrl, type CharacterState, type ChatHistoryDay } from "../lib/api";
+import { requestBail } from "../lib/api";
 import { splitNarration } from "../lib/narration";
 import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
@@ -152,7 +151,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
       setAffinity(score);
       onAffinityChange?.(character.id, score);
     },
-    onChoice: (c: DialogueChoice) => setChoice(c),
     onQuotaExceeded: (info) => { setQuotaLimit(info?.limit ?? null); setQuotaToast(true); },
     onDone: () => {
       // The scene can change mid-conversation (e.g. arrival flips apart->together),
@@ -173,11 +171,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
   const [profileOpen, setProfileOpen] = useState(false);
   const [activeMessage, setActiveMessage] = useState<typeof DEMO_AUDIO_MESSAGE | null>(null);
   const [storyState, setStoryState] = useState<CharacterState | null>(null);
-  const [choice, setChoice] = useState<DialogueChoice | null>(null);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
-  const [viralMoment, setViralMoment] = useState<string | null>(null);
-  const [endingDate, setEndingDate] = useState(false);
-  const [beginningDate, setBeginningDate] = useState(false);
   const [bailing, setBailing] = useState(false);
   const [nowTick, setNowTick] = useState(Date.now());
   const navigate = useNavigate();
@@ -252,19 +246,13 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
     return () => { cancelled = true; };
   }, [character.id, setMessages]);
 
-  // Fetch the character's current story-engine state for the status strip,
-  // and resume any pending timed choice.
+  // Fetch the character's current story-engine state for the status strip.
   useEffect(() => {
     let cancelled = false;
     setStoryState(null);
-    setChoice(null);
-    setViralMoment(null);
     fetchCharacterState(character.id)
       .then((s) => { if (!cancelled) setStoryState(s); })
       .catch((err) => console.error('[state] fetch failed:', err));
-    fetchActiveChoice(character.id)
-      .then((c) => { if (!cancelled && c) setChoice(c); })
-      .catch((err) => console.error('[choice] resume failed:', err));
     return () => { cancelled = true; };
   }, [character.id]);
 
@@ -283,32 +271,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storyState?.phase, storyState?.scene?.jailedUntil, character.id]);
-
-  // Resolve a timed choice: append the user's pick + the character's reaction,
-  // update affinity, refresh the feed if a social post was created.
-  const handleChoiceResolved = (result: ChoiceResolution, chosenLabel?: string) => {
-    setChoice(null);
-    setMessages((prev) => {
-      const next = [...prev];
-      if (chosenLabel) {
-        next.push({ id: crypto.randomUUID(), role: 'user', content: chosenLabel });
-      }
-      if (result.reaction) {
-        next.push({ id: crypto.randomUUID(), role: 'assistant', content: result.reaction });
-      }
-      return next;
-    });
-    if (typeof result.affinityScore === 'number') {
-      setAffinity(result.affinityScore);
-      onAffinityChange?.(character.id, result.affinityScore);
-    }
-    if (result.posted) setFeedRefreshKey((k) => k + 1);
-    if (result.viral && result.reaction) setViralMoment(result.reaction);
-    // Scene/affinity may have changed — refresh the status strip.
-    fetchCharacterState(character.id)
-      .then((st) => setStoryState(st))
-      .catch(() => { /* non-fatal */ });
-  };
 
   const handleBail = async () => {
     if (bailing) return;
@@ -332,48 +294,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
       ? Math.max(0, new Date(storyState.scene.jailedUntil).getTime() - nowTick)
       : 0;
   const jailMmss = `${Math.floor(jailMsLeft / 60000)}:${String(Math.floor((jailMsLeft % 60000) / 1000)).padStart(2, "0")}`;
-
-  const handleBeginDate = async () => {
-    if (beginningDate) return;
-    setBeginningDate(true);
-    try {
-      const res = await beginDate(character.id);
-      if (res.reaction) {
-        setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: res.reaction }]);
-      }
-      const st = await fetchCharacterState(character.id);
-      setStoryState(st);
-    } catch (err) {
-      console.error('[date] begin failed:', err);
-    } finally {
-      setBeginningDate(false);
-    }
-  };
-
-  const handleEndDate = async () => {
-    if (endingDate) return;
-    setEndingDate(true);
-    try {
-      const billChoice = await endDate(character.id);
-      setChoice(billChoice);
-    } catch (err) {
-      console.error('[date] end failed:', err);
-    } finally {
-      setEndingDate(false);
-    }
-  };
-
-  const handleShareViral = async () => {
-    const text = viralMoment;
-    setViralMoment(null);
-    if (!text) return;
-    try {
-      await shareViralMoment(character.id, text);
-      setFeedRefreshKey((k) => k + 1);
-    } catch (err) {
-      console.error('[share] failed:', err);
-    }
-  };
 
   const characterWithAffinity: Character = { ...character, currentAffinity: affinity };
 
@@ -817,7 +737,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
             </div>
         )}
 
-        {storyState?.phase === "jailed" && !choice ? (
+        {storyState?.phase === "jailed" ? (
           <div className="px-4 pt-2 md:px-8">
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-xl border border-amber-500/40 bg-amber-500/[0.07] px-4 py-3 sm:flex-row sm:items-center">
               <span className="min-w-0 flex-1 text-sm text-stone-700 dark:text-stone-200">
@@ -838,49 +758,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
             </div>
           </div>
         ) : null}
-        {storyState?.phase === "planning" && !choice && !viralMoment ? (
-          <div className="px-4 pt-2 md:px-8">
-            <button
-              type="button"
-              onClick={handleBeginDate}
-              disabled={beginningDate}
-              className="mx-auto flex w-full max-w-3xl items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent/[0.06] px-4 py-2.5 text-sm font-semibold text-accent transition-all hover:bg-accent/10 disabled:opacity-50"
-            >
-              {beginningDate
-                ? "On your way…"
-                : `Show up for your date${storyState?.sceneLabel ? ` at the ${storyState.sceneLabel.toLowerCase()}` : ""} 🚪`}
-            </button>
-          </div>
-        ) : null}
-        {storyState?.phase === "on_date" && !choice && !viralMoment ? (
-          <div className="px-4 pt-2 md:px-8">
-            <button
-              type="button"
-              onClick={handleEndDate}
-              disabled={endingDate}
-              className="mx-auto flex w-full max-w-3xl items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent/[0.06] px-4 py-2.5 text-sm font-semibold text-accent transition-all hover:bg-accent/10 disabled:opacity-50"
-            >
-              {endingDate ? "Getting the bill…" : "End date · get the bill 💳"}
-            </button>
-          </div>
-        ) : null}
-        {viralMoment ? (
-          <div className="px-4 pt-2 md:px-8">
-            <div className="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-xl border border-rose-400/40 bg-rose-500/[0.07] px-4 py-3 sm:flex-row sm:items-center">
-              <span className="min-w-0 flex-1 text-sm text-stone-700 dark:text-stone-200">
-                💢 {character.name} is fuming about the bill.
-              </span>
-              <button
-                type="button"
-                onClick={handleShareViral}
-                className="shrink-0 rounded-lg bg-rose-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-rose-600"
-              >
-                Share to feed 📸
-              </button>
-            </div>
-          </div>
-        ) : null}
-        {storyState?.pendingEvent && !choice ? (
+        {storyState?.pendingEvent ? (
           <div className="px-4 pt-2 md:px-8">
             <DesireEventCard
               characterName={character.name}
@@ -888,11 +766,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
               event={storyState.pendingEvent}
               onRespond={handleDesireRespond}
             />
-          </div>
-        ) : null}
-        {choice ? (
-          <div className="px-4 pt-2 md:px-8">
-            <ChoiceCard choice={choice} characterName={character.name} onResolved={handleChoiceResolved} />
           </div>
         ) : null}
         <div className="border-t border-black/[0.05] dark:border-white/[0.05] bg-gradient-to-t from-surface to-transparent p-4 md:p-8 md:pt-6">

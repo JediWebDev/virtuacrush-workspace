@@ -34,7 +34,7 @@ import {
   type EmotionState,
   type DriveEventCard,
 } from '../sim/emotions';
-import { getSituation, setScene, setMood } from '../db/state';
+import { getSituation, setMood } from '../db/state';
 import { moodShiftForIntent } from '../sim/vitals';
 import { getOrComposeScene, renderSceneHeader, renderSceneFactsBlock, markDisruptionFired } from '../db/scene_composition';
 import type { SceneCastMember } from '../sim/scene_composer';
@@ -46,10 +46,8 @@ import {
 } from '../sim/interruptions';
 import { formatSituationBlock, scenePhase } from '../db/scene_util';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
-import { detectPlanCue, detectAgreedVenue, shouldOfferDateChoice } from '../db/cue_util';
 import { jailNarratorPrompt, jailContextBlock } from '../db/jail_util';
 import { getLocation } from '../inworld/scenes';
-import { maybeCreateChoice } from '../db/choices';
 import { runLightTick, assembleWorld, assembleFullWorld, applyTick, getWorldClock, MIN_IDLE_MINUTES, MAX_CATCHUP_MINUTES } from '../db/sim_world';
 import type { PlayerIntent } from '../sim/intent';
 import { validateIntent } from '../sim/intent';
@@ -227,7 +225,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let onDate = false;
   let revealSecretNow = false;
   let emotions: EmotionState | undefined;
-  let drivePressure = false;
   let firedDisruption: PlannedDisruption | null = null;
   let newPendingEvent: DriveEventCard | undefined;
   let arrested = false;
@@ -365,7 +362,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       const hours = Math.min(12, Math.max(0, (Date.now() - lastAt) / 3_600_000));
       emotions = decayEmotions(prev, characterId, hours);
       emotionTone = emotionToneBlock(emotions, displayName);
-      drivePressure = (emotions.aroused ?? 0) >= 55 || (emotions.playful ?? 0) >= 55;
       if (!k.pendingDriveEvent) {
         newPendingEvent = pendingEventFromEmotions(emotions, characterId, displayName) ?? undefined;
       }
@@ -508,23 +504,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         void upsertNpcState(req.user!.id, characterId, { knowledge: knowledgePatch }).catch((e) => console.warn('[chat] perception update failed:', e));
       }
 
-      // Free-text date agreement: if the pair just committed to a venue in
-      // plain dialogue (no choice card), record the plan so the sim and the
-      // fiction stay in sync — the planning-phase situation block then tells
-      // the character where she's headed instead of leaving her clueless.
-      if (phase === 'home') {
-        const agreedVenue = detectAgreedVenue(message, assistantFull);
-        if (agreedVenue) {
-          void setScene(req.user!.id, characterId, {
-            mode: 'apart',
-            location: null,
-            billPending: false,
-            plannedLocation: agreedVenue,
-          }).catch((e) => console.warn('[chat] plan sync failed:', e));
-          void storeSignificantEvent(req.user!.id, characterId, `Agreed to meet up at the ${agreedVenue.replace(/_/g, ' ')}.`);
-        }
-      }
-
       // Disruption bookkeeping: mark it fired and persist any residue so the
       // world remembers the beat (the mystery text exists now).
       if (firedDisruption) {
@@ -579,45 +558,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         }
       : { excludeId: characterId };
     void runLightTick(req.user!.id, ripple).catch((e) => console.warn('[tick] light tick failed:', e));
-
-    // Offer a date choice when the conversation naturally turns toward making
-    // plans (cue-based, with a cooldown). Only when apart — during a date the
-    // only prompt is the persistent "End date" bill flow. Sent as its own SSE
-    // event AFTER `done` so the reply isn't delayed.
-    if (!abortController.signal.aborted && phase === 'home' && !arrested && !worldEventFired) {
-      try {
-        const { rows: cntRows } = await pool.query<{ n: number }>(
-          `SELECT count(*)::int AS n FROM chat_messages
-           WHERE user_id = $1 AND character_id = $2 AND role = 'user'`,
-          [req.user!.id, characterId],
-        );
-        const userMsgCount = Number(cntRows[0]?.n ?? 0);
-
-        const { rows: lastRows } = await pool.query<{ created_at: string }>(
-          `SELECT created_at FROM dialogue_choices
-           WHERE user_id = $1 AND character_id = $2 ORDER BY created_at DESC LIMIT 1`,
-          [req.user!.id, characterId],
-        );
-        const hadPriorChoice = lastRows.length > 0;
-        let msgsSinceLastChoice = userMsgCount;
-        if (hadPriorChoice) {
-          const { rows: sinceRows } = await pool.query<{ n: number }>(
-            `SELECT count(*)::int AS n FROM chat_messages
-             WHERE user_id = $1 AND character_id = $2 AND role = 'user' AND created_at > $3`,
-            [req.user!.id, characterId, lastRows[0].created_at],
-          );
-          msgsSinceLastChoice = Number(sinceRows[0]?.n ?? 0);
-        }
-
-        const cue = detectPlanCue(message, assistantFull);
-        if (shouldOfferDateChoice({ userMsgCount, msgsSinceLastChoice, hadPriorChoice, cue, drivePressure })) {
-          const choice = await maybeCreateChoice(req.user!.id, characterId, userMsgCount);
-          if (choice && !abortController.signal.aborted) send('choice', choice);
-        }
-      } catch (choiceErr) {
-        console.warn('[chat] choice offer failed:', choiceErr);
-      }
-    }
 
     res.end();
   } catch (err) {

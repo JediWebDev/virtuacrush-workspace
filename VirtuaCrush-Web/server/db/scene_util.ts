@@ -1,12 +1,10 @@
-// Pure helpers for the scene/dating loop: prompt formatting, choosing which kind
-// of choice to offer, and per-option effects. No DB / runtime imports.
-import { getLocation, type LocationKind } from '../inworld/scenes';
+// Pure helpers for the scene/dating loop: prompt formatting and phase derivation.
+import { getLocation } from '../inworld/scenes';
 import type { DailyState } from './story_util';
 import type { Incident } from './world_util';
 
 export type SceneMode = 'apart' | 'together';
 export type ScenePhase = 'home' | 'planning' | 'on_date' | 'jailed';
-export type ChoiceKind = 'date' | 'bill' | 'goal';
 
 export interface SceneState {
   mode: SceneMode;
@@ -32,11 +30,6 @@ export function scenePhase(scene: SceneState): ScenePhase {
   if (scene.plannedLocation) return 'planning';
   return 'home';
 }
-
-// Relationship-affinity effects for the dating choices (server-authoritative).
-export const CHOICE_DATE_AFFINITY = 1.5; // picking a place to go together
-export const CHOICE_BILL_PAY_AFFINITY = 2; // user picks up the bill
-export const CHOICE_BILL_LETPAY_AFFINITY = - 1; // user lets the character pay
 
 function closenessNote(affinity?: number): string {
   if (typeof affinity !== 'number' || !Number.isFinite(affinity)) return '';
@@ -104,35 +97,3 @@ export function formatSituationBlock(
   );
 }
 
-/**
- * Decides which kind of choice to surface:
- *  - 'bill' when on a date at a paid venue with an unsettled bill,
- *  - 'goal' on the rare goal-beat when the character is at home,
- *  - 'date' otherwise (the default — where to go / what to do together).
- */
-export function chooseChoiceKind(params: {
-  mode: SceneMode;
-  locationKind: LocationKind | null;
-  billPending: boolean;
-  preferGoal: boolean;
-}): ChoiceKind {
-  if (params.mode === 'together' && params.locationKind === 'paid' && params.billPending) {
-    return 'bill';
-  }
-  if (params.mode === 'apart' && params.preferGoal) {
-    return 'goal';
-  }
-  return 'date';
-}
-
-/** Rare goal-beat cadence given the running user-message count. */
-export function isGoalBeatDue(userMessageCount: number): boolean {
-  if (userMessageCount < 6 || (userMessageCount - 2) % 4 !== 0) return false;
-  const k = (userMessageCount - 2) / 4;
-  return k % 3 === 2;
-}
-
-/** Affinity delta for a bill choice: index 0 = user pays, index 1 = character pays. */
-export function billAffinity(optionIndex: number): number {
-  return optionIndex === 0 ? CHOICE_BILL_PAY_AFFINITY : CHOICE_BILL_LETPAY_AFFINITY;
-}
