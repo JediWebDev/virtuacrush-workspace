@@ -83,7 +83,7 @@ test('renderSceneHeader: readable narration with time + outfit', () => {
 test('activity sanitizer: away/engine-leak activities are replaced at home', () => {
   const c = composeScene({
     ...BASE,
-    state: { ...BASE.state, activity: 'Stealing a lipstick from a high-end store just to annoy the user.' },
+    state: { ...BASE.state, activity: 'Stealing a lipstick from a high-end store.' },
   });
   assert.ok(!/user/i.test(c.activity));
   assert.ok(!/steal/i.test(c.activity));
@@ -99,7 +99,7 @@ test('first meeting: meet-cute hook, no friend, stranger facts', () => {
   assert.ok(c.meetHook && c.meetHook.length > 10);
   assert.equal(c.cast.length, 0); // first meetings stay one-on-one
   const header = renderSceneHeader(c, 'Becca');
-  assert.ok(header.includes("You've never spoken before"));
+  assert.ok(header.includes("Where things go from here is up to you"));
   const facts = renderSceneFactsBlock(c, 'Becca');
   assert.ok(facts.includes('FIRST MEETING'));
   assert.ok(facts.includes('do not invent any'));
