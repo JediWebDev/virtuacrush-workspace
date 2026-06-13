@@ -36,7 +36,7 @@ export interface SceneComposition {
   composedAt: string;          // ISO timestamp
   forDate: string;             // YYYY-MM-DD the scene was composed for
   phase: ScenePhase;
-  locationSlug: string | null; // venue (on_date) or planned venue (planning)
+  locationSlug: string | null; // venue slug when on_date
   timeLabel: string;           // "Tuesday evening, just past 9"
   weather: string;
   setting: string;             // one-line where-she-is
@@ -121,11 +121,6 @@ export function composeScene(p: ComposeParams): SceneComposition {
     locationSlug = p.scene.location;
     setting = loc ? `together ${loc.description}` : 'out together';
     details = loc ? [loc.cues, ...pickSome(VENUE_DETAILS[loc.kind] ?? [], 1, r)] : [];
-  } else if (p.phase === 'planning' && p.scene.plannedLocation) {
-    const loc = getLocation(p.scene.plannedLocation);
-    locationSlug = p.scene.plannedLocation;
-    setting = `at ${pro.possessive} place getting ready — you two are meeting ${loc ? loc.description : 'up'} soon`;
-    details = pickSome(HOME_DETAILS, 1, r);
   } else {
     const props = pickSome(HOME_PROPS, 2, r);
     setting = `at ${pro.possessive} place, ${props.join(' and ')} in frame of the story`;
@@ -184,8 +179,6 @@ export function renderSceneHeader(c: SceneComposition, displayName: string, char
   }
   if (c.phase === 'on_date') {
     bits.push(`You're ${c.setting} with ${displayName}.`);
-  } else if (c.phase === 'planning') {
-    bits.push(`${displayName} is ${c.setting}.`);
   } else {
     bits.push(`${displayName} is ${c.setting.replace(' in frame of the story', '')}, ${c.activity}.`);
   }

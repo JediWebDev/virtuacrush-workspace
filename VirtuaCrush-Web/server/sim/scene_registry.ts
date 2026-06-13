@@ -191,7 +191,7 @@ export function styleFor(characterId: string): StyleArchetype {
 }
 
 export function outfitContextFor(phase: string, hour: number): OutfitContext {
-  if (phase === 'on_date' || phase === 'planning') {
+  if (phase === 'on_date') {
     return hour >= 18 || hour < 4 ? 'date_out' : 'date_casual';
   }
   if (hour >= 23 || hour < 7) return 'sleep';

@@ -37,7 +37,7 @@ router.get('/:characterId', requireAuth, async (req: Request, res: Response) => 
 
     const pendingEvent = (k.pendingDriveEvent as { drive: string; prompt: string; options: { id: string; label: string }[] } | null | undefined) ?? null;
     const phase = scenePhase(scene);
-    const venueSlug = phase === 'on_date' ? scene.location : phase === 'planning' ? scene.plannedLocation : null;
+    const venueSlug = phase === 'on_date' ? scene.location : null;
     res.json({
       characterId,
       activity: state.activity,

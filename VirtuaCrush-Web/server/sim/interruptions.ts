@@ -106,12 +106,12 @@ export function disruptionSpec(poolId: string): DisruptionSpec | null {
 // --- Planner (pure, seeded) ----------------------------------------------------
 
 export interface PlanOpts {
-  phase: 'home' | 'planning' | 'on_date' | 'jailed';
+  phase: 'home' | 'on_date' | 'jailed';
   hasFriend: boolean;
   firstMeeting: boolean;
 }
 
-const phaseKey = (p: PlanOpts['phase']): 'home' | 'on_date' => (p === 'on_date' ? 'on_date' : 'home');
+const phaseKey = (p: PlanOpts['phase']): 'home' | 'on_date' => p === 'on_date' ? 'on_date' : 'home';
 
 function pickSpec(pool: DisruptionSpec[], opts: PlanOpts, r: () => number): DisruptionSpec | null {
   const ok = pool.filter(

@@ -41,12 +41,7 @@ export async function getOrComposeScene(
   const firstMeeting = metRows.length === 0;
 
   const today = utcDateString();
-  const target =
-    phase === 'on_date'
-      ? situation.scene.location
-      : phase === 'planning'
-        ? (situation.scene.plannedLocation ?? null)
-        : null;
+  const target = phase === 'on_date' ? situation.scene.location : null;
 
   const { rows } = await pool.query<{ scene_composition: SceneComposition | null }>(
     `SELECT scene_composition FROM character_state WHERE user_id = $1 AND character_id = $2`,

@@ -32,8 +32,6 @@ export interface CharacterLore {
   transport: string;
   /** Prose describing the kinds of dates they like (prompt flavor). */
   datePreference: string;
-  /** Venue slugs offered in their date choices (must exist in scenes.ts). */
-  preferredLocations: string[];
 }
 
 export const LORE: Record<string, CharacterLore> = {
@@ -61,9 +59,7 @@ export const LORE: Record<string, CharacterLore> = {
     ],
     hasCar: false,
     transport: 'takes the bus or mooches rides off friends — she’s a homebody anyway',
-    datePreference: 'chill Gen Z hangs — an arcade, a movie, boba at the mall, nothing fancy',
-    preferredLocations: ['arcade', 'coffee_shop', 'movie_theater', 'mall', 'amusement_park'],
-  },
+    datePreference: 'chill Gen Z hangs — an arcade, a movie, boba at the mall, nothing fancy',  },
   becca: {
     backstory: 'A sharp, funny film major who works the counter at a struggling indie video rental store.',
     goal: 'Curate a legendary cult-film section and finally shoot her own short film.',
@@ -89,7 +85,6 @@ export const LORE: Record<string, CharacterLore> = {
     hasCar: false,
     transport: 'bikes or buses around town, headphones always in',
     datePreference: 'a movie (obviously), a coffee, thrifting at the mall — low-key and a little retro',
-    preferredLocations: ['movie_theater', 'coffee_shop', 'mall', 'arcade', 'park'],
   },
   madison: {
     backstory: 'A 21-year-old pre-law student and sorority philanthropy chair with magnetic extrovert energy.',
@@ -116,7 +111,6 @@ export const LORE: Record<string, CharacterLore> = {
     hasCar: true,
     transport: 'has her own car and loves driving the whole group around',
     datePreference: 'fun, social, photo-worthy outings — a buzzy restaurant, the mall, an amusement park',
-    preferredLocations: ['restaurant', 'mall', 'amusement_park', 'concert', 'coffee_shop'],
   },
   jordan: {
     backstory: 'A 26-year-old former college athlete who now runs a fitness channel and plays golf.',
@@ -143,7 +137,6 @@ export const LORE: Record<string, CharacterLore> = {
     hasCar: true,
     transport: 'drives a car with a trunk full of clubs and gym gear',
     datePreference: 'a round at the golf course, a restaurant, a sports bar, or catching a live sports game',
-    preferredLocations: ['golf_course', 'sports_game', 'restaurant', 'park', 'gym'],
   },
   serena: {
     backstory: "A 20-year-old deadpan alt-girl who runs the craft channel 'Serena Slays', where projects rarely survive.",
@@ -170,7 +163,6 @@ export const LORE: Record<string, CharacterLore> = {
     hasCar: false,
     transport: 'takes the bus, usually still covered in glitter and glue',
     datePreference: 'a loud rock or emo concert, a thrift-and-mall crawl, a movie, or reading Edgar Allan Poe together at the cemetery at midnight',
-    preferredLocations: ['concert', 'coffee_shop', 'mall', 'movie_theater', 'arcade', 'cemetery'],
   },
   riot: {
     backstory: 'A 27-year-old indie/rock musician who writes songs at 2am and lives on cold brew.',
@@ -197,7 +189,6 @@ export const LORE: Record<string, CharacterLore> = {
     hasCar: false,
     transport: 'hauls his gear on the bus or borrows the bassist’s beat-up van',
     datePreference: 'live music and concerts, a dive-bar vibe, late-night coffee, a walk talking about lyrics',
-    preferredLocations: ['concert', 'bar', 'restaurant', 'park', 'movie_theater'],
   },
   lexi: {
     backstory: 'A 25-year-old brat and thrill-seeker who works odd jobs to fund her street racing addiction and shoplifting sprees.',
@@ -224,7 +215,6 @@ export const LORE: Record<string, CharacterLore> = {
     hasCar: true,
     transport: 'Drives recklessly in her modified car',
     datePreference: 'High-energy, risky dates like street racing or sneaking into places',
-    preferredLocations: ['parking_garage', 'rooftop_park', 'nightclub', 'abandoned_building', 'highway'],
   },
   lin: {
     backstory: 'A mysterious young man with a deep connection to ancient wisdom.',
@@ -251,7 +241,6 @@ export const LORE: Record<string, CharacterLore> = {
     hasCar: false,
     transport: 'walks or takes transit — he prefers the quiet of it',
     datePreference: 'traditional, romantic dates — a nice dinner, a quiet walk, an unhurried coffee and conversation',
-    preferredLocations: ['restaurant', 'park', 'coffee_shop', 'bookstore'],
   },
   iris: {
     backstory: 'A 52-year-old meditation and wellness instructor who rebuilt her life after corporate burnout.',
@@ -278,7 +267,6 @@ export const LORE: Record<string, CharacterLore> = {
     hasCar: true,
     transport: 'has a car but drives calmly and unhurried',
     datePreference: 'calm, unhurried dates — a quiet park, tea, a peaceful dinner; never anything loud or chaotic',
-    preferredLocations: ['park', 'coffee_shop', 'restaurant'],
   },
   ash: {
     backstory: 'A mysterious handsome man who appears to be in his early 30s. He works as a travel photographer who chases hidden getaways for a travel magazine. Though this is just a cover for his true nature, which is hinted at in his secret.',
@@ -305,7 +293,6 @@ export const LORE: Record<string, CharacterLore> = {
     hasCar: true,
     transport: 'has a rugged car he’s driven across the country',
     datePreference: 'classic romance — a candlelit dinner, a sunset walk, somewhere with a view',
-    preferredLocations: ['restaurant', 'park', 'coffee_shop', 'movie_theater'],
   },
 };
 
@@ -335,7 +322,6 @@ const DEFAULT_LORE: CharacterLore = {
   hasCar: false,
   transport: 'gets around by bus or rideshare',
   datePreference: 'low-key, easygoing dates',
-  preferredLocations: ['coffee_shop', 'park', 'restaurant', 'movie_theater', 'mall'],
 };
 
 export function getLore(id: string): CharacterLore {

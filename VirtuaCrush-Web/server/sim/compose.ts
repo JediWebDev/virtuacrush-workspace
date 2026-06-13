@@ -11,7 +11,7 @@ export interface ComposePieces {
   profile: PlayerProfile;
   presentation: PresentationState;
   inventory: InventoryItem[];
-  phase: 'home' | 'planning' | 'on_date' | 'jailed';
+  phase: 'home' | 'on_date' | 'jailed';
   location: string | null;
   companionId: string;
   companionName: string;

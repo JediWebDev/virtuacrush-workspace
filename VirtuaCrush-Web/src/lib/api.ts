@@ -61,13 +61,12 @@ export function fetchChatHistory(characterId: string): Promise<{ days: ChatHisto
 export function assetUrl(key: string): string {
   return `${BASE}/api/assets/${key.replace(/^\/+/, '')}`;
 }
-export type ScenePhase = "home" | "planning" | "on_date" | "jailed";
+export type ScenePhase = "home" | "on_date" | "jailed";
 
 export interface SceneInfo {
   mode: "apart" | "together";
   location: string | null;
   billPending: boolean;
-  plannedLocation?: string | null;
   jailedUntil?: string | null;
   bailCallUsed?: boolean;
 }

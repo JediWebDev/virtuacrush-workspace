@@ -16,14 +16,6 @@ test('formatSituationBlock: on a date anchors in the venue', () => {
   assert.ok(!b.includes('grinding ranked')); // solo activity suppressed while together
 });
 
-test('formatSituationBlock: planned date -> logistics phase, still apart', () => {
-  const planned: SceneState = { mode: 'apart', location: null, billPending: false, plannedLocation: 'restaurant' };
-  const b = formatSituationBlock({ activity: 'x', mood: 'y' }, planned, 'Serena');
-  assert.ok(b.toLowerCase().includes('agreed to go'));
-  assert.ok(b.toLowerCase().includes('not there yet'));
-  assert.ok(b.toLowerCase().includes('meet you there'));
-});
-
 test('formatSituationBlock: affinity note included when provided', () => {
   const b = formatSituationBlock({ activity: 'x', mood: 'y' }, { mode: 'apart', location: null, billPending: false }, 'Mina', 42);
   assert.ok(b.includes('42/100'));
@@ -40,8 +32,7 @@ test('formatSituationBlock: together but unknown location falls back to apart te
   assert.ok(b.includes('CURRENT SETTING'));
 });
 
-test('scenePhase: home / planning / on_date', () => {
+test('scenePhase: home / on_date', () => {
   assert.equal(scenePhase({ mode: 'apart', location: null, billPending: false }), 'home');
-  assert.equal(scenePhase({ mode: 'apart', location: null, billPending: false, plannedLocation: 'restaurant' }), 'planning');
   assert.equal(scenePhase({ mode: 'together', location: 'restaurant', billPending: true }), 'on_date');
 });

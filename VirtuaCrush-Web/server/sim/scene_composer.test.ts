@@ -7,7 +7,7 @@ const BASE: ComposeParams = {
   characterId: 'becca',
   displayName: 'Becca',
   phase: 'home',
-  scene: { mode: 'apart', location: null, billPending: false, plannedLocation: null },
+  scene: { mode: 'apart', location: null, billPending: false },
   state: { activity: 'half-watching a cooking show', mood: 'easy', headline: '', goalProgress: 10 },
   now: new Date('2026-06-09T21:15:00'),
   forDate: '2026-06-09',
@@ -40,16 +40,6 @@ test('composeScene: on_date anchors at the venue', () => {
   assert.equal(c.locationSlug, 'coffee_shop');
   assert.ok(c.setting.includes('coffee shop'));
   assert.equal(c.cast.length, 0); // no friend rolls on dates (MVP)
-});
-
-test('composeScene: planning mentions the planned venue', () => {
-  const c = composeScene({
-    ...BASE,
-    phase: 'planning',
-    scene: { mode: 'apart', location: null, billPending: false, plannedLocation: 'arcade' },
-  });
-  assert.equal(c.locationSlug, 'arcade');
-  assert.ok(c.setting.includes('getting ready'));
 });
 
 test('friendFor: stable canonical identity per character', () => {

@@ -115,7 +115,7 @@ export interface WorldState {
     presentation: PresentationState; // current outfit/grooming
     inventory: InventoryItem[];      // wardrobe
   };
-  scene: { phase: 'home' | 'planning' | 'on_date' | 'jailed'; where: string; companionId: NpcId; presentNpcIds: NpcId[] };
+  scene: { phase: 'home' | 'on_date' | 'jailed'; where: string; companionId: NpcId; presentNpcIds: NpcId[] };
   npcs: Record<NpcId, NpcEntity>;
 }
 

@@ -207,12 +207,6 @@ export const LOCATIONS: Record<string, SceneLocation> = {
   },
 };
 
-/** Public date spots offered in "where should we go" choices. */
-export const DATE_LOCATION_SLUGS = [
-  'coffee_shop', 'restaurant', 'movie_theater', 'mall', 'park',
-  'concert', 'golf_course', 'sports_game', 'arcade', 'amusement_park',
-];
-
 export function getLocation(slug: string | null | undefined): SceneLocation | null {
   if (!slug) return null;
   return LOCATIONS[slug] ?? null;
@@ -225,15 +219,4 @@ export function isPaidLocation(slug: string | null | undefined): boolean {
 /** Engine-authoritative base price for a venue (0 if unknown/free). */
 export function basePriceFor(slug: string | null | undefined): number {
   return getLocation(slug)?.basePrice ?? 0;
-}
-
-/** Slugs that are valid date destinations (everything except the two homes). */
-export const DATEABLE_SLUGS = Object.values(LOCATIONS)
-  .filter((l) => l.kind !== 'home')
-  .map((l) => l.slug);
-
-/** Coerces an arbitrary string to a known date-location slug (fallback coffee_shop). */
-export function coerceDateLocation(slug: string | null | undefined): string {
-  if (slug && DATEABLE_SLUGS.includes(slug)) return slug;
-  return 'coffee_shop';
 }

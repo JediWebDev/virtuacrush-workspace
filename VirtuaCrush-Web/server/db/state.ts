@@ -19,14 +19,13 @@ interface StateRow {
   scene_mode: SceneMode;
   scene_location: string | null;
   bill_pending: boolean;
-  planned_location: string | null;
   jailed_until: string | Date | null;
   bail_call_used: boolean;
   scene_incidents: Incident[] | null;
 }
 
 const COLS = `character_id, state_date::text AS state_date, activity, mood, headline, goal_progress,
-              scene_mode, scene_location, bill_pending, planned_location,
+              scene_mode, scene_location, bill_pending,
               jailed_until, bail_call_used, scene_incidents`;
 
 export interface Situation {
@@ -61,7 +60,6 @@ function rowToScene(r: StateRow): SceneState {
     mode: r.scene_mode === 'together' ? 'together' : 'apart',
     location: r.scene_location ?? null,
     billPending: !!r.bill_pending,
-    plannedLocation: r.planned_location ?? null,
     jailedUntil: r.jailed_until ? new Date(r.jailed_until).toISOString() : null,
     bailCallUsed: !!r.bail_call_used,
     incidents: Array.isArray(r.scene_incidents) ? r.scene_incidents : [],
@@ -97,9 +95,9 @@ async function generateAndStore(
   const { rows } = await pool.query<StateRow>(
     `INSERT INTO character_state
        (user_id, character_id, state_date, activity, mood, headline, goal_progress,
-        scene_mode, scene_location, bill_pending, planned_location,
+        scene_mode, scene_location, bill_pending,
         jailed_until, bail_call_used, scene_incidents, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'apart', NULL, false, NULL, NULL, false, '[]'::jsonb, NOW())
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'apart', NULL, false, NULL, false, '[]'::jsonb, NOW())
      ON CONFLICT (user_id, character_id) DO UPDATE
        SET state_date = EXCLUDED.state_date,
            activity = EXCLUDED.activity,
@@ -109,7 +107,6 @@ async function generateAndStore(
            scene_mode = 'apart',
            scene_location = NULL,
            bill_pending = false,
-           planned_location = NULL,
            jailed_until = NULL,
            bail_call_used = false,
            scene_incidents = '[]'::jsonb,
@@ -140,7 +137,6 @@ async function ensureFreshRow(userId: string, characterId: string): Promise<Stat
         scene_mode: 'apart',
         scene_location: null,
         bill_pending: false,
-        planned_location: null,
         jailed_until: null,
         bail_call_used: false,
         scene_incidents: [],
@@ -173,7 +169,7 @@ export async function getSituation(userId: string, characterId: string): Promise
 /** Reads just the scene (assumes a row exists; returns apart default if not). */
 export async function getScene(userId: string, characterId: string): Promise<SceneState> {
   const row = await readRow(userId, characterId);
-  if (!row) return { mode: 'apart', location: null, billPending: false };
+  if (!row) return { mode: 'apart', location: null, billPending: false, incidents: [] };
   const scene = rowToScene(row);
   if (scene.jailedUntil && new Date(scene.jailedUntil).getTime() <= Date.now()) {
     await releaseUser(userId, characterId).catch(() => {});
@@ -181,22 +177,6 @@ export async function getScene(userId: string, characterId: string): Promise<Sce
     scene.bailCallUsed = false;
   }
   return scene;
-}
-
-/** Updates the scene for a user/character. Returns the new scene. */
-export async function setScene(
-  userId: string,
-  characterId: string,
-  scene: SceneState,
-): Promise<SceneState> {
-  const { rows } = await pool.query<StateRow>(
-    `UPDATE character_state
-       SET scene_mode = $3, scene_location = $4, bill_pending = $5, planned_location = $6, scene_incidents = '[]'::jsonb, updated_at = NOW()
-     WHERE user_id = $1 AND character_id = $2
-     RETURNING ${COLS}`,
-    [userId, characterId, scene.mode, scene.location, scene.billPending, scene.plannedLocation ?? null],
-  );
-  return rows[0] ? rowToScene(rows[0]) : scene;
 }
 
 /**
@@ -220,7 +200,7 @@ export async function arrestUser(
   await pool.query(
     `UPDATE character_state
        SET jailed_until = $3, bail_call_used = false,
-           scene_mode = 'apart', scene_location = NULL, planned_location = NULL, bill_pending = false,
+           scene_mode = 'apart', scene_location = NULL, bill_pending = false,
            scene_incidents = '[]'::jsonb,
            updated_at = NOW()
      WHERE user_id = $1 AND character_id = $2`,

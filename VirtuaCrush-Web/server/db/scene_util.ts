@@ -4,13 +4,12 @@ import type { DailyState } from './story_util';
 import type { Incident } from './world_util';
 
 export type SceneMode = 'apart' | 'together';
-export type ScenePhase = 'home' | 'planning' | 'on_date' | 'jailed';
+export type ScenePhase = 'home' | 'on_date' | 'jailed';
 
 export interface SceneState {
   mode: SceneMode;
   location: string | null;        // venue slug when together
   billPending: boolean;
-  plannedLocation?: string | null; // agreed venue while still apart (logistics phase)
   jailedUntil?: string | null;     // ISO timestamp while the user is locked up; null/absent = free
   bailCallUsed?: boolean;          // the one phone call from jail has been spent
   incidents?: Incident[];          // priced mischief incidents on the current date
@@ -20,14 +19,12 @@ export interface SceneState {
  * The authoritative phase of the dating loop, derived from the scene:
  *  - 'jailed'   : the user is locked up until the jail timer elapses,
  *  - 'on_date'  : physically together at a venue,
- *  - 'planning' : a date is agreed but they're still apart (sorting logistics),
  *  - 'home'     : no date in progress; solo, reachable remotely.
  * Every system (UI gating, status strip, auto-spawn, prompt) keys off this.
  */
 export function scenePhase(scene: SceneState): ScenePhase {
   if (scene.jailedUntil && new Date(scene.jailedUntil).getTime() > Date.now()) return 'jailed';
   if (scene.mode === 'together') return 'on_date';
-  if (scene.plannedLocation) return 'planning';
   return 'home';
 }
 
@@ -70,20 +67,6 @@ export function formatSituationBlock(
         `React directly to what the user does; don't give one-word non-answers.${closeness}`
       );
     }
-  }
-
-  if (scene.mode === 'apart' && scene.plannedLocation) {
-    const loc = getLocation(scene.plannedLocation);
-    const venue = loc ? loc.label : 'somewhere together';
-    return (
-      `\n\n=== CURRENT SETTING ===\n` +
-      `You and the user have JUST agreed to go to ${venue} together, but you are NOT there yet. ` +
-      `You're at your own place getting ready; the user will head over and meet you there shortly. ` +
-      `When a date is agreed, narrate leaving the house, getting ready, or heading out — travel is NOT instantaneous. ` +
-      `You're texting while you wait. React directly and substantively to what they say; never give a one-word non-answer.` +
-      LOGISTICS_REALISM +
-      closeness
-    );
   }
 
   const activity = state.activity ? state.activity : 'taking it easy';
