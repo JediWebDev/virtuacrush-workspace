@@ -12,7 +12,7 @@ async function main() {
     process.exit(1);
   }
   await pool.query(
-    `TRUNCATE TABLE chat_messages, character_affinity, user_memory, character_state, dialogue_choices, character_posts RESTART IDENTITY`,
+    `TRUNCATE TABLE chat_messages, character_affinity, user_memory, character_state, character_posts RESTART IDENTITY`,
   );
   await pool.end();
   console.log('[reset] conversation data cleared');
