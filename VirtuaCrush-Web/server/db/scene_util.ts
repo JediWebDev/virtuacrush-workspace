@@ -4,26 +4,22 @@ import type { DailyState } from './story_util';
 import type { Incident } from './world_util';
 
 export type SceneMode = 'apart' | 'together';
-export type ScenePhase = 'home' | 'on_date' | 'jailed';
+export type ScenePhase = 'home' | 'on_date';
 
 export interface SceneState {
   mode: SceneMode;
   location: string | null;        // venue slug when together
   billPending: boolean;
-  jailedUntil?: string | null;     // ISO timestamp while the user is locked up; null/absent = free
-  bailCallUsed?: boolean;          // the one phone call from jail has been spent
   incidents?: Incident[];          // priced mischief incidents on the current date
 }
 
 /**
  * The authoritative phase of the dating loop, derived from the scene:
- *  - 'jailed'   : the user is locked up until the jail timer elapses,
  *  - 'on_date'  : physically together at a venue,
  *  - 'home'     : no date in progress; solo, reachable remotely.
  * Every system (UI gating, status strip, auto-spawn, prompt) keys off this.
  */
 export function scenePhase(scene: SceneState): ScenePhase {
-  if (scene.jailedUntil && new Date(scene.jailedUntil).getTime() > Date.now()) return 'jailed';
   if (scene.mode === 'together') return 'on_date';
   return 'home';
 }

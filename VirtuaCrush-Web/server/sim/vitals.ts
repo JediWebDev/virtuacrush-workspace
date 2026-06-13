@@ -13,8 +13,6 @@ export function moodShiftForIntent(intent: PlayerIntent, seed = Date.now()): str
   switch (intent.type) {
     case 'conflict':
       return pick(['stung', 'guarded', 'prickly'], seed);
-    case 'crime':
-      return pick(['shaken', 'rattled'], seed);
     case 'romance':
       if (NEGATIVE_ROMANCE.has(s)) return pick(['crushed', 'hollow'], seed);
       if (s === 'kiss_attempt' || s === 'proposition') return pick(['flustered', 'breathless'], seed);

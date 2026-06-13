@@ -46,7 +46,6 @@ import {
 } from '../sim/interruptions';
 import { formatSituationBlock, scenePhase } from '../db/scene_util';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
-import { jailNarratorPrompt, jailContextBlock } from '../db/jail_util';
 import { getLocation } from '../inworld/scenes';
 import { runLightTick, assembleWorld, assembleFullWorld, applyTick, getWorldClock, MIN_IDLE_MINUTES, MAX_CATCHUP_MINUTES } from '../db/sim_world';
 import type { PlayerIntent } from '../sim/intent';
@@ -62,7 +61,6 @@ import { describeKnownPlayer, observePlayer, describeAppearance } from '../sim/p
 import { describeLastSeenOutfit, itemsById, wornItems, describeOutfit, describeGrooming } from '../sim/wardrobe';
 import { upsertNpcState } from '../db/npc_state';
 import { looksDegenerate } from '../llm/quality';
-import { vetoVictimCrime } from '../sim/victim';
 import { budgetHistory } from '../llm/budget';
 
 // Recent turns fed to the LLM for local coherence. Long-term recall comes from
@@ -217,8 +215,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   const scene = situation.scene;
   const phase = scenePhase(scene);
 
-  let systemOverride: string | undefined;
-  let memoryContext = '';
   let directorPrompt: string | undefined;
   let world: WorldState | undefined;
   let companionEntity: NpcEntity | undefined;
@@ -227,21 +223,14 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let emotions: EmotionState | undefined;
   let firedDisruption: PlannedDisruption | null = null;
   let newPendingEvent: DriveEventCard | undefined;
-  let arrested = false;
   let appliedAffinity: number | null = null;
   let worldEventFired = false;
-  let rippleRumor: string | null = null;
   let effIntent: PlayerIntent | undefined;
   let effectPlan: EffectPlan | undefined;
 
-  if (phase === 'jailed') {
-    // The user is in a holding cell. A strict jail NARRATOR takes over (the date
-    // character is not present) and imposes realism on what the user can do.
-    systemOverride = jailNarratorPrompt(displayName, !!scene.bailCallUsed);
-    memoryContext = jailContextBlock();
-  } else {
+  {
     // === Two-step LLM: referee classifies intent first; director narrates after
-    // engine consequences are known (warnings, arrests, responders stay causal).
+    // engine consequences are known (warnings, responders stay causal).
     world = await assembleWorld(req.user!.id, characterId);
     companionEntity = world.npcs[characterId];
     onDate = phase === 'on_date';
@@ -279,7 +268,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
     const npcs: Actor[] = [];
     if (onDate) {
-      npcs.push(authorityActor(authority, 'venue staff/security — bring them in only if the player causes a scene or commits a crime'));
+      npcs.push(authorityActor(authority, 'venue staff/security — bring them in only if the player causes a scene'));
     }
 
     // Composed scene: authoritative time/setting/outfit facts + anyone else
@@ -373,10 +362,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       refereeInputFromWorld(world, message, turns),
       (prompt) => completePrompt(prompt, { json: true }),
     );
-    effIntent = vetoVictimCrime(
-      validateIntent(refereeOut.intent) ?? { type: 'observation', subtype: 'wait' },
-      message,
-    );
+    effIntent = validateIntent(refereeOut.intent) ?? { type: 'observation', subtype: 'wait' };
     effectPlan = planEffects(consequencesFor(effIntent, world));
     const engineFacts = formatEngineFactsBlock(effectPlan, authority);
 
@@ -424,25 +410,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   req.on('close', () => abortController.abort());
 
   try {
-    if (phase === 'jailed') {
-      // Jail narrator streams; tag it so the client renders a NARRATOR bubble.
-      const prefix = '[NARRATOR] ';
-      assistantFull += prefix;
-      send('chunk', { text: prefix });
-      for await (const chunk of streamChat({
-        characterId,
-        history: turns,
-        userMessage: message,
-        memoryContext,
-        systemOverride,
-      })) {
-        if (abortController.signal.aborted) break;
-        if (chunk.text) {
-          assistantFull += chunk.text;
-          send('chunk', { text: chunk.text });
-        }
-      }
-    } else {
+    {
       // Step 2 — Director: narrate the scene (intent already classified; engine
       // facts are injected into the prompt). Degenerate output triggers one retry.
       const badReply = (lines: { text: string }[]) =>
@@ -464,9 +432,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       const plan = effectPlan!;
       const intent = effIntent!;
       const applied = await applyEffects(req.user!.id, characterId, plan);
-      arrested = applied.arrested;
       appliedAffinity = applied.affinityScore;
-      worldEventFired = plan.arrest || plan.warnings.length > 0;
+      worldEventFired = plan.warnings.length > 0;
 
       if (companionEntity && emotions) {
         emotions = applyEmotionDeltas(emotions, emotionDeltasForIntent(intent));
@@ -474,11 +441,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       const moodShift = moodShiftForIntent(intent);
       if (moodShift) {
         void setMood(req.user!.id, characterId, moodShift).catch((e) => console.warn('[chat] mood update failed:', e));
-      }
-      if (plan.arrest) {
-        const crimeLabel = intent.subtype.replace(/_/g, ' ');
-        rippleRumor = `the player got arrested for ${crimeLabel}`;
-        void storeSignificantEvent(req.user!.id, characterId, `Player was ARRESTED for ${crimeLabel}.`);
       }
       const replyTurns = dturns.length ? dturns : [{ speaker: displayName, text: 'Mm — say that again? You had me for a second there.' }];
       assistantFull = turnsToTranscript(replyTurns);
@@ -522,22 +484,16 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       assistantMessage: assistantFull,
     });
 
-    // Update long-term memory from this exchange (not while jailed — those aren't
-    // durable user facts). Fire-and-forget so it never delays the response.
-    if (phase !== 'jailed') {
-      void extractAndStoreFacts({
-        userId: req.user!.id,
-        characterId,
-        userMessage: message,
-        assistantMessage: assistantFull,
-      });
-    }
+    // Update long-term memory from this exchange. Fire-and-forget so it never delays the response.
+    void extractAndStoreFacts({
+      userId: req.user!.id,
+      characterId,
+      userMessage: message,
+      assistantMessage: assistantFull,
+    });
 
-    // Affinity: an arrest already applied its big hit; while jailed nothing
-    // changes (the character isn't present); otherwise score the user's message.
-    // Affinity is now driven by the engine (consequencesFor -> applyEffects);
-    // jailed turns leave it unchanged (the companion isn't present).
-    const newAffinityScore: number = phase === 'jailed' ? affinity : (appliedAffinity ?? affinity);
+    // Affinity is driven by the engine (consequencesFor -> applyEffects).
+    const newAffinityScore: number = appliedAffinity ?? affinity;
 
     // Bump usage only for free users so paid users have a clean 0/null state.
     let remaining: number | null = null;
@@ -548,16 +504,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
     send('done', { remaining, affinityScore: newAffinityScore });
 
-    // Advance the living world a little each message (deterministic, no LLM, off the
-    // response path). Reactive ripple: notable actions seed a rumor that then spreads.
-    const ripple = rippleRumor
-      ? {
-          rumors: [{ npcId: characterId, rumor: { text: rippleRumor, credibility: 0.9, virality: 0.7, age: 0 } }],
-          events: [{ at: 0, kind: 'event', actors: ['player', characterId], text: `Word is spreading that ${rippleRumor}.` }],
-          excludeId: characterId,
-        }
-      : { excludeId: characterId };
-    void runLightTick(req.user!.id, ripple).catch((e) => console.warn('[tick] light tick failed:', e));
+    // Advance the living world a little each message (deterministic, no LLM, off the response path).
+    void runLightTick(req.user!.id, { excludeId: characterId }).catch((e) => console.warn('[tick] light tick failed:', e));
 
     res.end();
   } catch (err) {

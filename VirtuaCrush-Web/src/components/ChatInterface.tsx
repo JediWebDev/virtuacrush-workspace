@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
 import { fetchGreeting, fetchCharacterState, respondToDesire, fetchChatHistory, assetUrl, type CharacterState, type ChatHistoryDay } from "../lib/api";
-import { requestBail } from "../lib/api";
 import { splitNarration } from "../lib/narration";
 import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
@@ -49,9 +48,6 @@ const SCENE_IMAGE: Record<string, string> = {
   restaurant: "restaurant.png",
   mall: "mall.png",
 };
-
-// Backdrop while the user is in a holding cell (jail mechanic).
-const JAIL_IMAGE = "Jail.png";
 
 // Subtle themed background per date location, layered under the photo (and
 // shown alone when no photo is mapped in SCENE_IMAGE above).
@@ -172,8 +168,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
   const [activeMessage, setActiveMessage] = useState<typeof DEMO_AUDIO_MESSAGE | null>(null);
   const [storyState, setStoryState] = useState<CharacterState | null>(null);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
-  const [bailing, setBailing] = useState(false);
-  const [nowTick, setNowTick] = useState(Date.now());
   const navigate = useNavigate();
 
   const handleDesireRespond = async (choice: "encourage" | "redirect" | "decline") => {
@@ -256,45 +250,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
     return () => { cancelled = true; };
   }, [character.id]);
 
-  // While jailed, tick a release countdown and auto-release when it elapses.
-  useEffect(() => {
-    if (storyState?.phase !== "jailed" || !storyState.scene?.jailedUntil) return;
-    const until = new Date(storyState.scene.jailedUntil).getTime();
-    const id = setInterval(() => {
-      if (Date.now() >= until) {
-        clearInterval(id);
-        fetchCharacterState(character.id).then(setStoryState).catch(() => {});
-      } else {
-        setNowTick(Date.now());
-      }
-    }, 1000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storyState?.phase, storyState?.scene?.jailedUntil, character.id]);
-
-  const handleBail = async () => {
-    if (bailing) return;
-    setBailing(true);
-    try {
-      const res = await requestBail(character.id);
-      if (res.reaction) {
-        setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", content: res.reaction! }]);
-      }
-      const st = await fetchCharacterState(character.id);
-      setStoryState(st);
-    } catch (err) {
-      console.error("[bail] failed:", err);
-    } finally {
-      setBailing(false);
-    }
-  };
-
-  const jailMsLeft =
-    storyState?.phase === "jailed" && storyState.scene?.jailedUntil
-      ? Math.max(0, new Date(storyState.scene.jailedUntil).getTime() - nowTick)
-      : 0;
-  const jailMmss = `${Math.floor(jailMsLeft / 60000)}:${String(Math.floor((jailMsLeft % 60000) / 1000)).padStart(2, "0")}`;
-
   const characterWithAffinity: Character = { ...character, currentAffinity: affinity };
 
   const openAudioMessage = () => setActiveMessage(DEMO_AUDIO_MESSAGE);
@@ -362,26 +317,20 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
     };
   }, [showHistoryView, character.id]);
 
-  // Chat backdrop: jail photo while locked up; the location photo (when one
-  // is mapped) over its gradient while on a date; otherwise none.
+  // Chat backdrop: the location photo (when one is mapped) over its gradient
+  // while on a date; otherwise none.
   const sceneLocation =
     storyState?.scene?.mode === "together" ? storyState.scene.location : null;
   const chatBackdropStyle: React.CSSProperties | undefined =
-    storyState?.phase === "jailed"
+    sceneLocation && SCENE_BG[sceneLocation]
       ? {
-          backgroundImage: `linear-gradient(160deg, rgba(10,10,18,0.55), rgba(5,5,12,0.35)), url(${assetUrl(JAIL_IMAGE)})`,
+          backgroundImage: `${
+            SCENE_IMAGE[sceneLocation] ? `url(${assetUrl(SCENE_IMAGE[sceneLocation])}), ` : ""
+          }${SCENE_BG[sceneLocation]}`,
           backgroundSize: "cover",
           backgroundPosition: "center",
         }
-      : sceneLocation && SCENE_BG[sceneLocation]
-        ? {
-            backgroundImage: `${
-              SCENE_IMAGE[sceneLocation] ? `url(${assetUrl(SCENE_IMAGE[sceneLocation])}), ` : ""
-            }${SCENE_BG[sceneLocation]}`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-          }
-        : undefined;
+      : undefined;
 
   const historyItems = (historyDays ?? []).map((d) => ({
     id: d.id,
@@ -737,27 +686,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, aut
             </div>
         )}
 
-        {storyState?.phase === "jailed" ? (
-          <div className="px-4 pt-2 md:px-8">
-            <div className="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-xl border border-amber-500/40 bg-amber-500/[0.07] px-4 py-3 sm:flex-row sm:items-center">
-              <span className="min-w-0 flex-1 text-sm text-stone-700 dark:text-stone-200">
-                🚔 You&apos;re in a holding cell.{" "}
-                {storyState.scene?.bailCallUsed ? "Your one call is used — sit tight." : "You get one phone call."}{" "}
-                Released in {jailMmss}.
-              </span>
-              {!storyState.scene?.bailCallUsed ? (
-                <button
-                  type="button"
-                  onClick={handleBail}
-                  disabled={bailing}
-                  className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-50"
-                >
-                  {bailing ? "Dialing…" : `📞 Call ${character.name} for bail`}
-                </button>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
         {storyState?.pendingEvent ? (
           <div className="px-4 pt-2 md:px-8">
             <DesireEventCard

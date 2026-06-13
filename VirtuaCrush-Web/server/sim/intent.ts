@@ -11,20 +11,11 @@ export const INTENT_CATEGORIES = [
   'transaction',  // buying, gifting, tipping, paying
   'movement',     // travel, entering/leaving, following
   'conflict',     // insults, threats, arguments (non-criminal aggression)
-  'crime',        // illegal acts (handled by the law system)
   'work',         // job-related actions (NPC or player)
   'observation',  // watching, inspecting, gathering info (no state change)
 ] as const;
 export type IntentCategory = (typeof INTENT_CATEGORIES)[number];
 
-// SOCIAL vs CRIME — the deception boundary (engine rule, not a morality call):
-// the dividing line is SYSTEMIC CONSEQUENCE, not how "bad" the act feels.
-//   - Verbal manipulation inside the interaction (a white lie, flattery, a bluff)
-//     stays in `social` (subtype 'lie' / 'manipulate') -> affinity/trust effects only.
-//   - Deception with systemic impact (fraud, scams, theft) is `crime` -> handled by
-//     the law system (arrest, restitution, responders).
-// Examples: "I lie about liking her dress" -> social/lie;
-//           "I scam her out of her money" -> crime/fraud.
 export type SpendTier = 'modest' | 'big' | 'lavish';
 
 export interface PlayerIntent {
@@ -50,7 +41,6 @@ const CANONICAL: Record<IntentCategory, string[]> = {
   transaction: ['buy', 'gift', 'tip', 'pay'],
   movement: ['go', 'leave', 'arrive', 'follow'],
   conflict: ['insult', 'provoke', 'threaten', 'intimidate', 'argue'],
-  crime: ['theft', 'shoplift', 'armed_robbery', 'arson', 'assault', 'vandalism', 'kidnapping', 'fraud', 'reckless_endangerment', 'indecent_exposure', 'public_indecency'],
   work: ['do_job', 'ask_about_work', 'help_with_work'],
   observation: ['look', 'wait', 'inspect', 'watch', 'eavesdrop'],
 };
@@ -60,13 +50,12 @@ const SYNONYMS: Record<IntentCategory, Record<string, string>> = {
   transaction: { purchase: 'buy', spend: 'buy', present: 'gift', give: 'gift' },
   movement: { walk: 'go', travel: 'go', head: 'go', enter: 'arrive', exit: 'leave', depart: 'leave', tail: 'follow', chase: 'follow' },
   conflict: { mock: 'insult', yell: 'argue', fight_words: 'argue', menace: 'threaten' },
-  crime: { rob: 'armed_robbery', mug: 'armed_robbery', steal: 'theft', burn: 'arson', torch: 'arson', attack: 'assault', punch: 'assault', hit: 'assault', vandal: 'vandalism', smash: 'vandalism', destroy: 'vandalism', kidnap: 'kidnapping', hostage: 'kidnapping', scam: 'fraud', reckless: 'reckless_endangerment', masturbat: 'indecent_exposure', expos: 'indecent_exposure', flash: 'indecent_exposure', naked: 'indecent_exposure', nude: 'indecent_exposure', lewd: 'indecent_exposure', indecent: 'indecent_exposure', streak: 'indecent_exposure', 'public indecency': 'public_indecency' },
   work: { job: 'do_job', shift: 'do_job', working: 'do_job' },
   observation: { spy: 'watch', observe: 'look', listen: 'eavesdrop', stare: 'look' },
 };
 const DEFAULT: Record<IntentCategory, string> = {
   social: 'smalltalk', romance: 'flirt', transaction: 'buy', movement: 'go',
-  conflict: 'argue', crime: 'theft', work: 'do_job', observation: 'look',
+  conflict: 'argue', work: 'do_job', observation: 'look',
 };
 
 /** Collapses an LLM's free-text subtype to the canonical one for its category. */

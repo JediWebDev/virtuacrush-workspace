@@ -30,9 +30,8 @@ test('composeWorld: builds user + companion with seeded goals and live affinity'
   assert.deepEqual(w.scene.presentNpcIds, ['serena']); // present on a date
 });
 
-test('composeWorld: jailed phase -> user.status jailed; npc_state knowledge merges', () => {
-  const w = composeWorld(pieces({ phase: 'jailed', npcState: { knowledge: { knownPlayerFacts: ['name', 'appearance'] } } }));
-  assert.equal(w.user.status, 'jailed');
+test('composeWorld: npc_state knowledge merges into companion', () => {
+  const w = composeWorld(pieces({ npcState: { knowledge: { knownPlayerFacts: ['name', 'appearance'] } } }));
   assert.deepEqual(w.npcs.serena.knowledge.knownPlayerFacts, ['name', 'appearance']);
 });
 

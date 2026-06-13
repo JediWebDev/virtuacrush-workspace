@@ -8,7 +8,6 @@
 
 export type NpcId = string;
 export const PLAYER: NpcId = 'player';
-export type UserStatus = 'free' | 'jailed';
 
 export interface Goal { id: string; weight: number; target?: NpcId }
 export interface Relationship { affinity: number; trust: number; love: number; resentment: number; tags?: string[] }
@@ -108,14 +107,13 @@ export interface WorldState {
   tick: number;
   user: {
     location: string;
-    status: UserStatus;
-    jailedUntil?: string | null;
+    status: 'free';
     money: number;
     profile: PlayerProfile;          // permanent identity
     presentation: PresentationState; // current outfit/grooming
     inventory: InventoryItem[];      // wardrobe
   };
-  scene: { phase: 'home' | 'on_date' | 'jailed'; where: string; companionId: NpcId; presentNpcIds: NpcId[] };
+  scene: { phase: 'home' | 'on_date'; where: string; companionId: NpcId; presentNpcIds: NpcId[] };
   npcs: Record<NpcId, NpcEntity>;
 }
 

@@ -116,8 +116,6 @@ export function emotionDeltasForIntent(intent: PlayerIntent): Deltas {
       return SOCIAL_DELTAS[intent.subtype] ?? {};
     case 'conflict':
       return CONFLICT_DELTAS[intent.subtype] ?? { angry: 10, annoyed: 8 };
-    case 'crime':
-      return { scared: 20, angry: 10, happy: -10 };
     case 'transaction':
       return intent.subtype === 'gift' ? { happy: 10, amused: 4 } : {};
     default:

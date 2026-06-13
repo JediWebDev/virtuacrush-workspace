@@ -19,14 +19,11 @@ interface StateRow {
   scene_mode: SceneMode;
   scene_location: string | null;
   bill_pending: boolean;
-  jailed_until: string | Date | null;
-  bail_call_used: boolean;
   scene_incidents: Incident[] | null;
 }
 
 const COLS = `character_id, state_date::text AS state_date, activity, mood, headline, goal_progress,
-              scene_mode, scene_location, bill_pending,
-              jailed_until, bail_call_used, scene_incidents`;
+              scene_mode, scene_location, bill_pending, scene_incidents`;
 
 export interface Situation {
   state: DailyState;
@@ -60,8 +57,6 @@ function rowToScene(r: StateRow): SceneState {
     mode: r.scene_mode === 'together' ? 'together' : 'apart',
     location: r.scene_location ?? null,
     billPending: !!r.bill_pending,
-    jailedUntil: r.jailed_until ? new Date(r.jailed_until).toISOString() : null,
-    bailCallUsed: !!r.bail_call_used,
     incidents: Array.isArray(r.scene_incidents) ? r.scene_incidents : [],
   };
 }
@@ -95,9 +90,8 @@ async function generateAndStore(
   const { rows } = await pool.query<StateRow>(
     `INSERT INTO character_state
        (user_id, character_id, state_date, activity, mood, headline, goal_progress,
-        scene_mode, scene_location, bill_pending,
-        jailed_until, bail_call_used, scene_incidents, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'apart', NULL, false, NULL, false, '[]'::jsonb, NOW())
+        scene_mode, scene_location, bill_pending, scene_incidents, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'apart', NULL, false, '[]'::jsonb, NOW())
      ON CONFLICT (user_id, character_id) DO UPDATE
        SET state_date = EXCLUDED.state_date,
            activity = EXCLUDED.activity,
@@ -107,8 +101,6 @@ async function generateAndStore(
            scene_mode = 'apart',
            scene_location = NULL,
            bill_pending = false,
-           jailed_until = NULL,
-           bail_call_used = false,
            scene_incidents = '[]'::jsonb,
            updated_at = NOW()
      RETURNING ${COLS}`,
@@ -137,8 +129,6 @@ async function ensureFreshRow(userId: string, characterId: string): Promise<Stat
         scene_mode: 'apart',
         scene_location: null,
         bill_pending: false,
-        jailed_until: null,
-        bail_call_used: false,
         scene_incidents: [],
       }
     );
@@ -156,27 +146,14 @@ export async function getOrGenerateDailyState(
 /** Current daily state AND scene together (one read). */
 export async function getSituation(userId: string, characterId: string): Promise<Situation> {
   const row = await ensureFreshRow(userId, characterId);
-  const scene = rowToScene(row);
-  // Lazy auto-release once the jail timer has elapsed.
-  if (scene.jailedUntil && new Date(scene.jailedUntil).getTime() <= Date.now()) {
-    await releaseUser(userId, characterId).catch(() => {});
-    scene.jailedUntil = null;
-    scene.bailCallUsed = false;
-  }
-  return { state: rowToState(row), scene };
+  return { state: rowToState(row), scene: rowToScene(row) };
 }
 
 /** Reads just the scene (assumes a row exists; returns apart default if not). */
 export async function getScene(userId: string, characterId: string): Promise<SceneState> {
   const row = await readRow(userId, characterId);
   if (!row) return { mode: 'apart', location: null, billPending: false, incidents: [] };
-  const scene = rowToScene(row);
-  if (scene.jailedUntil && new Date(scene.jailedUntil).getTime() <= Date.now()) {
-    await releaseUser(userId, characterId).catch(() => {});
-    scene.jailedUntil = null;
-    scene.bailCallUsed = false;
-  }
-  return scene;
+  return rowToScene(row);
 }
 
 /**
@@ -191,32 +168,6 @@ export async function setMood(userId: string, characterId: string, mood: string)
   );
 }
 
-/** Arrests the user: jail until `until`, clear any date/scene, reset the call. */
-export async function arrestUser(
-  userId: string,
-  characterId: string,
-  until: string,
-): Promise<void> {
-  await pool.query(
-    `UPDATE character_state
-       SET jailed_until = $3, bail_call_used = false,
-           scene_mode = 'apart', scene_location = NULL, bill_pending = false,
-           scene_incidents = '[]'::jsonb,
-           updated_at = NOW()
-     WHERE user_id = $1 AND character_id = $2`,
-    [userId, characterId, until],
-  );
-}
-
-/** Releases the user from jail. */
-export async function releaseUser(userId: string, characterId: string): Promise<void> {
-  await pool.query(
-    `UPDATE character_state SET jailed_until = NULL, bail_call_used = false, updated_at = NOW()
-     WHERE user_id = $1 AND character_id = $2`,
-    [userId, characterId],
-  );
-}
-
 /** Records a priced mischief incident on the current date (engine-decided bill line). */
 export async function appendIncident(
   userId: string,
@@ -228,15 +179,6 @@ export async function appendIncident(
        SET scene_incidents = COALESCE(scene_incidents, '[]'::jsonb) || $3::jsonb, updated_at = NOW()
      WHERE user_id = $1 AND character_id = $2`,
     [userId, characterId, JSON.stringify([incident])],
-  );
-}
-
-/** Marks the user's one phone call as spent. */
-export async function markBailCallUsed(userId: string, characterId: string): Promise<void> {
-  await pool.query(
-    `UPDATE character_state SET bail_call_used = true, updated_at = NOW()
-     WHERE user_id = $1 AND character_id = $2`,
-    [userId, characterId],
   );
 }
 

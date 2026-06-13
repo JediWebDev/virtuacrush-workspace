@@ -47,7 +47,7 @@ const BASE_SALIENCE: Record<string, number> = { move: 0.1, mood: 0.1, post: 0.3,
 /** How "interesting to anyone" an event is. Only high-salience events are logged. */
 export function salienceOf(e: WorldEvent): number {
   if (e.kind === 'interaction' && /argument/i.test(e.text)) return 0.75;
-  if (e.kind === 'rumor' && /(feuding|broke up|dating|a thing|falling out|hooked up|arrested|viral|caught)/i.test(e.text)) return 0.75;
+  if (e.kind === 'rumor' && /(feuding|broke up|dating|a thing|falling out|hooked up|viral|caught)/i.test(e.text)) return 0.75;
   return BASE_SALIENCE[e.kind] ?? 0.3;
 }
 const ARGUMENT_TOPICS = ['a movie', 'a band they both like', 'last weekend', 'an old grudge', 'a fashion choice'];

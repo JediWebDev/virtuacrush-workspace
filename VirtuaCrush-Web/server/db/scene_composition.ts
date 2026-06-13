@@ -19,8 +19,7 @@ const MAX_AGE_MS = 8 * 3_600_000;
 
 /**
  * Returns the active scene composition for this user/character, composing and
- * persisting a new one when stale. Returns null while jailed (the jail
- * narrator owns that scene). Never throws on the persistence write.
+ * persisting a new one when stale. Never throws on the persistence write.
  */
 export async function getOrComposeScene(
   userId: string,
@@ -29,7 +28,6 @@ export async function getOrComposeScene(
   situation: Situation,
 ): Promise<SceneComposition | null> {
   const phase = scenePhase(situation.scene);
-  if (phase === 'jailed') return null;
 
   // Stranger switch: it stays a "first meeting" until the user has sent their
   // first message ever to this character. (The hand-written greeting is an

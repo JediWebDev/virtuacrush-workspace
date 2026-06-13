@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateIntent, normalizeSubtype, parseRefereeOutput } from './intent';
-import { consequencesFor, ARREST_AFFINITY_HIT } from './rules';
+import { consequencesFor } from './rules';
 import { advanceNpcs, ACTION_THRESHOLD } from './agency';
 import type { WorldState, NpcEntity, Relationship } from './world';
 import { PLAYER } from './world';
@@ -38,17 +38,16 @@ function world(over: Partial<WorldState> = {}): WorldState {
 const rng = (v: number) => ({ next: () => v });
 
 // --- Layer 1: categories + subtype normalization -----------------------------
-test('8 closed categories; unknown category rejected', () => {
-  assert.equal(validateIntent({ type: 'crime', subtype: 'theft' })?.type, 'crime');
-  assert.equal(validateIntent({ type: 'deception', subtype: 'lie' }), null); // not a top category anymore
+test('7 closed categories; unknown category rejected', () => {
+  assert.equal(validateIntent({ type: 'social', subtype: 'smalltalk' })?.type, 'social');
+  assert.equal(validateIntent({ type: 'deception', subtype: 'lie' }), null);
   assert.equal(validateIntent({ type: 'summon_dragon', subtype: 'x' }), null);
+  assert.equal(validateIntent({ type: 'crime', subtype: 'theft' }), null); // crime removed
 });
 
 test('subtype normalization collapses synonyms to canonical', () => {
   assert.equal(normalizeSubtype('romance', 'cute teasing flirt'), 'flirt');
   assert.equal(normalizeSubtype('romance', 'soft_flirt_attempt'), 'flirt');
-  assert.equal(normalizeSubtype('crime', 'I robbed the register'), 'armed_robbery');
-  assert.equal(normalizeSubtype('crime', 'shoplifting some dvds'), 'shoplift');
   assert.equal(normalizeSubtype('social', 'gave her a genuine compliment'), 'compliment');
   assert.equal(normalizeSubtype('conflict', 'mocked him harshly'), 'insult');
   assert.equal(normalizeSubtype('romance', 'totally novel vibe'), 'flirt'); // unknown -> category default
@@ -61,13 +60,6 @@ test('parseRefereeOutput normalizes + fails soft', () => {
 });
 
 // --- Layer 2: engine consequences --------------------------------------------
-test('crime -> arrest; reckless warns; jailed inert', () => {
-  assert.ok(consequencesFor({ type: 'crime', subtype: 'armed_robbery' }, world()).some((c) => c.type === 'arrest'));
-  assert.ok(!consequencesFor({ type: 'crime', subtype: 'reckless_endangerment' }, world()).some((c) => c.type === 'arrest'));
-  const jailed = world({ user: { location: 'jail', status: 'jailed', money: 0, profile: emptyProfile('You'), presentation: { wornItemIds: [], grooming: {} }, inventory: [] } });
-  assert.deepEqual(consequencesFor({ type: 'crime', subtype: 'arson' }, jailed), []);
-});
-
 test('conflict insult drops affinity; threaten also warns', () => {
   assert.ok(consequencesFor({ type: 'conflict', subtype: 'insult' }, world()).some((c) => c.type === 'affinity' && c.delta < 0));
   assert.ok(consequencesFor({ type: 'conflict', subtype: 'threaten' }, world()).some((c) => c.type === 'authority_warn'));
@@ -100,16 +92,13 @@ test('behaviors are generic: registry-driven, threshold-gated', () => {
   assert.ok(ACTION_THRESHOLD > 0 && ACTION_THRESHOLD < 1);
 });
 
-test('deception boundary: social/lie is talk-only; crime/fraud is systemic (arrest)', () => {
+test('social/lie is affinity-only (talk space, no criminal consequence)', () => {
   const lie = consequencesFor({ type: 'social', subtype: 'lie' }, world());
-  assert.ok(!lie.some((c) => c.type === 'arrest'));
   assert.ok(lie.some((c) => c.type === 'affinity' && c.delta < 0));
-  const fraud = consequencesFor({ type: 'crime', subtype: 'fraud' }, world());
-  assert.ok(fraud.some((c) => c.type === 'arrest'));
+  assert.ok(lie.every((c) => c.type !== 'authority_warn'));
 });
 
 test('transaction/buy bills ONLY with an explicit magnitude (no silent $80 default)', () => {
   assert.deepEqual(consequencesFor({ type: 'transaction', subtype: 'buy' }, world()), []);
   assert.ok(consequencesFor({ type: 'transaction', subtype: 'buy', magnitude: 'big' }, world()).some((c) => c.type === 'bill_add' && c.amount === 300));
 });
-

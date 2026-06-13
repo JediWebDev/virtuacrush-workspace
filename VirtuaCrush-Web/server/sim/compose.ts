@@ -3,7 +3,7 @@
 // wrapper lives in db/sim_world.ts; keeping the composition pure makes it
 // testable. v1 includes the companion as the sole sim NPC; rivals/others slot in
 // here later.
-import type { WorldState, NpcEntity, PlayerProfile, PresentationState, InventoryItem, UserStatus, Rumor } from './world';
+import type { WorldState, NpcEntity, PlayerProfile, PresentationState, InventoryItem, Rumor } from './world';
 import { PLAYER } from './world';
 import { baseNpcEntity } from './roster';
 
@@ -11,7 +11,7 @@ export interface ComposePieces {
   profile: PlayerProfile;
   presentation: PresentationState;
   inventory: InventoryItem[];
-  phase: 'home' | 'on_date' | 'jailed';
+  phase: 'home' | 'on_date';
   location: string | null;
   companionId: string;
   companionName: string;
@@ -48,12 +48,11 @@ export function composeWorld(p: ComposePieces): WorldState {
       rumors: Array.isArray(k.rumors) ? (k.rumors as Rumor[]) : [],
     },
   };
-  const status: UserStatus = p.phase === 'jailed' ? 'jailed' : 'free';
   return {
     tick: 0,
     user: {
       location: p.location ?? 'home',
-      status,
+      status: 'free' as const,
       money: 0,
       profile: p.profile,
       presentation: p.presentation,

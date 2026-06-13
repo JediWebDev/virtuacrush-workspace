@@ -88,8 +88,7 @@ function looksStructured(s: string): boolean {
   return /"(?:intent|lines|speaker|text|type|subtype|target|magnitude)"\s*:/.test(s);
 }
 
-// Best-effort intent extraction even when the JSON object won't parse, so the
-// engine still classifies the player's action (e.g. crimes still trigger arrest).
+// Best-effort intent extraction even when the JSON object won't parse.
 function salvageIntent(raw: string): PlayerIntent | null {
   const type = raw.match(/"type"\s*:\s*"([^"]+)"/)?.[1];
   if (!type) return null;
@@ -187,15 +186,12 @@ export function buildScenePrompt(stage: DirectorStage): string {
 === CLASSIFY, THEN PLAY THE SCENE (one step) ===
 Reply with ONE JSON object only:
 {
-  "intent": { "type": "<social|romance|transaction|movement|conflict|crime|work|observation>", "subtype": "<short label>", "target": "<npc id, 'venue', or omit>", "magnitude": "<modest|big|lavish or omit>" },
+  "intent": { "type": "<social|romance|transaction|movement|conflict|work|observation>", "subtype": "<short label>", "target": "<npc id, 'venue', or omit>", "magnitude": "<modest|big|lavish or omit>" },
   "lines": [ { "speaker": "<name>", "text": "<words or *action*>" } ]
 }
 
 "intent" is your honest classification of what the PLAYER just did — NOT a consequence.
-If the player is the VICTIM or target of someone else's act (they get kidnapped, robbed, attacked, threatened), that is NOT the player's crime — classify it as "observation"/"share", never "crime".
-
 HOW THE WORLD REACTS (make your narration match your classification):
-- crime (theft, robbery, arson, assault, vandalism, kidnapping, indecent_exposure, …) → the player is ARRESTED: police/security arrive, cuff them, haul them off. Narrate it seriously; never a joke.
 - conflict (insults, threats, scenes) → venue staff/security step in with a warning.
 - otherwise → just play the scene naturally.
 

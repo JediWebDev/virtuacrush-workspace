@@ -61,14 +61,12 @@ export function fetchChatHistory(characterId: string): Promise<{ days: ChatHisto
 export function assetUrl(key: string): string {
   return `${BASE}/api/assets/${key.replace(/^\/+/, '')}`;
 }
-export type ScenePhase = "home" | "on_date" | "jailed";
+export type ScenePhase = "home" | "on_date";
 
 export interface SceneInfo {
   mode: "apart" | "together";
   location: string | null;
   billPending: boolean;
-  jailedUntil?: string | null;
-  bailCallUsed?: boolean;
 }
 
 export interface CharacterState {
@@ -101,18 +99,6 @@ export async function respondToDesire(
     method: 'POST',
     body: JSON.stringify({ choice }),
   });
-}
-
-export interface BailResult {
-  ok: boolean;
-  accepted?: boolean;
-  reaction?: string;
-  error?: string;
-}
-
-/** Spends the user's one phone call from jail to ask the date for bail. */
-export async function requestBail(characterId: string): Promise<BailResult> {
-  return api<BailResult>(`/api/jail/${encodeURIComponent(characterId)}/bail`, { method: 'POST' });
 }
 
 // --- Dynamic social posts ----------------------------------------------------

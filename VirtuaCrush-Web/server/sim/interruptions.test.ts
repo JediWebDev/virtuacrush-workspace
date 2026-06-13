@@ -41,8 +41,7 @@ test('planDisruptions: friend exit beat only when the friend is present', () => 
   assert.ok(sawExit, 'expected a friend exit beat within 20 seeds');
 });
 
-test('planDisruptions: jailed scenes get nothing; on_date pools are venue-appropriate', () => {
-  assert.deepEqual(planDisruptions(rng(1), { ...OPTS, phase: 'jailed' }), []);
+test('planDisruptions: on_date pools are venue-appropriate', () => {
   const date = planDisruptions(rng(3), { ...OPTS, phase: 'on_date' });
   for (const d of date) {
     const spec = disruptionSpec(d.poolId)!;

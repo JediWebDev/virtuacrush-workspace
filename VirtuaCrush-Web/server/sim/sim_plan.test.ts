@@ -25,16 +25,8 @@ test('roster: known companions seeded with goals + fashion prefs', () => {
   assert.equal(e.knowledge.knownPlayerFacts.length, 0);
 });
 
-test('planEffects: armed robbery -> arrest + summed affinity + responders', () => {
-  const plan = planEffects(consequencesFor({ type: 'crime', subtype: 'armed_robbery' }, world()));
-  assert.equal(plan.arrest, true);
-  assert.ok(plan.affinityByNpc.serena < 0);
-  assert.ok(plan.responders.length >= 1);
-});
-
-test('planEffects: purchase -> bill item, no arrest; insult -> negative affinity only', () => {
+test('planEffects: purchase -> bill item; insult -> negative affinity only', () => {
   const buy = planEffects(consequencesFor({ type: 'transaction', subtype: 'buy', magnitude: 'lavish' }, world()));
-  assert.equal(buy.arrest, false);
   assert.equal(buy.billItems[0].amount, 850);
   const insult = planEffects(consequencesFor({ type: 'conflict', subtype: 'insult' }, world()));
   assert.ok(insult.affinityByNpc.serena < 0);
