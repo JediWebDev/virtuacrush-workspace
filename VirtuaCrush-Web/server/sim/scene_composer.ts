@@ -165,16 +165,15 @@ export function composeScene(p: ComposeParams): SceneComposition {
 export function renderSceneHeader(c: SceneComposition, displayName: string, characterId = ''): string {
   const pro = pronounsFor(characterId);
   const bits: string[] = [];
-  bits.push(`${c.timeLabel} -- ${c.weather}.`);
   if (c.firstMeeting) {
-    // First encounter: the meet hook already places both people in the scene,
-    // so we skip the "at her place, half-watching something" line entirely.
+    // First encounter: skip time/weather — the meet hook sets the scene entirely.
     if (c.meetHook) {
       bits.push(`${c.meetHook.replace(/\.+$/, '')}.`);
     }
     bits.push(`Where things go from here is up to you.`);
     return bits.join(' ');
   }
+  bits.push(`${c.timeLabel} -- ${c.weather}.`);
   if (c.phase === 'on_date') {
     bits.push(`You're ${c.setting} with ${displayName}.`);
   } else {
