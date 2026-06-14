@@ -12,6 +12,16 @@ import { validateIntent, type PlayerIntent } from '../sim/intent';
 export type ActorKind = 'companion' | 'narrator' | 'npc';
 export interface Actor { tag: string; name: string; kind: ActorKind; brief?: string }
 
+/** Arc context injected into the director when a story arc is active. */
+export interface ArcContext {
+  /** Behavioral instruction injected verbatim into the system prompt. */
+  npcInstruction: string;
+  /** Evaluative criteria passed to the director for arcStatus decisions. */
+  completionCriteria: string;
+  /** Concrete examples grounding the LLM's completion evaluation. */
+  completionExamples: string[];
+}
+
 export interface DirectorStage {
   companionSystem: string;
   companionTag: string;
@@ -20,9 +30,23 @@ export interface DirectorStage {
   directives: string;
   history: ChatMessage[];
   userMessage: string;
+  /** Present only when a story arc is active this turn. */
+  arcContext?: ArcContext;
 }
 
 export interface DirectorTurn { speaker: string; text: string }
+
+/** Arc evaluation result extracted from the director's JSON output. */
+export interface ArcResult {
+  arcStatus: 'ongoing' | 'climax' | 'completed' | 'abandoned';
+  earnedBadge: { title: string; description: string } | null;
+}
+
+/** Extended output when an arc is active. */
+export interface DirectorOutput {
+  turns: DirectorTurn[];
+  arc: ArcResult | null;
+}
 
 const MAX_HISTORY_TURNS = 30;
 
@@ -100,7 +124,11 @@ function salvageIntent(raw: string): PlayerIntent | null {
   });
 }
 
-/** Legacy: narration-only prompt (JSON array of lines). */
+/**
+ * Builds the director prompt.
+ * When stage.arcContext is provided, the output schema gains arcStatus and
+ * earnedBadge fields so the director evaluates arc progress each turn.
+ */
 export function buildDirectorPrompt(stage: DirectorStage): string {
   const turns = stage.history.slice(-MAX_HISTORY_TURNS).map((m) => (m.role === 'user' ? `User: ${m.content}` : m.content)).join('\n');
   const speakerLines = [
@@ -108,16 +136,38 @@ export function buildDirectorPrompt(stage: DirectorStage): string {
     `- "narrator" — third-person narration of non-verbal beats and what the world or other people do. No first-person, no dialogue; wrap actions in *asterisks*.`,
     ...stage.npcs.map((n) => `- "${n.name}" — ${n.brief ?? 'present in the scene'}. Speaks and acts only as themselves.`),
   ].join('\n');
+
+  const arcBlock = stage.arcContext ? `
+
+=== ACTIVE STORY ARC ===
+${stage.arcContext.npcInstruction}
+
+ARC COMPLETION CRITERIA: ${stage.arcContext.completionCriteria}
+Examples of completion: ${stage.arcContext.completionExamples.map((e, i) => `(${i + 1}) ${e}`).join(' ')}
+
+USER FREEDOM — ABSURDITY IS NOT ABANDONMENT: If the player responds with something chaotic, unhinged, or unorthodox, they are still engaging — keep arcStatus "ongoing" or "climax". Only emit "abandoned" if the player has persistently changed the subject over multiple turns or explicitly exited the conversation.
+PACING: Hold "ongoing" across multiple turns. Use "climax" to mark the emotional breaking point immediately before resolution. Only emit "completed" after a genuine climax beat.` : '';
+
+  const outputSchema = stage.arcContext
+    ? `Reply as a JSON object:
+{
+  "lines": [ { "speaker": "<name>", "text": "<their words or *action*>" } ],
+  "arcStatus": "ongoing" | "climax" | "completed" | "abandoned",
+  "earnedBadge": { "title": "<2-4 word title>", "description": "<1-sentence recap>" } or null
+}
+Set earnedBadge only when arcStatus is "completed"; otherwise null.`
+    : `Reply as a JSON object: { "lines": [ { "speaker": "<name>", "text": "<their words or *action*>" } ] }`;
+
   return (
-`${stage.companionSystem}${stage.directives}
+`${stage.companionSystem}${stage.directives}${arcBlock}
 
 === HOW TO REPLY ===
-This is a live scene that may include more than just you. Reply as a JSON array of lines, in order. Each element is {"speaker": <name>, "text": <their words or *action*>}.
-Allowed speakers (use these names exactly):
+This is a live scene that may include more than just you. ${outputSchema}
+Allowed speakers in "lines" (use these names exactly):
 ${speakerLines}
 
 Guidance: ALWAYS include at least one "${stage.companionName}" line so the player gets a reply (usually that is the only line). Add a "narrator" line or another speaker ONLY when something warrants it. Keep it short. Never write a line for the player. ADDRESS THE PLAYER AS "you" (second person) — never call them "the user" or "the player".
-Output ONLY the JSON array — no preamble, no code fences, no commentary.
+Output ONLY the JSON object — no preamble, no code fences, no commentary.
 
 ${turns ? turns + '\n' : ''}User: ${stage.userMessage}
 
@@ -155,6 +205,50 @@ export function parseDirectorTurns(raw: string, companionName: string): Director
   // graceful fallback instead of leaking structure to the player).
   const cleaned = cleanLine(text.replace(/```[a-z]*|```/gi, ''));
   return cleaned && !looksStructured(text) ? [{ speaker: companionName, text: cleaned }] : [];
+}
+
+const VALID_ARC_STATUSES = new Set(['ongoing', 'climax', 'completed', 'abandoned']);
+
+/**
+ * Parses a director JSON response that may include arc fields.
+ * Works whether or not arcContext was provided — `arc` is null when the
+ * response has no arcStatus field (i.e. when no arc was active).
+ */
+export function parseDirectorOutput(raw: string, companionName: string): DirectorOutput {
+  const text = (raw ?? '').trim();
+  let turns: DirectorTurn[] = [];
+  let arc: ArcResult | null = null;
+
+  const start = text.indexOf('{');
+  if (start >= 0) {
+    const lastClose = text.lastIndexOf('}');
+    const candidate = lastClose > start ? text.slice(start, lastClose + 1) : text.slice(start);
+    for (const json of [candidate, repairJson(candidate)]) {
+      try {
+        const obj = JSON.parse(json) as Record<string, unknown>;
+        if (Array.isArray(obj.lines)) {
+          const t = mapLines(obj.lines as unknown[], companionName);
+          if (t.length) turns = t;
+        }
+        const status = typeof obj.arcStatus === 'string' ? obj.arcStatus : null;
+        if (status && VALID_ARC_STATUSES.has(status)) {
+          const badge = obj.earnedBadge && typeof obj.earnedBadge === 'object'
+            ? obj.earnedBadge as { title?: unknown; description?: unknown }
+            : null;
+          arc = {
+            arcStatus: status as ('ongoing' | 'climax' | 'completed' | 'abandoned'),
+            earnedBadge: badge && typeof badge.title === 'string' && typeof badge.description === 'string'
+              ? { title: badge.title, description: badge.description }
+              : null,
+          };
+        }
+        if (turns.length) break;
+      } catch { /* try repaired */ }
+    }
+  }
+
+  if (turns.length === 0) turns = parseDirectorTurns(text, companionName);
+  return { turns, arc };
 }
 
 /** Renders ordered turns into the canonical tagged transcript the UI reads. */

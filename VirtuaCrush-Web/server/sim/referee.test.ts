@@ -11,7 +11,7 @@ const input: RefereeInput = {
 
 test('buildRefereePrompt lists all categories + schema keys + scene + message', () => {
   const p = buildRefereePrompt(input);
-  for (const c of ['social', 'romance', 'transaction', 'movement', 'conflict', 'crime', 'work', 'observation']) {
+  for (const c of ['social', 'romance', 'transaction', 'movement', 'conflict', 'work', 'observation']) {
     assert.ok(p.includes(`- ${c}:`), `missing category ${c}`);
   }
   assert.ok(p.includes('"interpretation"'));
@@ -20,16 +20,18 @@ test('buildRefereePrompt lists all categories + schema keys + scene + message', 
   assert.ok(p.includes('"npcIntentHints"'));
   assert.ok(p.includes('CLASSIFY'));
   assert.ok(p.toLowerCase().includes('do not decide consequences'));
-  assert.ok(p.includes('becca (Becca)'.replace('becca (Becca)', 'becca (Becca)'))); // roster id (name)
+  assert.ok(p.includes('becca (Becca)')); // roster id (name)
   assert.ok(p.includes('PLAYER: *I tie up Becca and empty the register*'));
 });
 
 test('extractIntent: parses an injected JSON completion into a typed intent', async () => {
+  // 'crime' was folded into 'conflict' (+ the separate detectWorldEvent path);
+  // the referee now classifies aggression as conflict.
   const fakeComplete = async () =>
-    '{"interpretation":"robs the store","intent":{"type":"crime","subtype":"armed robbery"},"affectedNpcs":["becca"],"npcIntentHints":[{"npc":"becca","wants":"call police"}]}';
+    '{"interpretation":"threatens Becca behind the register","intent":{"type":"conflict","subtype":"menace"},"affectedNpcs":["becca"],"npcIntentHints":[{"npc":"becca","wants":"call police"}]}';
   const out = await extractIntent(input, fakeComplete);
-  assert.equal(out.intent.type, 'crime');
-  assert.equal(out.intent.subtype, 'armed_robbery'); // normalized by parseRefereeOutput
+  assert.equal(out.intent.type, 'conflict');
+  assert.equal(out.intent.subtype, 'threaten'); // 'menace' normalized by SYNONYMS
   assert.deepEqual(out.affectedNpcs, ['becca']);
   assert.equal(out.npcIntentHints[0].wants, 'call police');
 });

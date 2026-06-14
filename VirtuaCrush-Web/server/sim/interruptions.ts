@@ -7,6 +7,7 @@
 // (only when the friend is in the scene). Cast changes & scene breaks later.
 import { friendFor, pronounsFor, type Pronouns } from './scene_registry';
 import { pickFrom } from './scene_registry';
+import type { NarrativeTag } from '../inworld/arcs';
 
 export type DisruptionKind = 'texture' | 'beat';
 
@@ -23,6 +24,8 @@ interface DisruptionSpec {
   /** 'home' = texting scenes, 'on_date' = venue scenes, 'any' = both. */
   phase: 'home' | 'on_date' | 'any';
   requiresFriend?: boolean;
+  /** Narrative tags used for arc-weighted selection. */
+  tags: NarrativeTag[];
   directive: (name: string, friend: string, pro: Pronouns) => string;
   /** Durable memory written after the beat fires (texture leaves none). */
   residue?: (name: string, friend: string, pro: Pronouns) => string;
@@ -33,27 +36,33 @@ interface DisruptionSpec {
 const TEXTURES: DisruptionSpec[] = [
   {
     poolId: 'notification_swipe', kind: 'texture', phase: 'any',
+    tags: ['social'],
     directive: (n, _f, pro) =>
       `${n}'s phone buzzes with some notification; ${pro.subject} glances and swipes it away without comment.`,
   },
   {
     poolId: 'ambient_sound', kind: 'texture', phase: 'home',
+    tags: ['stability'],
     directive: () => `Somewhere outside, a car alarm starts and gives up after a few seconds.`,
   },
   {
     poolId: 'tv_moment', kind: 'texture', phase: 'home',
+    tags: ['stability'],
     directive: (n) => `Whatever's on ${n}'s TV gets suddenly loud for a second — ${n} mutes it without looking.`,
   },
   {
     poolId: 'drink_refill', kind: 'texture', phase: 'home',
+    tags: ['stability'],
     directive: (n) => `${n} pads off mid-thought to refill ${n}'s drink and comes back settling deeper into the couch.`,
   },
   {
     poolId: 'venue_bustle', kind: 'texture', phase: 'on_date',
+    tags: ['social', 'chaos'],
     directive: () => `A small commotion nearby — someone's order went wrong, or a chair scraped too loud. It passes.`,
   },
   {
     poolId: 'venue_song', kind: 'texture', phase: 'on_date',
+    tags: ['romance', 'social'],
     directive: (n, _f, pro) =>
       `The music shifts to something ${n} clearly knows — it tugs ${pro.possessive} attention for a beat.`,
   },
@@ -62,6 +71,7 @@ const TEXTURES: DisruptionSpec[] = [
 const BEATS: DisruptionSpec[] = [
   {
     poolId: 'friend_text', kind: 'beat', phase: 'any',
+    tags: ['friendship', 'conflict', 'social'],
     directive: (n, f, pro) =>
       `${n}'s phone lights up — a text from ${f}. ${pro.subjectCap} reads it, reacts visibly (a snort, an eye-roll, a flicker of worry — your choice, in character), and puts the phone face-down. ` +
       `If the player asks, ${pro.subject} gives a vague half-answer ("${f} being ${f}") and changes the subject. Do NOT explain what the text said — it's a hook for later.`,
@@ -69,6 +79,7 @@ const BEATS: DisruptionSpec[] = [
   },
   {
     poolId: 'mom_call', kind: 'beat', phase: 'any',
+    tags: ['family', 'stress', 'isolation'],
     directive: (n, _f, pro) =>
       `${n}'s phone rings: "Mom". ${pro.subjectCap} stares at it for a second too long, then declines the call. ${pro.possessive} mood dips — distracted, a little tight. ` +
       `If the player asks, ${pro.subject} deflects ("it's nothing — family stuff") but doesn't fully recover this turn. Do NOT resolve why; leave the thread hanging.`,
@@ -76,6 +87,7 @@ const BEATS: DisruptionSpec[] = [
   },
   {
     poolId: 'delivery_knock', kind: 'beat', phase: 'home',
+    tags: ['money', 'chaos'],
     directive: (n, _f, pro) =>
       `A knock — a delivery ${n} forgot ${pro.subject} ordered. ${pro.subjectCap} is gone for a moment and comes back with a package ${pro.subject}'s clearly pleased about but won't open right now. ` +
       `If the player asks what it is, ${pro.subject} teases ("you'll see... maybe") and moves on. Do NOT reveal the contents.`,
@@ -83,6 +95,7 @@ const BEATS: DisruptionSpec[] = [
   },
   {
     poolId: 'work_ping', kind: 'beat', phase: 'any',
+    tags: ['work', 'stress'],
     directive: (n, _f, pro) =>
       `${n} gets a message that is obviously about work or ${pro.possessive} main hustle — ${pro.subject} groans, types a fast reply, and tosses the phone aside. ` +
       `It costs ${pro.object} a beat of attention and earns the player a small apology. If asked, one tired sentence about it, then ${pro.subject} firmly changes the subject to the player.`,
@@ -90,6 +103,7 @@ const BEATS: DisruptionSpec[] = [
   },
   {
     poolId: 'friend_ride_arrives', kind: 'beat', phase: 'home', requiresFriend: true,
+    tags: ['friendship', 'social'],
     directive: (n, f, pro) =>
       `${f}'s ride is outside — ${pro.subject} has to go. ${pro.subjectCap} makes a small production of leaving (one last pointed remark aimed at ${n} about the player, in character), then ${pro.subject}'s gone and the room is suddenly quieter. ` +
       `${n} reacts to the new privacy however fits ${n}'s current feelings. ${f} is now GONE from the scene — do not voice ${f} again after this reply.`,
@@ -177,9 +191,45 @@ export function renderDisruptionDirective(
     `\n\n=== DISRUPTION THIS TURN (engine event — weave it into your reply) ===\n` +
     `[${spec.kind}] ${spec.directive(displayName, friend, pro)}\n` +
     `Rules: it happens DURING this reply, woven in naturally — never ignore it, never treat it as the player's doing. ` +
-    `It interrupts the moment but does not derail the scene unless the player engages with it. ` +
+    `It interrupts the moment but does not derail the scene unless the player engages withit. ` +
     `Do not resolve any tension it introduces this turn, and keep every established scene fact intact.`
   );
+}
+
+/**
+ * Re-rolls the poolId for each unfired disruption using arc-tag weighting.
+ * Call this when a new arc activates mid-scene so the remaining disruption
+ * slots are biased toward thematically resonant moments.
+ *
+ * Weight formula: 1 + (2 × N) where N = intersecting tags with arcTags.
+ */
+export function rerollUnfiredDisruptions(
+  disruptions: PlannedDisruption[],
+  firedIds: Set<string>,
+  arcTags: NarrativeTag[],
+  opts: Pick<PlanOpts, 'phase' | 'hasFriend'>,
+): PlannedDisruption[] {
+  return disruptions.map((d) => {
+    if (firedIds.has(d.id)) return d; // already fired â leave it
+    const kind = d.kind;
+    const pool = (kind === 'texture' ? TEXTURES : BEATS).filter(
+      (s) =>
+        (s.phase === 'any' || s.phase === opts.phase) &&
+        (!s.requiresFriend || opts.hasFriend),
+    );
+    if (pool.length === 0) return d;
+    const totalWeight = pool.reduce((sum, s) => {
+      const overlap = s.tags.filter((t) => arcTags.includes(t)).length;
+      return sum + 1 + 2 * overlap;
+    }, 0);
+    let roll = Math.random() * totalWeight;
+    for (const spec of pool) {
+      const overlap = spec.tags.filter((t) => arcTags.includes(t)).length;
+      roll -= 1 + 2 * overlap;
+      if (roll <= 0) return { ...d, poolId: spec.poolId };
+    }
+    return { ...d, poolId: pool[pool.length - 1].poolId };
+  });
 }
 
 /** Durable memory text for beats (empty for texture). */
@@ -192,4 +242,6 @@ export function disruptionResidue(
   if (!spec?.residue) return '';
   const pro = pronounsFor(characterId);
   return spec.residue(displayName, friendFor(characterId).name, pro);
+}
+splayName, friendFor(characterId).name, pro);
 }

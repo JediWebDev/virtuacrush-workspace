@@ -9,7 +9,9 @@ import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { enforceMessageQuota } from '../middleware/rateLimit';
 import { streamChat, completePrompt, type ChatMessage } from '../inworld/chat';
-import { buildDirectorPrompt, parseDirectorTurns, companionTagFor, turnsToTranscript, type Actor } from '../inworld/director';
+import { buildDirectorPrompt, parseDirectorOutput, parseDirectorTurns, companionTagFor, turnsToTranscript, type Actor, type ArcContext } from '../inworld/director';
+import { selectArc, getArc } from '../inworld/arcs';
+import { getArcState, setArcActive, clearArc as clearArcState, incrementAbandonmentStrikes, resetAbandonmentStrikes, saveCompletedArc, getCompletedArcIds } from '../db/arc_state';
 import { authorityActor } from '../inworld/npcs';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
@@ -42,6 +44,7 @@ import {
   nextDueDisruption,
   renderDisruptionDirective,
   disruptionResidue,
+  rerollUnfiredDisruptions,
   type PlannedDisruption,
 } from '../sim/interruptions';
 import { formatSituationBlock, scenePhase } from '../db/scene_util';
@@ -202,13 +205,42 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   // Lazily generated if it's a new day; never throws.
   const situationPromise = getSituation(req.user!.id, characterId);
   const affinityPromise = getAffinity(req.user!.id, characterId);
+  const arcStatePromise = getArcState(req.user!.id, characterId);
+  const completedArcIdsPromise = getCompletedArcIds(req.user!.id, characterId);
 
   // Gate the prompt on these before streaming.
-  const [situation, memories, affinity] = await Promise.all([
+  const [situation, memories, affinity, arcStateResult, completedArcIds] = await Promise.all([
     situationPromise,
     memoriesPromise,
     affinityPromise,
+    arcStatePromise,
+    completedArcIdsPromise,
   ]);
+
+  let arcContext: ArcContext | undefined;
+  let arcJustStarted = false;
+  let arcIntroNarrative: string | undefined;
+  let earnedBadge: { title: string; description: string } | null = null;
+
+  // --- Arc selection / continuation ---
+  // If no arc is running, try to select one. If one is active, load it.
+  let activeArc = arcStateResult.currentArcId ? getArc(arcStateResult.currentArcId) : null;
+  if (!activeArc) {
+    const candidate = selectArc(characterId, completedArcIds, null);
+    if (candidate) {
+      await setArcActive(req.user!.id, characterId, candidate.id);
+      activeArc = candidate;
+      arcJustStarted = true;
+      arcIntroNarrative = candidate.introNarrative;
+    }
+  }
+  if (activeArc) {
+    arcContext = {
+      npcInstruction: activeArc.npcInstruction,
+      completionCriteria: activeArc.completionCriteria,
+      completionExamples: activeArc.completionExamples,
+    };
+  }
   let displayName = characterId;
   try { displayName = getCharacter(characterId).displayName; } catch { /* unknown id */ }
 
@@ -227,7 +259,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let worldEventFired = false;
   let effIntent: PlayerIntent | undefined;
   let effectPlan: EffectPlan | undefined;
-
   {
     // === Two-step LLM: referee classifies intent first; director narrates after
     // engine consequences are known (warnings, responders stay causal).
@@ -295,6 +326,28 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         if (due) {
           disruptionDirective = renderDisruptionDirective(due, displayName, characterId);
           firedDisruption = due;
+        }
+
+        // When a new arc just activated, re-bias the remaining unfired
+        // disruption slots toward thematically resonant events.
+        if (arcJustStarted && activeArc && (comp.disruptions ?? []).length > 0) {
+          const firedIds = new Set(comp.firedDisruptions ?? []);
+          const rerolled = rerollUnfiredDisruptions(
+            comp.disruptions ?? [],
+            firedIds,
+            activeArc.arcTags,
+            { phase: onDate ? 'on_date' : 'home', hasFriend: (comp.cast ?? []).length > 0 },
+          );
+          void pool.query(
+            `UPDATE character_state
+               SET scene_composition = jsonb_set(
+                 COALESCE(scene_composition, '{}'::jsonb),
+                 '{disruptions}',
+                 $3::jsonb
+               )
+             WHERE user_id = $1 AND character_id = $2`,
+            [req.user!.id, characterId, JSON.stringify(rerolled)],
+          ).catch((e) => console.warn('[chat] arc disruption re-roll persist failed:', e));
         }
       }
     } catch (sceneErr) {
@@ -390,6 +443,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       directives,
       history: turns,
       userMessage: message,
+      arcContext,
     });
   }
 
@@ -416,19 +470,19 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       const badReply = (lines: { text: string }[]) =>
         lines.length === 0 || lines.some((t) => looksDegenerate(t.text));
       const raw1 = await completePrompt(directorPrompt!, { json: true });
-      let dturns = parseDirectorTurns(raw1, displayName);
-      if (badReply(dturns)) {
+      let dirOut = parseDirectorOutput(raw1, displayName);
+      if (badReply(dirOut.turns)) {
         const raw2 = await completePrompt(directorPrompt!, { json: true });
-        dturns = parseDirectorTurns(raw2, displayName);
-        if (badReply(dturns)) {
+        dirOut = parseDirectorOutput(raw2, displayName);
+        if (badReply(dirOut.turns)) {
           console.warn(
             `[chat] director output unusable twice (${characterId}); raw tail: …${(raw2 || raw1 || '').slice(-220)}`,
           );
         }
       }
-      if (dturns.some((t) => looksDegenerate(t.text))) {
-        dturns = [];
-      }
+      let dturns = dirOut.turns.some((t) => looksDegenerate(t.text)) ? [] : dirOut.turns;
+      const arcResult = arcContext ? dirOut.arc : null;
+
       const plan = effectPlan!;
       const intent = effIntent!;
       const applied = await applyEffects(req.user!.id, characterId, plan);
@@ -442,8 +496,41 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       if (moodShift) {
         void setMood(req.user!.id, characterId, moodShift).catch((e) => console.warn('[chat] mood update failed:', e));
       }
-      const replyTurns = dturns.length ? dturns : [{ speaker: displayName, text: 'Mm — say that again? You had me for a second there.' }];
+
+      // Prepend arc intro narrative as a narrator beat on the first turn of a new arc.
+      const replyTurns = [
+        ...(arcIntroNarrative ? [{ speaker: 'narrator', text: arcIntroNarrative }] : []),
+        ...(dturns.length ? dturns : [{ speaker: displayName, text: 'Mm — say that again? You had me for a second there.' }]),
+      ];
       assistantFull = turnsToTranscript(replyTurns);
+
+      // --- Arc evaluation ---
+      if (arcResult && activeArc) {
+        const { arcStatus } = arcResult;
+        if (arcStatus === 'completed' && !arcJustStarted && arcResult.earnedBadge) {
+          // Minimum-turn guard: only accept completion after at least 3 player
+          // turns since the arc started (prevents LLM false positives on turn 1).
+          const startedAt = arcStateResult.activeArcStartedAt ?? new Date(0);
+          const { rows: tcRows } = await pool.query<{ n: number }>(
+            `SELECT count(*)::int AS n FROM chat_messages
+             WHERE user_id = $1 AND character_id = $2 AND role = 'user' AND created_at > $3`,
+            [req.user!.id, characterId, startedAt],
+          );
+          const turnsSinceStart = Number(tcRows[0]?.n ?? 0);
+          if (turnsSinceStart >= 2) {
+            earnedBadge = arcResult.earnedBadge;
+            void saveCompletedArc(req.user!.id, characterId, activeArc, earnedBadge).catch(() => {});
+            void clearArcState(req.user!.id, characterId).catch(() => {});
+          }
+        } else if (arcStatus === 'abandoned') {
+          const newStrikes = await incrementAbandonmentStrikes(req.user!.id, characterId);
+          if (newStrikes >= 3) {
+            void clearArcState(req.user!.id, characterId).catch(() => {});
+          }
+        } else if ((arcStatus === 'ongoing' || arcStatus === 'climax') && arcStateResult.abandonmentStrikes > 0) {
+          void resetAbandonmentStrikes(req.user!.id, characterId).catch(() => {});
+        }
+      }
       if (!abortController.signal.aborted) send('chunk', { text: assistantFull });
 
       // Perception update for NEXT turn: companion learns name/bio, and outfit when co-present.
@@ -502,7 +589,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       remaining = Math.max(0, FREE_TIER_DAILY_LIMIT - used);
     }
 
-    send('done', { remaining, affinityScore: newAffinityScore });
+    send('done', { remaining, affinityScore: newAffinityScore, earnedBadge });
 
     // Advance the living world a little each message (deterministic, no LLM, off the response path).
     void runLightTick(req.user!.id, { excludeId: characterId }).catch((e) => console.warn('[tick] light tick failed:', e));

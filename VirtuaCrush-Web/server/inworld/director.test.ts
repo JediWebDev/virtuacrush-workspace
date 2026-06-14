@@ -17,11 +17,11 @@ test('buildDirectorPrompt asks for JSON and lists speakers, no tag rules', () =>
     history: [{ role: 'user', content: 'hi' }],
     userMessage: '*dumps soap in the fountain*',
   });
-  assert.ok(p.includes('JSON array'));
+  assert.ok(p.includes('JSON object'));
   assert.ok(p.includes('"Serena"'));
   assert.ok(p.includes('"narrator"'));
   assert.ok(p.includes('"Security"'));
-  assert.ok(p.includes('Output ONLY the JSON array'));
+  assert.ok(p.includes('Output ONLY the JSON object'));
   assert.ok(p.includes('ALWAYS include at least one'));
   assert.ok(p.includes('User: *dumps soap in the fountain*'));
 });
