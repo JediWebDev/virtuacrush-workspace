@@ -21,7 +21,6 @@ import {
   outfitContextFor,
   friendFor,
   FRIEND_AGENDAS,
-  FIRST_MEET_HOOKS,
   MEET_HOOK_BY_CHARACTER,
   pronounsFor,
 } from './scene_registry';
@@ -150,7 +149,7 @@ export function composeScene(p: ComposeParams): SceneComposition {
     cast,
     firstMeeting: Boolean(p.firstMeeting),
     meetHook: p.firstMeeting
-      ? (MEET_HOOK_BY_CHARACTER[p.characterId] ?? pickFrom(FIRST_MEET_HOOKS, r))
+      ? (MEET_HOOK_BY_CHARACTER[p.characterId] ?? 'You matched online and it clicked immediately')
       : undefined,
     disruptions: planDisruptions(r, {
       phase: p.phase,
