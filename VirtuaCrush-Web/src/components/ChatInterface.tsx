@@ -500,7 +500,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                     animate={{ opacity: 1, y: 0 }}
                     className="flex w-full justify-center px-4 py-1.5"
                   >
-                    <p className="max-w-[82%] rounded-xl border border-violet-200/70 bg-violet-50/80 px-4 py-2.5 text-center text-[13px] italic leading-relaxed text-violet-900 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-200">
+                    <p className="max-w-[82%] rounded-xl border border-violet-300/60 bg-violet-100 px-4 py-2.5 text-center text-[13px] italic leading-relaxed text-violet-900 dark:border-violet-300/30 dark:bg-violet-300/20 dark:text-violet-100">
                       {nsegs.map((seg) => seg.text).join(" ")}
                     </p>
                   </motion.div>
