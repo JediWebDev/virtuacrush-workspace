@@ -55,7 +55,7 @@ export const WEATHER_POOL = [
 
 // --- Her place: fixed props + mutable details -----------------------------------
 
-// Persistent furniture (stable across visits — sampled once per composition for
+// Persistent furniture (stable across visits -- sampled once per composition for
 // mention, but drawn from the same fixed list so the room never "remodels").
 export const HOME_PROPS = [
   'the couch',
@@ -67,7 +67,7 @@ export const HOME_PROPS = [
   'her desk in the corner',
 ] as const;
 
-// Mutable slots — the things that change between visits and make the room feel
+// Mutable slots -- the things that change between visits and make the room feel
 // lived-in. One or two per composition.
 export const HOME_DETAILS = [
   'two empty mugs on the coffee table',
@@ -143,7 +143,7 @@ export const OUTFITS: Record<StyleArchetype, Record<OutfitContext, readonly stri
     date_out: ['wide-leg trousers and a tucked blouse', 'a sporty-chic dress with heels and a leather jacket'],
   },
   alt_edgy: {
-    sleep: ['a band tee three sizes too big', 'black shorts and a faded tour shirt'], 
+    sleep: ['a band tee three sizes too big', 'black shorts and a faded tour shirt'],
     home_day: ['ripped black jeans and a flannel', 'a band tee and cargo pants, rings still on'],
     home_evening: ['fishnets under shorts and an oversized hoodie', 'a cropped band tee and plaid pajama pants'],
     date_casual: ['black skinny jeans, docs, and a leather jacket', 'a graphic tee under a pleated skirt with chains'],
@@ -200,7 +200,7 @@ export function outfitContextFor(phase: string, hour: number): OutfitContext {
 }
 
 // --- The canonical best friend ---------------------------------------------------
-// Each companion gets ONE stable friend, derived deterministically from her id —
+// Each companion gets ONE stable friend, derived deterministically from her id --
 // same name forever, across users and sessions. Names avoid companion names and
 // phonetic neighbors (cast disambiguation rule). The LLM never invents names;
 // these are engine facts.
@@ -246,10 +246,10 @@ export function friendFor(characterId: string): FriendCanon {
 }
 
 // --- First meetings ---------------------------------------------------------------
-// How the match happened, used ONLY for the very first conversation between a
-// user and a character (consistent with the app's "you just matched" fiction).
-// After the first chat exists, openings describe a pair who already know
-// each other.
+// Character-specific meet hooks: the exact scenario rendered in renderSceneHeader
+// on the very first visit. Each hook places the player in the scene and names the
+// character so the narration reads as a self-contained vignette.
+// Fallback pool is used only if a character has no specific hook.
 
 export const FIRST_MEET_HOOKS = [
   'You two matched online and hit it off',
@@ -257,6 +257,30 @@ export const FIRST_MEET_HOOKS = [
   'You met through the app and the conversation never stopped',
   'You matched and it clicked immediately',
 ] as const;
+
+/** Per-character first-meeting scene hooks -- overrides the generic pool above. */
+export const MEET_HOOK_BY_CHARACTER: Record<string, string> = {
+  serena:
+    "You're browsing a cramped art supply store when a cascade of spray cans rains down from the top shelf. The culprit -- Serena, white hair, heavy eyeliner -- freezes when she sees you",
+  becca:
+    "You reach for a DVD at the last video rental store in the city. So does the girl behind the counter -- Becca -- at the exact same moment",
+  mina:
+    "Artist Alley at the con is a beautiful chaos of booths and noise. Mina, moving considerably faster than everyone else, doesn't see you until it's too late",
+  madison:
+    "The barista sets a vanilla oat latte on the counter. You and Madison reach for it at exactly the same moment",
+  jordan:
+    "You're cutting through the park when Jordan -- one player short for the pickup game -- locks eyes with you like you're exactly what she's been waiting for",
+  riot:
+    "The show ended twenty minutes ago and you're still in the venue when Riot, hauling guitar cases through the room, nearly takes out your shins",
+  lexi:
+    "You head back to your car in the parking garage and find Lexi -- slim jim in hand -- who freezes the moment she sees you",
+  lin:
+    "In the library, you watch a tall stack of books begin to tilt past the point of no return. You reach out and catch them. Lin looks up",
+  iris:
+    "You end up in the botanical garden without quite planning to. After ten minutes standing lost in front of the same display, someone comes to you -- Iris, who teaches here, and who noticed",
+  ash:
+    "You've been circling the same terminal for twenty minutes with the wrong map. Ash -- who has been stuck here four days and has that particular stillness about him -- offers to help",
+};
 
 // --- Pronoun system -----------------------------------------------------------
 

@@ -1,5 +1,5 @@
 // Scene composer: turns sim state into a concrete, engine-authoritative opening
-// scene — time, weather, setting, mutable details, outfit, and who else is
+// scene -- time, weather, setting, mutable details, outfit, and who else is
 // around. Two renderings of the same object:
 //   renderSceneHeader()     -> VN-style prose narration shown to the user
 //   renderSceneFactsBlock() -> compact facts block injected into the LLM prompt
@@ -22,6 +22,7 @@ import {
   friendFor,
   FRIEND_AGENDAS,
   FIRST_MEET_HOOKS,
+  MEET_HOOK_BY_CHARACTER,
   pronounsFor,
 } from './scene_registry';
 
@@ -148,7 +149,9 @@ export function composeScene(p: ComposeParams): SceneComposition {
     activity: sceneActivity(p.state.activity, hour, p.phase !== 'on_date', r),
     cast,
     firstMeeting: Boolean(p.firstMeeting),
-    meetHook: p.firstMeeting ? pickFrom(FIRST_MEET_HOOKS, r) : undefined,
+    meetHook: p.firstMeeting
+      ? (MEET_HOOK_BY_CHARACTER[p.characterId] ?? pickFrom(FIRST_MEET_HOOKS, r))
+      : undefined,
     disruptions: planDisruptions(r, {
       phase: p.phase,
       hasFriend: cast.length > 0,
@@ -162,18 +165,12 @@ export function composeScene(p: ComposeParams): SceneComposition {
 export function renderSceneHeader(c: SceneComposition, displayName: string, characterId = ''): string {
   const pro = pronounsFor(characterId);
   const bits: string[] = [];
-  bits.push(`${c.timeLabel} — ${c.weather}.`);
+  bits.push(`${c.timeLabel} -- ${c.weather}.`);
   if (c.firstMeeting) {
-    // First encounter: short meet-cute hook, brief placement, closer.
-    // No outfit or detail list — keep it punchy.
+    // First encounter: the meet hook already places both people in the scene,
+    // so we skip the "at her place, half-watching something" line entirely.
     const hook = (c.meetHook ?? `You and ${displayName} just matched online`).replace(/\.+$/, '');
     bits.push(`${hook}.`);
-    // Strip the verbose props list ("string lights over the window and her desk in the corner")
-    // for the very first meeting — just "at his/her place".
-    const briefSetting = c.setting.includes('in frame of the story')
-      ? `at ${pro.possessive} place`
-      : c.setting;
-    bits.push(`${displayName} is ${briefSetting}, ${c.activity}.`);
     bits.push(`Where things go from here is up to you.`);
     return bits.join(' ');
   }
@@ -185,7 +182,7 @@ export function renderSceneHeader(c: SceneComposition, displayName: string, char
   if (c.details.length) bits.push(`${c.details.join('; ')}.`.replace(/\.\.$/, '.'));
   bits.push(`${pro.subjectCap}'s in ${c.outfit}.`);
   for (const m of c.cast) {
-    bits.push(`${m.name} — ${pro.possessive} ${m.role} — is there too, and ${m.agenda}.`);
+    bits.push(`${m.name} -- ${pro.possessive} ${m.role} -- is there too, and ${m.agenda}.`);
   }
   return bits.join(' ');
 }
@@ -194,25 +191,26 @@ export function renderSceneHeader(c: SceneComposition, displayName: string, char
 export function renderSceneFactsBlock(c: SceneComposition, displayName: string, characterId = ''): string {
   const pro = pronounsFor(characterId);
   const lines: string[] = [
-    `\n\n=== SCENE FACTS (engine-authoritative — never contradict these) ===`,
+    `\n\n=== SCENE FACTS (engine-authoritative -- never contradict these) ===`,
     `Time: ${c.timeLabel}. Weather: ${c.weather}.`,
     `${displayName} is ${c.setting}; ${pro.subject} was ${c.activity}.`,
     c.details.length ? `Scene details: ${c.details.join('; ')}.` : '',
-    `${pro.subjectCap} is wearing ${c.outfit} — do not change or re-invent ${pro.possessive} outfit this scene.`,
+    `${pro.subjectCap} is wearing ${c.outfit} -- do not change or re-invent ${pro.possessive} outfit this scene.`,
   ];
   if (c.firstMeeting) {
+    const meetScenario = c.meetHook?.toLowerCase() ?? 'you just met for the first time';
     lines.push(
-      `FIRST MEETING: You and the player have NEVER spoken before — ${c.meetHook?.toLowerCase() ?? 'you just matched on the app'}. ` +
-        `There is no shared history: no past conversations, dates, nicknames, or inside jokes — do not invent any. ` +
+      `FIRST MEETING: You and the player have NEVER spoken before -- ${meetScenario}. ` +
+        `There is no shared history: no past conversations, dates, nicknames, or inside jokes -- do not invent any. ` +
         `Play genuine first-impressions energy: curious, feeling them out, a little guarded but interested.`,
     );
   } else if (c.cast.length) {
     for (const m of c.cast) {
       // Friends are always female (drawn from FRIEND_NAMES which are all female).
       lines.push(
-        `ALSO PRESENT: ${m.name}, ${pro.possessive} ${m.role} — ${m.vibe}. Right now ${m.name} ${m.agenda}. ` +
+        `ALSO PRESENT: ${m.name}, ${pro.possessive} ${m.role} -- ${m.vibe}. Right now ${m.name} ${m.agenda}. ` +
           `Voice ${m.name} ONLY via [${m.name.toUpperCase()}] tagged lines; she can interject, react, or be overheard. ` +
-          `She is real and persistent — never rename her or swap her for someone else.`,
+          `She is real and persistent -- never rename her or swap her for someone else.`,
       );
     }
   }
