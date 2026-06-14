@@ -251,13 +251,6 @@ export function friendFor(characterId: string): FriendCanon {
 // character so the narration reads as a self-contained vignette.
 // Fallback pool is used only if a character has no specific hook.
 
-export const FIRST_MEET_HOOKS = [
-  'You two matched online and hit it off',
-  'You found each other through the app and swapped numbers',
-  'You met through the app and the conversation never stopped',
-  'You matched and it clicked immediately',
-] as const;
-
 /** Per-character first-meeting scene hooks -- overrides the generic pool above. */
 export const MEET_HOOK_BY_CHARACTER: Record<string, string> = {
   serena:
@@ -271,7 +264,7 @@ export const MEET_HOOK_BY_CHARACTER: Record<string, string> = {
   jordan:
     "You're cutting through the park when Jordan -- one player short for the pickup game -- locks eyes with you like you're exactly what she's been waiting for",
   riot:
-    "The show ended twenty minutes ago and you're still in the venue when Riot, hauling guitar cases through the room, nearly takes out your shins",
+    "The concert ended twenty minutes ago and your friend you came with left you to go home with some pretty face she met at the show. The backstage door opens and you notice the lead guitarist from the band walk out. He looks around and notices you",
   lexi:
     "You head back to your car in the parking garage and find Lexi -- slim jim in hand -- who freezes the moment she sees you",
   lin:
@@ -279,7 +272,7 @@ export const MEET_HOOK_BY_CHARACTER: Record<string, string> = {
   iris:
     "You end up in the botanical garden without quite planning to. After ten minutes standing lost in front of the same display, someone comes to you -- Iris, who teaches here, and who noticed",
   ash:
-    "You've been circling the same terminal for twenty minutes with the wrong map. Ash -- who has been stuck here four days and has that particular stillness about him -- offers to help",
+    "You decided to head to parts unknown in search of new experiences. The only problem is you lost your phone somewhere between the airport and this market place. You notice a man looking in your direction. He begins to approach you.",
 };
 
 // --- Pronoun system -----------------------------------------------------------
