@@ -243,5 +243,3 @@ export function disruptionResidue(
   const pro = pronounsFor(characterId);
   return spec.residue(displayName, friendFor(characterId).name, pro);
 }
-splayName, friendFor(characterId).name, pro);
-}
