@@ -729,16 +729,3 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     </motion.div>
   );
 }
-Meters drives={storyState?.drives} />
-          <SecretCard secret={storyState?.secret} name={character.name} />
-          <ActivityLog characterId={character.id} name={character.name} />
-                </div>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-    </motion.div>
-  );
-}
