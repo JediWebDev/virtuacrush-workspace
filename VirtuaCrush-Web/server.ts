@@ -32,6 +32,7 @@ import desireRouter from './server/routes/desire';
 import assetsRouter from './server/routes/assets';
 import diaryRouter from './server/routes/diary';
 import interestRouter from './server/routes/interest';
+import travelRouter from './server/routes/travel';
 import { syncCuratedPosts } from './server/jobs/curated_posts';
 import { summarizePendingDiaries } from './server/db/diary';
 
@@ -87,13 +88,10 @@ app.use('/api/posts', postsRouter);
 app.use('/api/profile', profileRouter);
 app.use('/api/world', worldRouter);
 app.use('/api/desire', desireRouter);
+app.use('/api/assets', assetsRouter);
 app.use('/api/diary', diaryRouter);
 app.use('/api/interest', interestRouter);
-
-// Images/media proxied from the private R2 bucket (falls back to /public).
-// No auth: these are the same assets the site ships publicly, and skipping
-// auth keeps them browser/CDN cacheable.
-app.use('/api/assets', assetsRouter);
+app.use('/api/travel', travelRouter);
 
 // --- Health check -----------------------------------------------------------
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
@@ -114,27 +112,46 @@ if (process.env.SERVE_STATIC === 'true' || process.env.SERVE_STATIC === '1') {
 }
 
 // --- Start ------------------------------------------------------------------
-const HOST = process.env.HOST ?? '0.0.0.0';
-const server = app.listen(PORT, HOST, () => {
-  console.log(`[server] listening on ${HOST}:${PORT}`);
-  // Run DB migrations AFTER binding the port so a slow/unready database can
-  // never block startup or fail the healthcheck. Idempotent + non-fatal.
-  void applyMigrations().catch((e) => console.error('[migrate] background run failed:', e));
-
-  // Background jobs (fail-soft, off the request path):
-  //  - curated feed sync: picks up new image+caption pairs from the R2 bucket
-  //  - diary sweep: summarizes idle chat sessions into story-so-far beats
-  setTimeout(() => void syncCuratedPosts(), 15_000);
-  setInterval(() => void syncCuratedPosts(), 60 * 60_000).unref();
-  setInterval(() => void summarizePendingDiaries(), 15 * 60_000).unref();
+const server = app.listen(PORT, () => {
+  console.log(`[server] listening on http://localhost:${PORT}`);
 });
 
 // Friendly handling for the common "port already taken" case (usually a stale
-// dev server still holding the port).
+// dev server still holding the port — see the shutdown note below).
 server.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EADDRINUSE') {
-    console.error(`[server] port ${PORT} is already in use — is another dev server still running?`);
+    console.error(
+      `[server] port ${PORT} is already in use — another instance is probably ` +
+        `still running. Stop it (Windows: \`npx kill-port ${PORT}\`, or find the ` +
+        `PID with \`netstat -ano | findstr :${PORT}\` then \`taskkill /PID <pid> /F\`) ` +
+        `or set PORT to a free port.`,
+    );
     process.exit(1);
   }
   throw err;
 });
+
+// Graceful shutdown.
+//
+// The @inworld/runtime addon registers its OWN SIGINT/SIGTERM/exit listeners
+// that close its native thread pool but never call process.exit(). Because
+// registering any SIGINT listener suppresses Node's default "terminate on
+// Ctrl+C" behavior, the process would otherwise linger after Ctrl+C with a
+// closed thread pool — a zombie that keeps holding the port (EADDRINUSE on the
+// next start) and fails every chat request with "Thread pool is closed".
+// We register our own handlers that actually exit so the process really dies.
+let shuttingDown = false;
+const shutdown = (signal: string) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[server] ${signal} received — shutting down`);
+  server.close(() => process.exit(0));
+  // Don't hang forever if a connection refuses to drain (e.g. open SSE stream).
+  setTimeout(() => process.exit(0), 5_000).unref();
+};
+['SIGINT', 'SIGTERM'].forEach((sig) => process.on(sig, () => shutdown(sig)));
+
+// --- Startup tasks ----------------------------------------------------------
+applyMigrations().catch((e) => console.error('[startup] migrations failed:', e));
+syncCuratedPosts().catch((e) => console.warn('[curated_posts] initial sync failed:', e));
+summarizePendingDiaries().catch((e) => console.warn('[diary] initial summarize failed:', e));

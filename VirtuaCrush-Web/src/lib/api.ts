@@ -71,6 +71,8 @@ export interface CharacterState {
   secret?: { label: string; discovered: boolean; reveal: string | null; progress?: number };
   drives?: { key: string; label: string; value: number }[];
   pendingEvent?: { drive: string; prompt: string; options: { id: string; label: string }[] } | null;
+  /** Current travel location slug (null = player is at home / remote chat). */
+  sceneLocation?: string | null;
 }
 
 // Current story-engine state (what the character is "doing" today) for the
@@ -136,4 +138,43 @@ export function fetchUsage(): Promise<UsageInfo> {
 /** Joins the VIP interest list ("notify me when it launches"). */
 export async function joinInterestList(email: string): Promise<void> {
   await api('/api/interest', { method: 'POST', body: JSON.stringify({ email, source: 'vip_waitlist' }) });
+}
+
+// --- Travel ------------------------------------------------------------------
+
+export interface TravelLocation {
+  slug: string;
+  name: string;
+  shortName: string;
+  type: 'player_home' | 'public' | 'character_home';
+  characterId?: string;
+  affinityRequired?: number;
+}
+
+export interface TravelResult {
+  location: TravelLocation;
+  sceneHeader?: string;
+}
+
+/**
+ * Moves the player (in the context of their conversation with characterId) to
+ * the given location. Throws ApiError on affinity gate or unknown slug.
+ */
+export async function travel(
+  characterId: string,
+  locationSlug: string,
+): Promise<TravelResult> {
+  return api<TravelResult>('/api/travel', {
+    method: 'POST',
+    body: JSON.stringify({ characterId, locationSlug }),
+  });
+}
+
+/**
+ * Reads the player's current location for this character from the state
+ * endpoint (scene_location field). Returns null when at home.
+ */
+export async function getPlayerLocation(characterId: string): Promise<string | null> {
+  const state = await fetchCharacterState(characterId);
+  return state.sceneLocation ?? null;
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
-import { fetchGreeting, fetchCharacterState, respondToDesire, fetchChatHistory, type CharacterState, type ChatHistoryDay } from "../lib/api";
+import { fetchGreeting, fetchCharacterState, respondToDesire, fetchChatHistory, travel, type CharacterState, type ChatHistoryDay, type TravelResult } from "../lib/api";
 import { splitNarration } from "../lib/narration";
 import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
@@ -10,6 +10,7 @@ import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Searc
 import { Character } from "../types/character";
 import type { UserTier } from "../types/subscription";
 import SocialFeed from "./SocialFeed";
+import CityMap from "./CityMap";
 import UpgradeToast from "./UpgradeToast";
 import SecretCard from "./SecretCard";
 import DriveMeters from "./DriveMeters";
@@ -58,6 +59,9 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [profileOpen, setProfileOpen] = useState(false);
   const [storyState, setStoryState] = useState<CharacterState | null>(null);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
+  // Travel / city map
+  const [playerLocation, setPlayerLocation] = useState<string | null>(null);
+  const [isTraveling, setIsTraveling] = useState(false);
   const navigate = useNavigate();
 
   const handleDesireRespond = async (choice: "encourage" | "redirect" | "decline") => {
@@ -135,10 +139,46 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     let cancelled = false;
     setStoryState(null);
     fetchCharacterState(character.id)
-      .then((s) => { if (!cancelled) setStoryState(s); })
+      .then((s) => {
+        if (!cancelled) {
+          setStoryState(s);
+          // Seed the map's current location from persisted state.
+          setPlayerLocation(s.sceneLocation ?? null);
+        }
+      })
       .catch((err) => console.error('[state] fetch failed:', err));
     return () => { cancelled = true; };
   }, [character.id]);
+
+  // Travel handler — called by CityMap when the player clicks a pin.
+  const handleTravel = async (locationSlug: string) => {
+    if (isTraveling) return;
+    setIsTraveling(true);
+    try {
+      const result: TravelResult = await travel(character.id, locationSlug);
+      const newSlug = locationSlug === "player_home" ? null : locationSlug;
+      setPlayerLocation(newSlug);
+      // Inject a narrator travel message into the chat.
+      const locationName = result.location.name;
+      const travelMsg = result.sceneHeader
+        ? `[NARRATOR] You're now at ${locationName}. ${result.sceneHeader}`
+        : `[NARRATOR] You travel to ${locationName}.`;
+      setMessages((prev) => [
+        ...prev,
+        { id: `travel-${Date.now()}`, role: "assistant" as const, content: travelMsg },
+      ]);
+    } catch (err: any) {
+      const detail = err?.body?.error === "affinity_too_low"
+        ? `You need ${err?.body?.required} affinity to visit here (you have ${err?.body?.current}).`
+        : "Couldn't travel there right now.";
+      setMessages((prev) => [
+        ...prev,
+        { id: `travel-err-${Date.now()}`, role: "assistant" as const, content: `[NARRATOR] ${detail}` },
+      ]);
+    } finally {
+      setIsTraveling(false);
+    }
+  };
 
   const characterWithAffinity: Character = { ...character, currentAffinity: affinity };
 
@@ -583,9 +623,18 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           </>
         )}
       </motion.div>
-      {/* Desktop social feed */}
-      <div className="hidden min-h-0 flex-col border-l border-black/[0.06] dark:border-white/[0.06] lg:flex">
-        <SocialFeed character={characterWithAffinity} className="h-full w-full" isActive userTier={userTier} refreshKey={feedRefreshKey} />
+      {/* Desktop right panel — city map above social feed */}
+      <div className="hidden min-h-0 flex-col border-l border-black/[0.06] dark:border-white/[0.06] lg:flex overflow-y-auto">
+        <div className="shrink-0 border-b border-black/[0.06] dark:border-white/[0.06]">
+          <CityMap
+            characterId={character.id}
+            currentLocation={playerLocation}
+            currentAffinity={affinity}
+            onTravel={handleTravel}
+            isTraveling={isTraveling}
+          />
+        </div>
+        <SocialFeed character={characterWithAffinity} className="min-h-0 flex-1" isActive userTier={userTier} refreshKey={feedRefreshKey} />
       </div>
 
       <AnimatePresence>
@@ -617,6 +666,15 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                   <X size={20} />
                 </button>
               </div>
+              <div className="shrink-0 border-b border-black/[0.06] dark:border-white/[0.06]">
+                <CityMap
+                  characterId={character.id}
+                  currentLocation={playerLocation}
+                  currentAffinity={affinity}
+                  onTravel={(slug) => { handleTravel(slug); setFeedOpen(false); }}
+                  isTraveling={isTraveling}
+                />
+              </div>
               <SocialFeed character={characterWithAffinity} className="min-h-0 flex-1" isActive={feedOpen} userTier={userTier} refreshKey={feedRefreshKey} />
             </motion.div>
           </>
@@ -638,31 +696,40 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", damping: 28, stiffness: 280 }}
-              className="absolute inset-y-0 left-0 z-[60] flex w-full max-w-[320px] flex-col border-r border-black/[0.08] dark:border-white/[0.08] bg-stone-50 dark:bg-surface shadow-2xl lg:hidden"
+              className="absolute inset-y-0 left-0 z-[60] flex w-full max-w-[340px] flex-col overflow-y-auto bg-stone-50 dark:bg-surface shadow-2xl lg:hidden border-r border-black/[0.08] dark:border-white/[0.08]"
             >
               <div className="flex shrink-0 items-center justify-between border-b border-black/[0.06] dark:border-white/[0.06] px-4 py-3">
                 <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">Profile</span>
                 <button
                   type="button"
                   onClick={() => setProfileOpen(false)}
-                  className="rounded-lg p-2 text-stone-600 transition-colors hover:bg-black/[0.06] hover:text-stone-800 dark:text-stone-400 dark:hover:bg-white/[0.06] dark:hover:text-stone-100"
+                  className="rounded-lg p-2 text-stone-600 dark:text-stone-400 transition-colors hover:bg-black/[0.06] dark:hover:bg-white/[0.06] hover:text-stone-800 dark:hover:text-stone-100"
                   aria-label="Close profile"
                 >
                   <X size={20} />
                 </button>
               </div>
-              <div className="no-scrollbar flex-1 overflow-y-auto p-6">
-                <div className="flex flex-col items-center text-center">
-                  <div className="relative mb-5 h-36 w-36 overflow-hidden rounded-[2rem] border border-black/10 bg-stone-200 p-1 shadow-xl shadow-black/10 dark:border-white/10 dark:bg-stone-800/40 dark:shadow-black/20">
-                    <img src={character.image} alt="" className="h-full w-full rounded-[1.75rem] object-cover" />
-                    <div className="absolute bottom-3 right-3 h-3.5 w-3.5 rounded-full border-2 border-stone-50 bg-emerald-400 dark:border-surface shadow-[0_0_0_2px_rgba(16,185,129,0.35)]" />
-                  </div>
-                  <h2 className="mb-1 font-serif text-2xl font-bold text-stone-900 dark:text-stone-50">{character.name}</h2>
-                  <p className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-accent">{character.role}</p>
-                  <span className="mb-5 inline-flex items-center rounded-full border border-black/10 bg-black/[0.04] px-3 py-1 text-[11px] font-semibold text-stone-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-300">
-                    Affinity {affinity}%
-                  </span>
-                  <DriveMeters drives={storyState?.drives} />
+              <div className="flex flex-col items-center p-6 text-center">
+                <div className="relative mb-4 h-32 w-32 overflow-hidden rounded-[1.5rem] border border-black/10 dark:border-white/10 bg-stone-200 dark:bg-stone-800/40 shadow-xl">
+                  <img src={character.image} alt="" className="h-full w-full object-cover" />
+                </div>
+                <h2 className="mb-1 font-serif text-xl font-bold text-stone-900 dark:text-stone-50">{character.name}</h2>
+                <p className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-accent">{character.role}</p>
+                <span className="mb-4 inline-flex items-center rounded-full border border-black/10 dark:border-white/10 bg-black/[0.04] dark:bg-white/[0.04] px-3 py-1 text-[11px] font-semibold text-stone-600 dark:text-stone-300">
+                  Affinity {affinity}%
+                </span>
+                <DriveMeters drives={storyState?.drives} />
+                <SecretCard secret={storyState?.secret} name={character.name} />
+                <ActivityLog characterId={character.id} name={character.name} />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+Meters drives={storyState?.drives} />
           <SecretCard secret={storyState?.secret} name={character.name} />
           <ActivityLog characterId={character.id} name={character.name} />
                 </div>

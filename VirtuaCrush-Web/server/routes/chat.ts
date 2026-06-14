@@ -46,7 +46,7 @@ import {
   rerollUnfiredDisruptions,
   type PlannedDisruption,
 } from '../sim/interruptions';
-import { formatSituationBlock } from '../db/scene_util';
+import { formatSituationBlock, formatLocationBlock } from '../db/scene_util';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
 import { runLightTick, assembleWorld, assembleFullWorld, applyTick, getWorldClock, MIN_IDLE_MINUTES, MAX_CATCHUP_MINUTES } from '../db/sim_world';
 import type { PlayerIntent } from '../sim/intent';
@@ -315,7 +315,9 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     try {
       const comp = await getOrComposeScene(req.user!.id, characterId, displayName, situation);
       if (comp) {
-        sceneFacts = renderSceneFactsBlock(comp, displayName, characterId, { suppressFirstMeeting: !!activeArc?.sceneAnchor });
+        sceneFacts = renderSceneFactsBlock(comp, displayName, characterId, {
+          suppressFirstMeeting: !!activeArc?.sceneAnchor || !!situation.scene.location,
+        });
         sceneCast = comp.cast;
 
         // Mid-scene interruptions: fire the next pre-rolled disruption when
@@ -328,7 +330,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         );
         const turn = Number(turnRows[0]?.n ?? 0) + 1;
         const due = nextDueDisruption(comp, turn);
-        if (due && !activeArc?.sceneAnchor?.coPresent) {
+        if (due && !activeArc?.sceneAnchor?.coPresent && !situation.scene.location) {
           disruptionDirective = renderDisruptionDirective(due, displayName, characterId);
           firedDisruption = due;
         }
@@ -417,12 +419,15 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     const engineFacts = formatEngineFactsBlock(effectPlan, authority);
 
     const directives =
-      // Arc-anchored scenes (meet arcs, future date arcs) declare their own
-      // physical setting via SceneAnchor, which takes precedence over the
-      // default home/remote block so the LLM knows where it actually is.
+      // Priority order for the CURRENT SETTING block:
+      // 1. Arc sceneAnchor (meet arcs, story arcs with their own physical scene)
+      // 2. Player travel location (player has moved to a city venue with companion)
+      // 3. Default home/remote block (player and companion are texting from apart)
       (activeArc?.sceneAnchor
         ? formatAnchorBlock(activeArc.sceneAnchor)
-        : formatSituationBlock(situation.state, scene, displayName, affinity)) +
+        : situation.scene.location
+          ? formatLocationBlock(situation.scene.location, displayName, affinity)
+          : formatSituationBlock(situation.state, scene, displayName, affinity)) +
       sceneFacts +
       disruptionDirective +
       formatCharacterFactsBlock(getLore(characterId)) +

@@ -1,18 +1,20 @@
 // Pure helpers for the scene system: prompt formatting and phase type.
 import type { DailyState } from './story_util';
+import { getLocation } from '../inworld/locations';
 
-export type ScenePhase = 'home' | 'on_date'; // 'on_date' reserved for future arc-driven scenes
+export type ScenePhase = 'home' | 'on_date';
 
 export interface SceneState {
-  location: string | null; // venue slug (reserved; currently always null)
+  location: string | null; // venue slug; null = player is at home (remote chat)
 }
 
 /**
- * Derives scene phase from state. Always 'home' now that the date loop is
- * removed; retained as a typed hook for future arc-driven co-present scenes.
+ * Derives scene phase from state.
+ * 'on_date' now means "player has traveled to a location" (not necessarily a date —
+ * just any co-present venue). The name is kept for backward compat with scene_composition.ts.
  */
-export function scenePhase(_scene: SceneState): ScenePhase {
-  return 'home';
+export function scenePhase(scene: SceneState): ScenePhase {
+  return scene.location ? 'on_date' : 'home';
 }
 
 function closenessNote(affinity?: number): string {
@@ -24,9 +26,8 @@ function closenessNote(affinity?: number): string {
 }
 
 /**
- * Builds the remote-chat situation block injected into the chat system prompt.
- * For arc-driven co-present scenes, chat.ts overrides this with a SceneAnchor
- * block instead.
+ * Builds the remote-chat situation block (player and companion are APART).
+ * Used when scene.location is null and no arc sceneAnchor is active.
  */
 export function formatSituationBlock(
   state: Pick<DailyState, 'activity' | 'mood'>,
@@ -42,6 +43,48 @@ export function formatSituationBlock(
     `You and the user are NOT in the same room — you're texting from a distance. ` +
     `If asked, you are at home doing your own thing, chatting with them remotely. ` +
     `When you agree to meet up, narrate getting ready or heading out — do not teleport to the venue.` +
+    closeness
+  );
+}
+
+export function formatLocationBlock(
+  locationSlug: string,
+  _displayName: string,
+  affinity?: number,
+): string {
+  const loc = getLocation(locationSlug);
+  const closeness = closenessNote(affinity);
+
+  if (!loc) {
+    return (
+      `\n\n=== CURRENT SETTING ===\n` +
+      `You and the player are PHYSICALLY TOGETHER at a location in the city.` +
+      closeness
+    );
+  }
+
+  const homeNote =
+    loc.type === 'player_home'
+      ? `This is the player's own space — they're on their turf and you're a guest here.`
+      : loc.type === 'character_home'
+        ? `This is YOUR space — you're on your turf and the player is a guest here.`
+        : '';
+
+  return (
+    `\n\n=== CURRENT SETTING ===\n` +
+    `You and the player are PHYSICALLY TOGETHER at ${loc.name} — ${loc.description}. ` +
+    `${loc.atmosphere} ` +
+    (homeNote ? homeNote + ' ' : '') +
+    `You are both in the same physical space — respond to what's around you, ` +
+    `react to the environment, and engage as if genuinely present. ` +
+    `The scene evolves with the conversation — follow the history above for the current state.` +
+    closeness
+  );
+}
++
+    `You are both in the same physical space — respond to what's around you, ` +
+    `react to the environment, and engage as if genuinely present. ` +
+    `The scene evolves with the conversation — follow the history above for the current state.` +
     closeness
   );
 }

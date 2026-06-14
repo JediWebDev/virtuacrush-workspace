@@ -23,6 +23,7 @@ import {
   MEET_HOOK_BY_CHARACTER,
   pronounsFor,
 } from './scene_registry';
+import { getLocation } from '../inworld/locations';
 
 export interface SceneCastMember {
   name: string;
@@ -115,7 +116,20 @@ export function composeScene(p: ComposeParams): SceneComposition {
   const cast: SceneCastMember[] = [];
 
   const pro = pronounsFor(p.characterId);
-  {
+
+  if (p.phase === 'on_date' && p.scene.location) {
+    // ── Co-present venue scene ──────────────────────────────────────────────
+    // The player has traveled to a city location with this companion.
+    // No friend cast, no home props — just the two of them at the venue.
+    const loc = getLocation(p.scene.location);
+    locationSlug = p.scene.location;
+    setting = loc
+      ? `at ${loc.name} with the player — ${loc.description}`
+      : `at a city location with the player`;
+    const venueKey = loc && (loc.type === 'player_home' || loc.type === 'character_home') ? 'home' : 'outing';
+    details = loc ? pickSome(VENUE_DETAILS[venueKey] ?? [], 2, r) : [];
+  } else {
+    // ── Home / remote scene (default) ──────────────────────────────────────
     const props = pickSome(HOME_PROPS, 2, r);
     setting = `at ${pro.possessive} place, ${props.join(' and ')} in frame of the story`;
     details = pickSome(HOME_DETAILS, 2, r);
@@ -139,17 +153,17 @@ export function composeScene(p: ComposeParams): SceneComposition {
     setting,
     details,
     outfit,
-    activity: sceneActivity(p.state.activity, hour, true, r),
+    activity: sceneActivity(p.state.activity, hour, p.phase !== 'on_date', r),
     cast,
     firstMeeting: Boolean(p.firstMeeting),
     meetHook: p.firstMeeting
       ? (MEET_HOOK_BY_CHARACTER[p.characterId] ?? 'You matched online and it clicked immediately')
       : undefined,
-    disruptions: planDisruptions(r, {
+    disruptions: p.phase === 'home' ? planDisruptions(r, {
       phase: 'home',
       hasFriend: cast.length > 0,
       firstMeeting: Boolean(p.firstMeeting),
-    }),
+    }) : [],
     firedDisruptions: [],
   };
 }
@@ -197,7 +211,6 @@ export function renderSceneFactsBlock(c: SceneComposition, displayName: string, 
     );
   } else if (c.cast.length) {
     for (const m of c.cast) {
-      // Friends are always female (drawn from FRIEND_NAMES which are all female).
       lines.push(
         `ALSO PRESENT: ${m.name}, ${pro.possessive} ${m.role} -- ${m.vibe}. Right now ${m.name} ${m.agenda}. ` +
           `Voice ${m.name} ONLY via [${m.name.toUpperCase()}] tagged lines; she can interject, react, or be overheard. She is real and persistent -- never rename her or swap her for someone else.`,

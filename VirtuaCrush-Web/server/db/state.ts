@@ -1,7 +1,6 @@
 // Story-state persistence and orchestration.
 //
-// Hybrid daily regeneration (lazy on read + scheduled batch).
-// Per-user: one row per (user, character).
+// Hybrid daily regeneration (lazy on read + scheduled batch). Per-user: one row per (user, character).
 import { pool } from './pool';
 import { getCharacter } from '../inworld/characters';
 import { generateDailyState } from '../inworld/story_engine';
@@ -18,8 +17,7 @@ interface StateRow {
   scene_location: string | null;
 }
 
-const COLS = `character_id, state_date::text AS state_date, activity, mood, headline, goal_progress,
-              scene_location`;
+const COLS = `character_id, state_date::text AS state_date, activity, mood, headline, goal_progress, scene_location`;
 
 export interface Situation {
   state: DailyState;
@@ -60,14 +58,14 @@ async function readRow(userId: string, characterId: string): Promise<StateRow | 
   return rows[0] ?? null;
 }
 
-/** Generates a new daily state from the prior row and upserts it. */
+/** Generates a new daily state from the prior row and upserts it (scene resets to home). */
 async function generateAndStore(
   userId: string,
   characterId: string,
   prior: StateRow | null,
   today: string,
 ): Promise<StateRow> {
-  const character = getCharacter(characterId);
+  const character = getCharacter(characterId); // throws on unknown id
   const generated = await generateDailyState({
     characterId,
     displayName: character.displayName,
@@ -80,8 +78,7 @@ async function generateAndStore(
 
   const { rows } = await pool.query<StateRow>(
     `INSERT INTO character_state
-       (user_id, character_id, state_date, activity, mood, headline, goal_progress,
-        scene_location, updated_at)
+       (user_id, character_id, state_date, activity, mood, headline, goal_progress, scene_location, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, NOW())
      ON CONFLICT (user_id, character_id) DO UPDATE
        SET state_date = EXCLUDED.state_date,
@@ -134,42 +131,34 @@ export async function getSituation(userId: string, characterId: string): Promise
   return { state: rowToState(row), scene: rowToScene(row) };
 }
 
-/** Reads just the scene (assumes a row exists; returns default if not). */
+/** Reads just the scene (assumes a row exists; returns home default if not). */
 export async function getScene(userId: string, characterId: string): Promise<SceneState> {
   const row = await readRow(userId, characterId);
   if (!row) return { location: null };
   return rowToScene(row);
 }
 
-/**
- * Conversation-reactive mood nudge: overwrites the current mood word for this
- * user/character. The daily regen still sets the morning baseline.
- */
+/** Updates the character's mood for this user. */
 export async function setMood(userId: string, characterId: string, mood: string): Promise<void> {
   await pool.query(
     `UPDATE character_state SET mood = $3, updated_at = NOW()
      WHERE user_id = $1 AND character_id = $2`,
-    [userId, characterId, mood.slice(0, 60)],
+    [userId, characterId, mood],
   );
 }
 
-/**
- * Adjusts the user's goal progress for a character by delta, clamped to
- * [0, 100]. Returns the new progress (or 0 if no state row exists yet).
- */
-export async function bumpGoalProgress(
+/** Moves the player to a location (or back home with null). Clears scene_composition to force recompose. */
+export async function setSceneLocation(
   userId: string,
   characterId: string,
-  delta: number,
-): Promise<number> {
-  const { rows } = await pool.query<{ goal_progress: number }>(
+  locationSlug: string | null,
+): Promise<void> {
+  await pool.query(
     `UPDATE character_state
-       SET goal_progress = LEAST(GREATEST(goal_progress + $3, 0), 100), updated_at = NOW()
-     WHERE user_id = $1 AND character_id = $2
-     RETURNING goal_progress`,
-    [userId, characterId, Math.round(delta)],
+       SET scene_location = $3, scene_composition = NULL, updated_at = NOW()
+     WHERE user_id = $1 AND character_id = $2`,
+    [userId, characterId, locationSlug],
   );
-  return rows[0] ? Number(rows[0].goal_progress) : 0;
 }
 
 /**
