@@ -44,13 +44,15 @@ export async function setArcActive(
   characterId: string,
   arcId: string,
 ): Promise<void> {
+  // Pure UPDATE — the row is always created by the state system (getSituation)
+  // before arc logic runs. An INSERT here would fail the NOT NULL constraint on
+  // state_date if the row doesn't exist yet.
   await pool.query(
-    `INSERT INTO character_state (user_id, character_id, current_arc_id, active_arc_started_at, abandonment_strikes)
-     VALUES ($1, $2, $3, NOW(), 0)
-     ON CONFLICT (user_id, character_id) DO UPDATE
-       SET current_arc_id        = EXCLUDED.current_arc_id,
-           active_arc_started_at = NOW(),
-           abandonment_strikes   = 0`,
+    `UPDATE character_state
+        SET current_arc_id        = $3,
+            active_arc_started_at = NOW(),
+            abandonment_strikes   = 0
+      WHERE user_id = $1 AND character_id = $2`,
     [userId, characterId, arcId],
   );
 }
