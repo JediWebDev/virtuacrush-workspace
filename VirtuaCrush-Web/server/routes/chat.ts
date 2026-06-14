@@ -76,7 +76,10 @@ const RECENT_TURNS_FOR_PROMPT = 12;
 function formatAnchorBlock(anchor: SceneAnchor): string {
   return (
     `\n\n=== CURRENT SETTING ===\n` +
-    anchor.situation
+    anchor.situation +
+    (anchor.coPresent
+      ? `\n\nThe scene evolves with the conversation — follow the history above for the current state. Do NOT reset to the opening moment.`
+      : '')
   );
 }
 
@@ -312,7 +315,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     try {
       const comp = await getOrComposeScene(req.user!.id, characterId, displayName, situation);
       if (comp) {
-        sceneFacts = renderSceneFactsBlock(comp, displayName, characterId);
+        sceneFacts = renderSceneFactsBlock(comp, displayName, characterId, { suppressFirstMeeting: !!activeArc?.sceneAnchor });
         sceneCast = comp.cast;
 
         // Mid-scene interruptions: fire the next pre-rolled disruption when
@@ -325,7 +328,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         );
         const turn = Number(turnRows[0]?.n ?? 0) + 1;
         const due = nextDueDisruption(comp, turn);
-        if (due) {
+        if (due && !activeArc?.sceneAnchor?.coPresent) {
           disruptionDirective = renderDisruptionDirective(due, displayName, characterId);
           firedDisruption = due;
         }
@@ -646,7 +649,6 @@ async function persistTurn(p: {
   } finally {
     client.release();
   }
-
 }
 
 export default router;

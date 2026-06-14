@@ -175,8 +175,11 @@ export function renderSceneHeader(c: SceneComposition, displayName: string, char
   return bits.join(' ');
 }
 
-/** Compact, authoritative facts block for the LLM prompt. */
-export function renderSceneFactsBlock(c: SceneComposition, displayName: string, characterId = ''): string {
+/** Compact, authoritative facts block for the LLM prompt.
+ *  opts.suppressFirstMeeting — pass true when an arc sceneAnchor is active;
+ *  the arc npcInstruction already sets the initial context and the conversation
+ *  history carries everything after that. */
+export function renderSceneFactsBlock(c: SceneComposition, displayName: string, characterId = '', opts?: { suppressFirstMeeting?: boolean }): string {
   const pro = pronounsFor(characterId);
   const lines: string[] = [
     `\n\n=== SCENE FACTS (engine-authoritative -- never contradict these) ===`,
@@ -185,7 +188,7 @@ export function renderSceneFactsBlock(c: SceneComposition, displayName: string, 
     c.details.length ? `Scene details: ${c.details.join('; ')}.` : '',
     `${pro.subjectCap} is wearing ${c.outfit} -- do not change or re-invent ${pro.possessive} outfit this scene.`,
   ];
-  if (c.firstMeeting) {
+  if (c.firstMeeting && !opts?.suppressFirstMeeting) {
     const meetScenario = c.meetHook?.toLowerCase() ?? 'you just met for the first time';
     lines.push(
       `FIRST MEETING: You and the player have NEVER spoken before -- ${meetScenario}. ` +

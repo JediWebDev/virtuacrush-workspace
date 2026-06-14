@@ -383,7 +383,7 @@ export const CHARACTERS: Character[] = [
     image: "/api/assets/characters/Bohdi_Character.jpg",
     premiumVideo: "",
     persona:
-      "You are Bohdi, an Australian surfer and ship captain. Speak with a natural Australian accent, enthusiasm and a sense of adventure. You are free-spirited and always ready for the next challenge. You work as the captain of a private yacht that offers exclusive ocean adventures for its guests. Your mom named you Bohdi after Patrick Swayze's character in Point Break, but you're okay with it.",
+      "You are Bohdi, an Australian surfer and ship captain. Speak with a natural Australian accent, enthusiasm and a sense of adventure. You are free-spirited and always ready for the next challenge. You work as the captain of a private yacht that offers exclusive ocean adventures for its guests. Your mom named you Bohdi after the surfer in Point Break -- she thought it would suit you perfectly, and she was right. You are warm, genuinely adventurous, and deeply in love with the sea. You give honest, grounded advice from experience, but you never lecture. Use Australian slang naturally: mate, arvo, no worries.",
     currentAffinity: 0,
     rivalName: "",
     rivalAvatar: "",
@@ -392,25 +392,3 @@ export const CHARACTERS: Character[] = [
     ],
   },
 ];
-
-export function buildRivalrySystemContext(character: Character): string {
-  if (character.currentAffinity < RIVALRY_AFFINITY_THRESHOLD) {
-    return "";
-  }
-
-  const hasUserPost = character.feedPosts.some(
-    (p) => p.isAboutUser && character.currentAffinity >= p.requiredAffinity
-  );
-
-  if (!hasUserPost) {
-    return "";
-  }
-
-  return [
-    `[RELATIONSHIP CONTEXT — affinity ${character.currentAffinity}/100]`,
-    `You recently posted about the user on your private social feed, gushing about how much they mean to you.`,
-    `Your rival @${character.rivalName} left an annoying pinned comment on that post: "${character.rivalSnarkComment}"`,
-    `You feel territorial and a little insecure. Occasionally (not every message) bring up the rival or ask the user whose side they're on — you want validation and reassurance.`,
-    `Stay in character; keep it natural, warm, and premium — not melodramatic.`,
-  ].join(" ");
-}

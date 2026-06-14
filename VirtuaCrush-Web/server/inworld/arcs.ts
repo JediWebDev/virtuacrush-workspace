@@ -266,7 +266,7 @@ const ARCS: StoryArc[] = [
     sceneAnchor: {
       setting: 'in a parking garage — the player just walked up to find you with a slim jim in their car door',
       situation:
-        'You and the player are PHYSICALLY IN THE SAME SPACE — in a parking garage. The player just found you trying to break into what you genuinely thought was your car. You can see them, speak to them directly, and you are currently very caught. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.',
+        'OPENING SCENARIO: You and the player are PHYSICALLY IN THE SAME SPACE — they just caught you in a parking garage, slim jim in hand, mid-attempt on what you genuinely thought was your own car (identical model, wrong floor). You froze the moment you saw them. Follow the conversation history for where the scene stands now — do NOT reset to this opening moment if the scene has progressed.',
       coPresent: true,
     },
     tone: 'dramatic',
@@ -276,7 +276,7 @@ const ARCS: StoryArc[] = [
     introNarrative:
       "Level 3 of the parking garage is mostly empty at this hour. You're heading back to your car when you find a girl in a leather jacket with what looks very much like a slim jim wedged into your driver's side door.",
     npcInstruction:
-      "ARC — FIRST MEETING (parking garage): The player just walked up and found you trying to break into their car. You genuinely thought it was yours — identical model, similar color, you were three floors off. You froze when they showed up. Your first instinct is to own it defiantly, because you hate looking caught. Your second instinct is to see how the player handles this — if they panic, you lose interest; if they're funny or cool about it, you're intrigued. Complete the arc when: you've exchanged names and the player has reacted to this situation in a way that actually surprises you — calm, funny, or genuinely cool.",
+      "ARC — FIRST MEETING (parking garage): The player just walked up and found you trying to open their car door with a slim jim. You genuinely thought it was yours — identical model, similar color, you were three floors off. You froze when they showed up. Your first instinct is to own it defiantly, because you hate looking caught. Your second instinct is to see how the player handles this — if they panic, you lose interest; if they're funny or cool about it, you're intrigued. React authentically to whatever the player does — follow the conversation rather than the opening scenario. Complete the arc when: you've exchanged names and the player has reacted to this situation in a way that actually surprises you — calm, funny, or genuinely cool.",
     completionCriteria:
       "The player and Lexi have exchanged names and the player has reacted to the car situation in a way that makes Lexi think they're worth knowing.",
     completionExamples: [
@@ -903,7 +903,7 @@ export function selectArc(
   return eligible[eligible.length - 1];
 }
 
-/** Look up a specific arc by ID (returns null if not found). */
-export function getArc(arcId: string): StoryArc | null {
-  return ARCS.find((a) => a.id === arcId) ?? null;
+/** Look up an arc by id. Returns null for unknown ids. */
+export function getArc(id: string): StoryArc | null {
+  return ARCS.find((a) => a.id === id) ?? null;
 }

@@ -13,5 +13,5 @@ export function isFreeCharacter(fullName: string): boolean {
 }
 
 export function hasPremiumAccess(tier: UserTier): boolean {
-  return tier === "pro" || tier === "vip";
+  return tier=== 'pro' || tier === 'vip';
 }
