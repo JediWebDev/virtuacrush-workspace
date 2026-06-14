@@ -169,8 +169,9 @@ export function renderSceneHeader(c: SceneComposition, displayName: string, char
   if (c.firstMeeting) {
     // First encounter: the meet hook already places both people in the scene,
     // so we skip the "at her place, half-watching something" line entirely.
-    const hook = (c.meetHook ?? `You and ${displayName} just matched online`).replace(/\.+$/, '');
-    bits.push(`${hook}.`);
+    if (c.meetHook) {
+      bits.push(`${c.meetHook.replace(/\.+$/, '')}.`);
+    }
     bits.push(`Where things go from here is up to you.`);
     return bits.join(' ');
   }
