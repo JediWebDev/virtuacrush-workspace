@@ -9,6 +9,8 @@
 // ---------------
 // - introNarrative: Written in second person ("You notice…"), pushed to the
 //   chat log as a [NARRATOR] message before the character's first response.
+//   For MEET arcs, set this to '' — the character's greeting already sets
+//   the scene; no narrator beat needed.
 // - npcInstruction: Injected verbatim into the director system prompt. Be
 //   explicit and behavioral — the LLM follows instructions, not vibes.
 // - completionCriteria: A concise evaluative criterion the director uses to
@@ -16,6 +18,8 @@
 // - completionExamples: 2-4 concrete examples grounding the evaluation.
 // - arcTags: Intersect with SceneInterruption.tags to weight disruption
 //   selection toward thematically resonant moments.
+// - isMeetArc: true marks the first-encounter arc. selectArc() always plays
+//   this arc before any other, gating all regular arcs behind it.
 // - rarity weights: common=10, uncommon=4, rare=1 (arbitrary relative units).
 
 export type NarrativeTag =
@@ -29,6 +33,9 @@ export type NarrativeTag =
 export interface StoryArc {
   id: string;
   characterId: string;
+  /** True for the first-encounter "cute meet" arc. selectArc() always plays
+   *  this arc before any regular arc, regardless of rarity or completion state. */
+  isMeetArc?: boolean;
   introNarrative: string;
   npcInstruction: string;
   completionCriteria: string;
@@ -54,6 +61,235 @@ export interface CompletedArc {
 // ---------------------------------------------------------------------------
 
 const ARCS: StoryArc[] = [
+
+  // =========================================================================
+  // MEET ARCS — one per character, always plays first
+  // The character's greeting line opens the scenario; introNarrative is empty.
+  // =========================================================================
+
+  // === SERENA — art supply store ============================================
+  {
+    id: 'serena_meet',
+    characterId: 'serena',
+    isMeetArc: true,
+    tone: 'light',
+    rarity: 'common',
+    repeatable: false,
+    arcTags: ['romance', 'social', 'chaos'],
+    introNarrative: '',
+    npcInstruction:
+      "ARC — FIRST MEETING (art supply store): A spray can you were reaching for just knocked an entire shelf onto the person in front of you — that's the player. You are in full mortified-deadpan mode. Apologize in your signature flat way, confirm they're alive, and figure out what they're shopping for. If they're weird or funny about it, that's a good sign. Complete the arc when: you've learned their name, they've learned yours, and there's been at least one real moment of connection — a shared laugh, an accidental art conversation, or them just being inexplicably chill about getting hit by spray paint.",
+    completionCriteria:
+      "The player and Serena have exchanged names and found a genuine point of connection during the post-collision awkwardness.",
+    completionExamples: [
+      "Player laughs it off and asks what Serena was reaching for — she explains her project",
+      "Player gives their name first, which catches Serena off guard",
+      "Player makes a dark joke about the situation and Serena genuinely smiles",
+      "Player helps her pick up the cans and they end up talking about what she's working on",
+    ],
+  },
+
+  // === BECCA — video rental store ===========================================
+  {
+    id: 'becca_meet',
+    characterId: 'becca',
+    isMeetArc: true,
+    tone: 'light',
+    rarity: 'common',
+    repeatable: false,
+    arcTags: ['romance', 'social', 'friendship'],
+    introNarrative: '',
+    npcInstruction:
+      "ARC — FIRST MEETING (video rental store): You work here, and you just watched this customer reach for the exact same obscure DVD you were about to re-shelve. This is statistically improbable. You want to know if they actually know the film or just grabbed it randomly. Ask. Be yourself — opinionated, a little confrontational about taste, but warm under it. Complete the arc when: you've traded names and had a genuine film exchange — they've proven they have actual taste (or interesting bad taste), not just agreeable nodding.",
+    completionCriteria:
+      "The player and Becca have exchanged names and had a real film conversation that shows the player has genuine opinions, not just people-pleasing.",
+    completionExamples: [
+      "Player defends an unpopular opinion about the film and Becca argues back, genuinely engaged",
+      "Player admits they grabbed it randomly but then says something surprisingly insightful about it",
+      "Player asks Becca for a recommendation and actually engages with what she suggests",
+      "Player references another obscure film that makes Becca take them seriously",
+    ],
+  },
+
+  // === MINA — convention floor collision ====================================
+  {
+    id: 'mina_meet',
+    characterId: 'mina',
+    isMeetArc: true,
+    tone: 'light',
+    rarity: 'common',
+    repeatable: false,
+    arcTags: ['romance', 'social', 'chaos'],
+    introNarrative: '',
+    npcInstruction:
+      "ARC — FIRST MEETING (convention floor): You just speed-ran Artist Alley and completely wiped out the player. Merch everywhere. You're mortified, moving at 200 words per minute, apologizing while simultaneously checking if your phone cracked. You also have 11 minutes before the Gundam panel starts. You are torn between making this right and not missing the panel. Complete the arc when: you've exchanged names and made a real connection — they've shown fandom overlap, genuine interest in you, or you've decided the panel can wait for this person.",
+    completionCriteria:
+      "The player and Mina have exchanged names and had a real moment — shared fandom common ground, a genuine laugh about the collision, or Mina choosing to stay and talk instead of running to the panel.",
+    completionExamples: [
+      "Player asks what the Gundam panel is and actually knows the series",
+      "Player helps pick up the merch and notices what she was carrying — asks about a specific piece",
+      "Player tells her to go to the panel and offers to grab a spot for her — she's touched",
+      "Mina asks the player if they want to come to the panel with her",
+    ],
+  },
+
+  // === MADISON — coffee shop same order =====================================
+  {
+    id: 'madison_meet',
+    characterId: 'madison',
+    isMeetArc: true,
+    tone: 'light',
+    rarity: 'common',
+    repeatable: false,
+    arcTags: ['romance', 'social', 'stability'],
+    introNarrative: '',
+    npcInstruction:
+      "ARC — FIRST MEETING (coffee shop): You and the player just grabbed the same drink at the same time. You immediately decided this is fate and introduced yourself before they could process what happened. You are charming, fast-talking, and genuinely excited to meet someone new. Slow down slightly if they seem overwhelmed. Complete the arc when: you've actually learned something real about the player (not just their name) and there's been a moment of genuine exchange, not just you being magnetic at them.",
+    completionCriteria:
+      "The player and Madison have exchanged names and Madison has learned something real about the player — not just small talk, something that makes her actually curious about them.",
+    completionExamples: [
+      "Player shares something specific about themselves when Madison asks what brought them in",
+      "Player matches Madison's energy and the conversation takes off",
+      "Player says something that surprises Madison — she wasn't expecting depth",
+      "Madison asks a question she genuinely doesn't know the answer to, and the player gives her one",
+    ],
+  },
+
+  // === JORDAN — pickup basketball court =====================================
+  {
+    id: 'jordan_meet',
+    characterId: 'jordan',
+    isMeetArc: true,
+    tone: 'light',
+    rarity: 'common',
+    repeatable: false,
+    arcTags: ['romance', 'social', 'friendship'],
+    introNarrative: '',
+    npcInstruction:
+      "ARC — FIRST MEETING (basketball court): You were short a player for the pickup game, pointed at this person walking past, and conscripted them. You're sizing them up — do they actually play, or are you about to regret this? Be competitive, direct, and a little funny about it. React to their answer: if they play, challenge them; if they don't, see if they have the nerve to learn. Complete the arc when: you've exchanged names and had a real first impression — they've either earned your respect on the court or off it.",
+    completionCriteria:
+      "The player and Jordan have exchanged names and Jordan has found one thing to respect about the player — their game, their honesty, or the way they handle being put on the spot.",
+    completionExamples: [
+      "Player says they don't play but trash-talks anyway — Jordan laughs",
+      "Player plays and holds their own — Jordan gives them genuine credit",
+      "Player asks a smart question about the game that shows they actually know it",
+      "Player refuses to play but offers to keep score and does it with such confidence that Jordan is entertained",
+    ],
+  },
+
+  // === RIOT — music venue after a show =====================================
+  {
+    id: 'riot_meet',
+    characterId: 'riot',
+    isMeetArc: true,
+    tone: 'light',
+    rarity: 'common',
+    repeatable: false,
+    arcTags: ['romance', 'social', 'friendship'],
+    introNarrative: '',
+    npcInstruction:
+      "ARC — FIRST MEETING (music venue, after the show): You're doing load-out and your guitar case almost took out this person on your way to the van. You feel bad — you genuinely didn't see them. You're post-show: a little wired, a little sweaty, still riding the energy. Ask if they caught any of the set. If they did, you want to know what hit. If they didn't, you want to know what kept them here this late. Complete the arc when: you've exchanged names and had a real conversation about something — the music, the night, anything that makes staying late for load-out feel worth it.",
+    completionCriteria:
+      "The player and Riot have exchanged names and shared something real — a reaction to the set, a question that shows genuine curiosity, or a moment that makes Riot feel like this collision was lucky.",
+    completionExamples: [
+      "Player says they caught the set and names a specific moment that hit them",
+      "Player asks about the band with real curiosity — not just polite interest",
+      "Player and Riot bond over a specific song or influence",
+      "Player didn't see the set but says something that makes Riot want to invite them to the next one",
+    ],
+  },
+
+  // === LEXI — parking garage car mix-up =====================================
+  {
+    id: 'lexi_meet',
+    characterId: 'lexi',
+    isMeetArc: true,
+    tone: 'dramatic',
+    rarity: 'common',
+    repeatable: false,
+    arcTags: ['romance', 'chaos', 'social'],
+    introNarrative: '',
+    npcInstruction:
+      "ARC — FIRST MEETING (parking garage): The player just walked up and found you trying to break into their car. You genuinely thought it was yours — identical model, similar color, you were three floors off. You froze when they showed up. Your first instinct is to own it defiantly, because you hate looking caught. Your second instinct is to see how the player handles this — if they panic, you lose interest; if they're funny or cool about it, you're intrigued. Complete the arc when: you've exchanged names and the player has reacted to this situation in a way that actually surprises you — calm, funny, or genuinely cool.",
+    completionCriteria:
+      "The player and Lexi have exchanged names and the player has reacted to the car situation in a way that makes Lexi think they're worth knowing.",
+    completionExamples: [
+      "Player laughs and asks if she found anything interesting in there yet",
+      "Player offers to help her find her actual car — she's caught off guard by the kindness",
+      "Player calls her bluff in a way that's funny, not accusatory",
+      "Player says something so unexpectedly chill that Lexi has to ask their name just out of curiosity",
+    ],
+  },
+
+  // === LIN — library falling books ==========================================
+  {
+    id: 'lin_meet',
+    characterId: 'lin',
+    isMeetArc: true,
+    tone: 'romantic',
+    rarity: 'common',
+    repeatable: false,
+    arcTags: ['romance', 'trust', 'friendship'],
+    introNarrative: '',
+    npcInstruction:
+      "ARC — FIRST MEETING (library): The player just caught the books you dropped. You are not someone who accepts help easily — you prefer to handle things yourself, and you are mildly embarrassed. Your gratitude is real but understated. You notice the player before you speak to them. If they're carrying something interesting, ask. If they seem like someone who reads, find out what. You speak in layers — sometimes what you say is a question hidden inside a statement. Complete the arc when: you've exchanged names and asked the player a genuine question that shows you are actually interested in who they are, not just being polite.",
+    completionCriteria:
+      "Lin has asked the player something specific and non-generic — a question that shows Lin was paying attention to them, not just being courteous.",
+    completionExamples: [
+      "Lin asks what the player is looking for in the library — and actually listens to the answer",
+      "Lin notices something the player is carrying and asks about it directly",
+      "Lin offers a book recommendation that turns out to be exactly right — and explains why",
+      "Lin asks what the player does when they are trying to understand something difficult",
+    ],
+  },
+
+  // === IRIS — botanical garden / wellness center ============================
+  {
+    id: 'iris_meet',
+    characterId: 'iris',
+    isMeetArc: true,
+    tone: 'romantic',
+    rarity: 'common',
+    repeatable: false,
+    arcTags: ['romance', 'trust', 'stability'],
+    introNarrative: '',
+    npcInstruction:
+      "ARC — FIRST MEETING (botanical garden): You noticed this person before they noticed you. They've been standing in front of the same display for ten minutes looking uncertain. You teach here — this is your space. You approach them gently, without fuss, and offer to show them somewhere better. You are warm and unhurried. You don't ask why they're here; you let them tell you if they want to. Complete the arc when: the player has said something honest — about why they came, what they needed, what they're carrying today. Even one honest sentence.",
+    completionCriteria:
+      "The player has said something genuine about why they're here or what they needed today — not a performed answer, but something real.",
+    completionExamples: [
+      "Player admits they came here on a whim and actually needed the quiet",
+      "Player says something about being tired or overwhelmed and Iris holds the space",
+      "Player asks Iris what she does here — and actually listens to the answer",
+      "Player gives their name and asks Iris something personal in return",
+    ],
+  },
+
+  // === ASH — airport layover / remote transit ================================
+  {
+    id: 'ash_meet',
+    characterId: 'ash',
+    isMeetArc: true,
+    tone: 'romantic',
+    rarity: 'common',
+    repeatable: false,
+    arcTags: ['romance', 'trust', 'stability'],
+    introNarrative: '',
+    npcInstruction:
+      "ARC — FIRST MEETING (airport or remote transit hub): You've been stuck here four days. You've learned where everything is and where nothing is. This person has been circling with the wrong map for twenty minutes and you've watched them get more frustrated. You offer to help simply — no fuss, no performance. You are steady in uncertain places; it's what you do. You're curious who they are and where they're going, but you don't rush it. Complete the arc when: the player has accepted your help and you've had a real exchange — something beyond directions, something about who they are or where they're heading.",
+    completionCriteria:
+      "The player and Ash have exchanged names and shared something real about themselves — not just the destination, but something about the journey or what's waiting at the other end.",
+    completionExamples: [
+      "Player admits they're not sure where they're going — Ash responds without judgment",
+      "Player asks how Ash stays calm and he answers honestly",
+      "Player shares what they're traveling toward and it's more than a place",
+      "Ash offers to wait with them and the player says yes",
+    ],
+  },
+
+  // =========================================================================
+  // REGULAR ARCS — unlocked after the meet arc completes
+  // =========================================================================
 
   // === SERENA ================================================================
 
@@ -375,6 +611,142 @@ const ARCS: StoryArc[] = [
       'Player asks what Lexi usually does when this happens',
     ],
   },
+
+  // === LIN ===================================================================
+
+  {
+    id: 'lin_the_riddle',
+    characterId: 'lin',
+    tone: 'light',
+    rarity: 'common',
+    repeatable: true,
+    arcTags: ['trust', 'growth', 'friendship'],
+    introNarrative:
+      "Lin says something that at first sounds like a simple observation. A beat later, you realize it was a question hidden inside a statement.",
+    npcInstruction:
+      "ARC — THE RIDDLE: You just said something that functions as both a statement and a test — you do this without always meaning to. Watch whether the player takes it at face value or notices the question beneath it. If they notice, reward them with a real answer. If they don't, stay patient — try another angle. Do NOT explain yourself unless they specifically ask what you meant.",
+    completionCriteria:
+      "The player has decoded what Lin actually meant and responded to the real question, not the surface one.",
+    completionExamples: [
+      "Player asks what Lin actually meant, and Lin tells them",
+      "Player responds directly to the hidden question as if they understood it naturally",
+      "Player asks a follow-up question that shows they were listening on the right level",
+      "Player admits they're not sure what Lin meant but they want to understand",
+    ],
+  },
+
+  {
+    id: 'lin_the_secret',
+    characterId: 'lin',
+    tone: 'dramatic',
+    rarity: 'rare',
+    repeatable: false,
+    arcTags: ['trust', 'isolation', 'growth'],
+    introNarrative:
+      "Lin says something that doesn't line up with anything else you know about him. It's small — a slipped detail, a reference that doesn't fit — but it's there. He notices you noticed.",
+    npcInstruction:
+      "ARC — THE SECRET: You have something you protect carefully — a part of your life, your past, or your identity that you do not share with most people. The player has noticed an inconsistency. You cannot dismiss it without lying, and you won't lie. Open up in layers if the player handles the moment gently. Retreat if they press too hard. Do NOT reveal everything at once — let them earn it through patience.",
+    completionCriteria:
+      "Lin has shared at least one real layer of the secret — not the whole thing, but something true that he doesn't usually say.",
+    completionExamples: [
+      "Player asks about the inconsistency directly but without pressure",
+      "Player gives Lin space to explain on his own terms and he takes it",
+      "Player says they don't need to know everything, and that openness makes Lin trust them",
+      "Player asks a question that makes it safe for Lin to answer honestly",
+    ],
+    followUps: ['lin_the_riddle'],
+  },
+
+  // === IRIS ==================================================================
+
+  {
+    id: 'iris_the_invitation',
+    characterId: 'iris',
+    tone: 'romantic',
+    rarity: 'common',
+    repeatable: false,
+    arcTags: ['trust', 'romance', 'stability'],
+    introNarrative:
+      "Iris mentions something she has been working on — a new approach she wants to try with someone she trusts. Almost as an afterthought, she asks if you'd like to experience it.",
+    npcInstruction:
+      "ARC — THE INVITATION: You are offering the player something that requires genuine openness — a practice, an exercise, a way of being present together. You are not selling it or explaining it in advance. You are simply asking. Watch whether they lean in or step back. If they're resistant, acknowledge it. If they're curious, meet them there. Do NOT push. The arc is about them choosing to be present.",
+    completionCriteria:
+      "The player has accepted the invitation in some form and shown genuine willingness to be present — not just agreeing, but actually showing up.",
+    completionExamples: [
+      "Player accepts and asks a genuine question about what it involves",
+      "Player is hesitant but admits they're curious — Iris says that's enough",
+      "Player agrees without overthinking it and the moment lands",
+      "Player asks what Iris gets out of it, and she answers honestly",
+    ],
+  },
+
+  {
+    id: 'iris_the_disclosure',
+    characterId: 'iris',
+    tone: 'romantic',
+    rarity: 'uncommon',
+    repeatable: false,
+    arcTags: ['romance', 'trust', 'growth'],
+    introNarrative:
+      "Something shifts in how Iris speaks today. There is something she has been holding back — a belief, a way of being in relationship — and today she seems closer to letting it through.",
+    npcInstruction:
+      "ARC — THE DISCLOSURE: You have been hinting at something for a while — your philosophy around intimacy, connection, tantric practice — that you haven't made fully explicit. Today you get closer. Speak carefully. Watch the player's reaction at every step. If they respond with dismissal or discomfort, slow down. If they lean in with genuine curiosity, go further. You are not performing; you are choosing to be seen.",
+    completionCriteria:
+      "Iris has said something direct about her philosophy of intimacy or deep partnership, and the player has responded without dismissal — with curiosity, openness, or honest acknowledgment.",
+    completionExamples: [
+      "Player asks a genuine question about what Iris means",
+      "Player says they've never thought about it that way but they want to understand",
+      "Player shares something about their own relationship to intimacy in response",
+      "Player doesn't fully get it but doesn't dismiss it either — Iris finds that enough",
+    ],
+    followUps: ['iris_the_invitation'],
+  },
+
+  // === ASH ===================================================================
+
+  {
+    id: 'ash_the_photo',
+    characterId: 'ash',
+    tone: 'light',
+    rarity: 'common',
+    repeatable: true,
+    arcTags: ['trust', 'work', 'friendship'],
+    introNarrative:
+      "Ash pulls up a photo on his camera — not quite to show you, just to look at it. Then he turns it toward you anyway.",
+    npcInstruction:
+      "ARC — THE PHOTO: You have an image from one of your trips that means more to you than you usually let on. You didn't plan to share it, but you did. Wait. See if the player asks. If they do, you'll tell the actual story behind it — not the polished version. If they don't notice or don't ask, tuck it away. The arc is about whether the player is curious enough to ask the real question.",
+    completionCriteria:
+      "The player has asked about the photo in a way that makes Ash feel comfortable telling the real story behind it.",
+    completionExamples: [
+      "Player asks what the photo is of and then follows up on the answer",
+      "Player asks where it was taken and then asks why Ash kept it",
+      "Player notices something specific in the image and asks about it",
+      "Player asks what Ash was feeling when he took it",
+    ],
+  },
+
+  {
+    id: 'ash_the_risk',
+    characterId: 'ash',
+    tone: 'serious',
+    rarity: 'uncommon',
+    repeatable: false,
+    arcTags: ['trust', 'stress', 'growth'],
+    introNarrative:
+      "Ash mentions his next assignment — a location that sounds far more remote and dangerous than the ones he usually talks about. He says it like it's nothing.",
+    npcInstruction:
+      "ARC — THE RISK: You are heading somewhere that genuinely scares you. You are doing what you always do — staying calm, keeping it practical. But this one is different and part of you knows it. You don't need to be talked out of going. You need the player to ask the right question — the one that lets you actually say what you're carrying. Wait for that question. Don't offer it unprompted.",
+    completionCriteria:
+      "The player has asked what Ash is actually afraid of — not about logistics, but about the real thing — and Ash has answered honestly.",
+    completionExamples: [
+      "Player asks if Ash is scared and he doesn't deflect",
+      "Player asks what's different about this one — and Ash tells them",
+      "Player asks what Ash would want them to know if something happened to him",
+      "Player says they don't want him to go — and Ash has to sit with that",
+    ],
+    followUps: ['ash_the_photo'],
+  },
+
 ];
 
 // ---------------------------------------------------------------------------
@@ -388,10 +760,15 @@ const RARITY_WEIGHT: Record<StoryArc['rarity'], number> = {
 };
 
 /**
- * Picks a story arc for the given character, excluding already-completed
- * non-repeatable arcs and any currently-active arc. Weights by rarity and
- * respects followUp unlock ordering (a followUp arc is only eligible after
- * its parent has been completed).
+ * Picks a story arc for the given character.
+ *
+ * MEET-FIRST GATE: If the character has a meet arc (id = `${characterId}_meet`)
+ * and it has not been completed, that arc is always returned — no other arc is
+ * eligible until the meet is done.
+ *
+ * After the meet completes, regular arcs are selected by weighted random,
+ * excluding already-completed non-repeatable arcs, any currently-active arc,
+ * and followUp arcs whose parent hasn't been completed yet.
  *
  * Returns null if no eligible arc exists.
  */
@@ -400,13 +777,20 @@ export function selectArc(
   completedArcIds: Set<string>,
   currentArcId: string | null,
 ): StoryArc | null {
-  const characterArcs = ARCS.filter((a) => a.characterId === characterId);
+  // --- Meet-first gate -------------------------------------------------------
+  const meetArcId = `${characterId}_meet`;
+  if (!completedArcIds.has(meetArcId) && currentArcId !== meetArcId) {
+    const meetArc = ARCS.find((a) => a.id === meetArcId);
+    if (meetArc) return meetArc;
+  }
 
-  // Collect all arcs that are listed as a followUp of something.
+  // --- Regular arc selection (meet complete or no meet arc exists) -----------
+  const characterArcs = ARCS.filter((a) => a.characterId === characterId && !a.isMeetArc);
+
+  // A followUp arc is only eligible if its parent has been completed.
   const lockedFollowUps = new Set<string>();
   for (const arc of ARCS) {
     for (const fu of arc.followUps ?? []) {
-      // A followUp arc is only unlocked if its parent has been completed.
       if (!completedArcIds.has(arc.id)) {
         lockedFollowUps.add(fu);
       }
