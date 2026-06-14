@@ -26,6 +26,7 @@ export async function getOrComposeScene(
   characterId: string,
   displayName: string,
   situation: Situation,
+  nowOverride?: Date,
 ): Promise<SceneComposition | null> {
   const phase = scenePhase(situation.scene);
 
@@ -58,7 +59,7 @@ export async function getOrComposeScene(
     (Boolean(existing.firstMeeting) === firstMeeting || existing.firstMeeting === true);
   if (fresh) return existing;
 
-  const now = new Date();
+  const now = nowOverride ?? new Date();
   // Seed buckets the day into 8h windows so a morning visit and a late-night
   // visit compose different scenes, but refreshes within a window are stable.
   const composed = composeScene({

@@ -7,6 +7,7 @@ import { setSceneLocation, getSituation } from '../db/state';
 import { getAffinity } from '../db/affinity';
 import { getCharacter, type CharacterId } from '../inworld/characters';
 import { getOrComposeScene, renderSceneHeader } from '../db/scene_composition';
+import { getWorldClock, setWorldClock } from '../db/world_sim';
 
 const router = Router();
 
@@ -69,12 +70,23 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
   // Persist the location change and invalidate the old scene composition.
   await setSceneLocation(req.user!.id, characterId, dbSlug);
 
+  // Advance the world clock by travel time so the scene reflects elapsed time.
+  const MINUTES_PER_TRAVEL = 20;
+  try {
+    const clock = await getWorldClock(req.user!.id);
+    await setWorldClock(req.user!.id, clock.simMinutes + MINUTES_PER_TRAVEL);
+  } catch (err) {
+    console.warn('[travel] world clock advance failed (non-fatal):', err);
+  }
+
   // Compose a fresh scene at the new location so the next chat prompt is
-  // already authoritative. Fail-soft: a compose error never blocks travel.
+  // already authoritative. nowOverride offsets by travel time so the scene
+  // header shows the time AFTER arrival, not the moment the user clicked.
+  const travelNow = new Date(Date.now() + MINUTES_PER_TRAVEL * 60_000);
   let sceneHeader: string | undefined;
   try {
     const situation = await getSituation(req.user!.id, characterId);
-    const comp = await getOrComposeScene(req.user!.id, characterId, displayName, situation);
+    const comp = await getOrComposeScene(req.user!.id, characterId, displayName, situation, travelNow);
     if (comp) sceneHeader = renderSceneHeader(comp, displayName, characterId);
   } catch (err) {
     console.warn('[travel] scene recompose failed (non-fatal):', err);

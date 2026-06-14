@@ -23,6 +23,13 @@ import {
   MEET_HOOK_BY_CHARACTER,
   pronounsFor,
 } from './scene_registry';
+
+/** Co-presence activity phrases shown in the scene header when player is physically at a location. */
+const TOGETHER_ACTIVITIES: Record<string, readonly string[]> = {
+  player_home: ['making themselves at home', 'taking it easy at yours', 'settling in with you'],
+  character_home: ['on their home turf with you', 'in their element with you here', 'showing you around their place'],
+  public: ['taking it all in with you', 'exploring the spot together', 'keeping you company here', 'here with you for the night'],
+};
 import { getLocation } from '../inworld/locations';
 
 export interface SceneCastMember {
@@ -113,6 +120,7 @@ export function composeScene(p: ComposeParams): SceneComposition {
   let setting: string;
   let details: string[];
   let locationSlug: string | null = null;
+  let coActivity = '';
   const cast: SceneCastMember[] = [];
 
   const pro = pronounsFor(p.characterId);
@@ -128,6 +136,7 @@ export function composeScene(p: ComposeParams): SceneComposition {
       : `at a city location with the player`;
     const venueKey = loc && (loc.type === 'player_home' || loc.type === 'character_home') ? 'home' : 'outing';
     details = loc ? pickSome(VENUE_DETAILS[venueKey] ?? [], 2, r) : [];
+    coActivity = pickFrom(TOGETHER_ACTIVITIES[loc?.type ?? 'public'] ?? TOGETHER_ACTIVITIES['public']!, r);
   } else {
     // ── Home / remote scene (default) ──────────────────────────────────────
     const props = pickSome(HOME_PROPS, 2, r);
@@ -153,7 +162,7 @@ export function composeScene(p: ComposeParams): SceneComposition {
     setting,
     details,
     outfit,
-    activity: sceneActivity(p.state.activity, hour, p.phase !== 'on_date', r),
+    activity: coActivity || sceneActivity(p.state.activity, hour, true, r),
     cast,
     firstMeeting: Boolean(p.firstMeeting),
     meetHook: p.firstMeeting
