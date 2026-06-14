@@ -81,10 +81,3 @@ export function formatLocationBlock(
     closeness
   );
 }
-+
-    `You are both in the same physical space — respond to what's around you, ` +
-    `react to the environment, and engage as if genuinely present. ` +
-    `The scene evolves with the conversation — follow the history above for the current state.` +
-    closeness
-  );
-}
