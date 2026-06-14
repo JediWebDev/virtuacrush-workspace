@@ -170,7 +170,6 @@ export function renderSceneHeader(c: SceneComposition, displayName: string, char
     if (c.meetHook) {
       bits.push(`${c.meetHook.replace(/\.+$/, '')}.`);
     }
-    bits.push(`Where things go from here is up to you.`);
     return bits.join(' ');
   }
   bits.push(`${c.timeLabel} -- ${c.weather}.`);

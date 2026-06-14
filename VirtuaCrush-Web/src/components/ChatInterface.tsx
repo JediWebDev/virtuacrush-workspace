@@ -498,9 +498,9 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                     key={key}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="flex w-full justify-center px-2 py-0.5"
+                    className="flex w-full justify-center px-4 py-1.5"
                   >
-                    <p className="max-w-[82%] text-center text-[13px] italic leading-relaxed text-stone-500 dark:text-stone-400">
+                    <p className="max-w-[82%] rounded-xl border border-violet-200/70 bg-violet-50/80 px-4 py-2.5 text-center text-[13px] italic leading-relaxed text-violet-900 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-200">
                       {nsegs.map((seg) => seg.text).join(" ")}
                     </p>
                   </motion.div>
