@@ -76,7 +76,8 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'social', 'chaos'],
-    introNarrative: '',
+    introNarrative:
+      "You're browsing a cramped art supply store when a cascade of spray paint cans rains down from the shelf above you. The girl responsible — white hair, heavy eyeliner, full look of mortification — freezes the moment she sees you.",
     npcInstruction:
       "ARC — FIRST MEETING (art supply store): A spray can you were reaching for just knocked an entire shelf onto the person in front of you — that's the player. You are in full mortified-deadpan mode. Apologize in your signature flat way, confirm they're alive, and figure out what they're shopping for. If they're weird or funny about it, that's a good sign. Complete the arc when: you've learned their name, they've learned yours, and there's been at least one real moment of connection — a shared laugh, an accidental art conversation, or them just being inexplicably chill about getting hit by spray paint.",
     completionCriteria:
@@ -98,7 +99,8 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'social', 'friendship'],
-    introNarrative: '',
+    introNarrative:
+      "The sign outside says VIDEO RENTAL in letters that have been fading for years. Inside it smells like plastic cases and strong opinions. You reach for a DVD on the second shelf. Another hand gets there at the exact same moment.",
     npcInstruction:
       "ARC — FIRST MEETING (video rental store): You work here, and you just watched this customer reach for the exact same obscure DVD you were about to re-shelve. This is statistically improbable. You want to know if they actually know the film or just grabbed it randomly. Ask. Be yourself — opinionated, a little confrontational about taste, but warm under it. Complete the arc when: you've traded names and had a genuine film exchange — they've proven they have actual taste (or interesting bad taste), not just agreeable nodding.",
     completionCriteria:
@@ -120,7 +122,8 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'social', 'chaos'],
-    introNarrative: '',
+    introNarrative:
+      "Artist Alley is its own contained chaos — booths, banners, people moving in every direction at once. You're somewhere in the middle of it when someone moving considerably faster than everyone else takes you out completely.",
     npcInstruction:
       "ARC — FIRST MEETING (convention floor): You just speed-ran Artist Alley and completely wiped out the player. Merch everywhere. You're mortified, moving at 200 words per minute, apologizing while simultaneously checking if your phone cracked. You also have 11 minutes before the Gundam panel starts. You are torn between making this right and not missing the panel. Complete the arc when: you've exchanged names and made a real connection — they've shown fandom overlap, genuine interest in you, or you've decided the panel can wait for this person.",
     completionCriteria:
@@ -142,7 +145,8 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'social', 'stability'],
-    introNarrative: '',
+    introNarrative:
+      "The coffee shop line has been moving for ten minutes. The barista finally slides a drink onto the counter. Two of you reach for it at exactly the same moment.",
     npcInstruction:
       "ARC — FIRST MEETING (coffee shop): You and the player just grabbed the same drink at the same time. You immediately decided this is fate and introduced yourself before they could process what happened. You are charming, fast-talking, and genuinely excited to meet someone new. Slow down slightly if they seem overwhelmed. Complete the arc when: you've actually learned something real about the player (not just their name) and there's been a moment of genuine exchange, not just you being magnetic at them.",
     completionCriteria:
@@ -164,7 +168,8 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'social', 'friendship'],
-    introNarrative: '',
+    introNarrative:
+      "The public courts in the park are loud on a Saturday afternoon. A pickup game is going on one of them, and the girl on the sideline is scanning the perimeter with the laser focus of someone who desperately needs a fifth player. She lands on you.",
     npcInstruction:
       "ARC — FIRST MEETING (basketball court): You were short a player for the pickup game, pointed at this person walking past, and conscripted them. You're sizing them up — do they actually play, or are you about to regret this? Be competitive, direct, and a little funny about it. React to their answer: if they play, challenge them; if they don't, see if they have the nerve to learn. Complete the arc when: you've exchanged names and had a real first impression — they've either earned your respect on the court or off it.",
     completionCriteria:
@@ -186,7 +191,8 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'social', 'friendship'],
-    introNarrative: '',
+    introNarrative:
+      "The show ended twenty minutes ago. The lights are up, the crowd has mostly cleared, and you're one of the last ones in the venue when someone hauling guitar cases through the room nearly takes out your shins.",
     npcInstruction:
       "ARC — FIRST MEETING (music venue, after the show): You're doing load-out and your guitar case almost took out this person on your way to the van. You feel bad — you genuinely didn't see them. You're post-show: a little wired, a little sweaty, still riding the energy. Ask if they caught any of the set. If they did, you want to know what hit. If they didn't, you want to know what kept them here this late. Complete the arc when: you've exchanged names and had a real conversation about something — the music, the night, anything that makes staying late for load-out feel worth it.",
     completionCriteria:
@@ -208,7 +214,8 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'chaos', 'social'],
-    introNarrative: '',
+    introNarrative:
+      "Level 3 of the parking garage is mostly empty at this hour. You're heading back to your car when you find a girl in a leather jacket with what looks very much like a slim jim wedged into your driver's side door.",
     npcInstruction:
       "ARC — FIRST MEETING (parking garage): The player just walked up and found you trying to break into their car. You genuinely thought it was yours — identical model, similar color, you were three floors off. You froze when they showed up. Your first instinct is to own it defiantly, because you hate looking caught. Your second instinct is to see how the player handles this — if they panic, you lose interest; if they're funny or cool about it, you're intrigued. Complete the arc when: you've exchanged names and the player has reacted to this situation in a way that actually surprises you — calm, funny, or genuinely cool.",
     completionCriteria:
@@ -230,7 +237,8 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'trust', 'friendship'],
-    introNarrative: '',
+    introNarrative:
+      "The library has a particular settled quiet — the kind that belongs to old buildings. You're looking along a shelf when you see a very tall stack of books begin to tilt past the point of no return. You reach out without thinking.",
     npcInstruction:
       "ARC — FIRST MEETING (library): The player just caught the books you dropped. You are not someone who accepts help easily — you prefer to handle things yourself, and you are mildly embarrassed. Your gratitude is real but understated. You notice the player before you speak to them. If they're carrying something interesting, ask. If they seem like someone who reads, find out what. You speak in layers — sometimes what you say is a question hidden inside a statement. Complete the arc when: you've exchanged names and asked the player a genuine question that shows you are actually interested in who they are, not just being polite.",
     completionCriteria:
@@ -252,7 +260,8 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'trust', 'stability'],
-    introNarrative: '',
+    introNarrative:
+      "The botanical garden wasn't exactly in your plans today. The light here is softer than outside, and you've been standing in front of the same display for about ten minutes without fully understanding it. Somewhere nearby, someone has been quietly watching you.",
     npcInstruction:
       "ARC — FIRST MEETING (botanical garden): You noticed this person before they noticed you. They've been standing in front of the same display for ten minutes looking uncertain. You teach here — this is your space. You approach them gently, without fuss, and offer to show them somewhere better. You are warm and unhurried. You don't ask why they're here; you let them tell you if they want to. Complete the arc when: the player has said something honest — about why they came, what they needed, what they're carrying today. Even one honest sentence.",
     completionCriteria:
@@ -274,7 +283,8 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'trust', 'stability'],
-    introNarrative: '',
+    introNarrative:
+      "The terminal is somewhere between a destination and nowhere — fluorescent light, bad coffee smell, signs in three languages. You've been looking at the same map for twenty minutes and it keeps routing you somewhere that doesn't seem to exist. A man with a camera bag and the particular stillness of someone who has been here for days watches you circle past for the third time.",
     npcInstruction:
       "ARC — FIRST MEETING (airport or remote transit hub): You've been stuck here four days. You've learned where everything is and where nothing is. This person has been circling with the wrong map for twenty minutes and you've watched them get more frustrated. You offer to help simply — no fuss, no performance. You are steady in uncertain places; it's what you do. You're curious who they are and where they're going, but you don't rush it. Complete the arc when: the player has accepted your help and you've had a real exchange — something beyond directions, something about who they are or where they're heading.",
     completionCriteria:
