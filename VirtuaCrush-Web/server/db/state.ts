@@ -1,13 +1,12 @@
-// Story-state + scene persistence and orchestration.
+// Story-state persistence and orchestration.
 //
-// Hybrid daily regeneration (lazy on read + scheduled batch) plus the per-date
-// scene (mode/location/bill). Per-user: one row per (user, character).
+// Hybrid daily regeneration (lazy on read + scheduled batch).
+// Per-user: one row per (user, character).
 import { pool } from './pool';
 import { getCharacter } from '../inworld/characters';
 import { generateDailyState } from '../inworld/story_engine';
 import { utcDateString, isStale, advanceProgress, type DailyState } from './story_util';
-import type { SceneState, SceneMode } from './scene_util';
-import type { Incident } from './world_util';
+import type { SceneState } from './scene_util';
 
 interface StateRow {
   character_id: string;
@@ -16,14 +15,11 @@ interface StateRow {
   mood: string;
   headline: string;
   goal_progress: number;
-  scene_mode: SceneMode;
   scene_location: string | null;
-  bill_pending: boolean;
-  scene_incidents: Incident[] | null;
 }
 
 const COLS = `character_id, state_date::text AS state_date, activity, mood, headline, goal_progress,
-              scene_mode, scene_location, bill_pending, scene_incidents`;
+              scene_location`;
 
 export interface Situation {
   state: DailyState;
@@ -53,12 +49,7 @@ function rowToState(r: StateRow): DailyState {
 }
 
 function rowToScene(r: StateRow): SceneState {
-  return {
-    mode: r.scene_mode === 'together' ? 'together' : 'apart',
-    location: r.scene_location ?? null,
-    billPending: !!r.bill_pending,
-    incidents: Array.isArray(r.scene_incidents) ? r.scene_incidents : [],
-  };
+  return { location: r.scene_location ?? null };
 }
 
 async function readRow(userId: string, characterId: string): Promise<StateRow | null> {
@@ -69,14 +60,14 @@ async function readRow(userId: string, characterId: string): Promise<StateRow | 
   return rows[0] ?? null;
 }
 
-/** Generates a new daily state from the prior row and upserts it (scene resets to home/apart). */
+/** Generates a new daily state from the prior row and upserts it. */
 async function generateAndStore(
   userId: string,
   characterId: string,
   prior: StateRow | null,
   today: string,
 ): Promise<StateRow> {
-  const character = getCharacter(characterId); // throws on unknown id
+  const character = getCharacter(characterId);
   const generated = await generateDailyState({
     characterId,
     displayName: character.displayName,
@@ -90,18 +81,15 @@ async function generateAndStore(
   const { rows } = await pool.query<StateRow>(
     `INSERT INTO character_state
        (user_id, character_id, state_date, activity, mood, headline, goal_progress,
-        scene_mode, scene_location, bill_pending, scene_incidents, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'apart', NULL, false, '[]'::jsonb, NOW())
+        scene_location, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, NOW())
      ON CONFLICT (user_id, character_id) DO UPDATE
        SET state_date = EXCLUDED.state_date,
            activity = EXCLUDED.activity,
            mood = EXCLUDED.mood,
            headline = EXCLUDED.headline,
            goal_progress = EXCLUDED.goal_progress,
-           scene_mode = 'apart',
            scene_location = NULL,
-           bill_pending = false,
-           scene_incidents = '[]'::jsonb,
            updated_at = NOW()
      RETURNING ${COLS}`,
     [userId, characterId, today, generated.activity, generated.mood, generated.headline, goalProgress],
@@ -126,10 +114,7 @@ async function ensureFreshRow(userId: string, characterId: string): Promise<Stat
         mood: '',
         headline: '',
         goal_progress: 0,
-        scene_mode: 'apart',
         scene_location: null,
-        bill_pending: false,
-        scene_incidents: [],
       }
     );
   }
@@ -149,10 +134,10 @@ export async function getSituation(userId: string, characterId: string): Promise
   return { state: rowToState(row), scene: rowToScene(row) };
 }
 
-/** Reads just the scene (assumes a row exists; returns apart default if not). */
+/** Reads just the scene (assumes a row exists; returns default if not). */
 export async function getScene(userId: string, characterId: string): Promise<SceneState> {
   const row = await readRow(userId, characterId);
-  if (!row) return { mode: 'apart', location: null, billPending: false, incidents: [] };
+  if (!row) return { location: null };
   return rowToScene(row);
 }
 
@@ -165,20 +150,6 @@ export async function setMood(userId: string, characterId: string, mood: string)
     `UPDATE character_state SET mood = $3, updated_at = NOW()
      WHERE user_id = $1 AND character_id = $2`,
     [userId, characterId, mood.slice(0, 60)],
-  );
-}
-
-/** Records a priced mischief incident on the current date (engine-decided bill line). */
-export async function appendIncident(
-  userId: string,
-  characterId: string,
-  incident: Incident,
-): Promise<void> {
-  await pool.query(
-    `UPDATE character_state
-       SET scene_incidents = COALESCE(scene_incidents, '[]'::jsonb) || $3::jsonb, updated_at = NOW()
-     WHERE user_id = $1 AND character_id = $2`,
-    [userId, characterId, JSON.stringify([incident])],
   );
 }
 

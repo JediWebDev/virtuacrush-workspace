@@ -1,12 +1,10 @@
 // Groups the engine's Consequence[] into a flat EffectPlan the persistence layer
-// can apply in one pass (summed affinity, collected bill items,
-// narration-only warnings/responders). Pure + testable; execution lives in
-// db/sim_apply.ts.
+// can apply in one pass (summed affinity, narration-only warnings/responders).
+// Pure + testable; execution lives in db/sim_apply.ts.
 import type { Consequence } from './rules';
 
 export interface EffectPlan {
   affinityByNpc: Record<string, number>;
-  billItems: { label: string; amount: number }[];
   warnings: string[];    // authority warnings (narration only)
   responders: string[];  // dispatched responders (narration only)
   moveTo?: string;       // requested user move (narration / future scene change)
@@ -29,14 +27,11 @@ export function formatEngineFactsBlock(plan: EffectPlan, authority = 'venue secu
 }
 
 export function planEffects(consequences: Consequence[]): EffectPlan {
-  const plan: EffectPlan = { affinityByNpc: {}, billItems: [], warnings: [], responders: [] };
+  const plan: EffectPlan = { affinityByNpc: {}, warnings: [], responders: [] };
   for (const c of consequences) {
     switch (c.type) {
       case 'affinity':
         plan.affinityByNpc[c.npc] = (plan.affinityByNpc[c.npc] ?? 0) + c.delta;
-        break;
-      case 'bill_add':
-        plan.billItems.push({ label: c.label, amount: c.amount });
         break;
       case 'authority_warn':
         plan.warnings.push(c.reason);

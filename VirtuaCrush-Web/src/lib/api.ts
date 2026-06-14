@@ -61,14 +61,6 @@ export function fetchChatHistory(characterId: string): Promise<{ days: ChatHisto
 export function assetUrl(key: string): string {
   return `${BASE}/api/assets/${key.replace(/^\/+/, '')}`;
 }
-export type ScenePhase = "home" | "on_date";
-
-export interface SceneInfo {
-  mode: "apart" | "together";
-  location: string | null;
-  billPending: boolean;
-}
-
 export interface CharacterState {
   characterId: string;
   activity: string;
@@ -76,9 +68,6 @@ export interface CharacterState {
   headline: string;
   goalProgress: number;
   goal: string;
-  scene?: SceneInfo;
-  phase?: ScenePhase;
-  sceneLabel?: string | null;
   secret?: { label: string; discovered: boolean; reveal: string | null; progress?: number };
   drives?: { key: string; label: string; value: number }[];
   pendingEvent?: { drive: string; prompt: string; options: { id: string; label: string }[] } | null;

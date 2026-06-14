@@ -6,33 +6,20 @@ import {
   type SceneState,
 } from './scene_util';
 
-const apart: SceneState = { mode: 'apart', location: null, billPending: false };
-const atCoffee: SceneState = { mode: 'together', location: 'coffee_shop', billPending: true };
-
-test('formatSituationBlock: on a date anchors in the venue', () => {
-  const b = formatSituationBlock({ activity: 'grinding ranked', mood: 'wired' }, atCoffee, 'Mina');
-  assert.ok(b.includes('ON A DATE'));
-  assert.ok(b.toLowerCase().includes('coffee shop'));
-  assert.ok(!b.includes('grinding ranked')); // solo activity suppressed while together
-});
+const scene: SceneState = { location: null };
 
 test('formatSituationBlock: affinity note included when provided', () => {
-  const b = formatSituationBlock({ activity: 'x', mood: 'y' }, { mode: 'apart', location: null, billPending: false }, 'Mina', 42);
+  const b = formatSituationBlock({ activity: 'x', mood: 'y' }, { location: null }, 'Mina', 42);
   assert.ok(b.includes('42/100'));
 });
 
 test('formatSituationBlock: apart places them at home, remote', () => {
-  const b = formatSituationBlock({ activity: 'mixing a demo', mood: 'mellow' }, apart, 'Riot');
+  const b = formatSituationBlock({ activity: 'mixing a demo', mood: 'mellow' }, scene, 'Riot');
   assert.ok(b.includes('mixing a demo'));
   assert.ok(b.toLowerCase().includes('texting'));
 });
 
-test('formatSituationBlock: together but unknown location falls back to apart text', () => {
-  const b = formatSituationBlock({ activity: 'x', mood: 'y' }, { mode: 'together', location: 'void', billPending: false }, 'A');
-  assert.ok(b.includes('CURRENT SETTING'));
-});
-
-test('scenePhase: home / on_date', () => {
-  assert.equal(scenePhase({ mode: 'apart', location: null, billPending: false }), 'home');
-  assert.equal(scenePhase({ mode: 'together', location: 'restaurant', billPending: true }), 'on_date');
+test('scenePhase: always returns home', () => {
+  assert.equal(scenePhase({ location: null }), 'home');
+  assert.equal(scenePhase({ location: 'coffee_shop' }), 'home');
 });

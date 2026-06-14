@@ -1,17 +1,15 @@
 // Layer 2: the engine. Maps a classified+normalized intent to CONSEQUENCES,
 // switching on the closed category then the (canonical) subtype, with a safe
 // default per category. Sole authority over what actions mean. Pure + testable.
-import type { PlayerIntent, SpendTier } from './intent';
+import type { PlayerIntent } from './intent';
 import type { WorldState } from './world';
 
 export type Consequence =
   | { type: 'affinity'; npc: string; delta: number; reason: string }
-  | { type: 'bill_add'; label: string; amount: number }
   | { type: 'move_user'; to: string }
   | { type: 'authority_warn'; reason: string }
   | { type: 'dispatch_responders'; who: string };
 
-const SPEND_AMOUNTS: Record<SpendTier, number> = { modest: 80, big: 300, lavish: 850 };
 // Tuned so a warm 15-20 message session moves affinity a VISIBLE +4-8 points
 // (the old values rounded away to nothing in the UI), while negatives still
 // bite harder than positives reward.
@@ -30,7 +28,6 @@ const CONFLICT: Record<string, { delta: number; warn: boolean }> = {
 
 export function consequencesFor(intent: PlayerIntent, world: WorldState): Consequence[] {
   const companion = world.scene.companionId;
-  const onDate = world.scene.phase === 'on_date';
   const target = intent.target ?? companion;
 
   switch (intent.type) {
@@ -41,8 +38,6 @@ export function consequencesFor(intent: PlayerIntent, world: WorldState): Conseq
       return cs;
     }
 
-    // NB: social/lie is verbal-only (talk space). Deception with systemic impact
-    // stays in `social` as well — the crime category is no longer active.
     case 'social':
       return [{ type: 'affinity', npc: target, delta: SOCIAL_AFFINITY[intent.subtype] ?? 0.3, reason: intent.subtype }];
 
@@ -51,14 +46,9 @@ export function consequencesFor(intent: PlayerIntent, world: WorldState): Conseq
 
     case 'transaction': {
       if (intent.subtype === 'gift') {
-        const cs: Consequence[] = [{ type: 'affinity', npc: target, delta: 1.5, reason: 'gift' }];
-        if (onDate && intent.magnitude) cs.push({ type: 'bill_add', label: 'Gift', amount: SPEND_AMOUNTS[intent.magnitude] });
-        return cs;
+        return [{ type: 'affinity', npc: target, delta: 1.5, reason: 'gift' }];
       }
       if (intent.subtype === 'tip') return [{ type: 'affinity', npc: target, delta: 0.3, reason: 'tip' }];
-      // Routine buys are covered by the venue base price; only an explicit
-      // magnitude (a deliberate, notable spend) adds a bill line.
-      if (intent.subtype === 'buy') return onDate && intent.magnitude ? [{ type: 'bill_add', label: 'Purchases', amount: SPEND_AMOUNTS[intent.magnitude] }] : [];
       return [];
     }
 

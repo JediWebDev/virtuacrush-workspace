@@ -1,8 +1,8 @@
 export type UserTier = "guest" | "free" | "pro" | "vip";
 
-export const FREE_CHARS = ["Mina", "Becca", "Serena", "Ash"] as const;
+export const FREE_CHARS = ["Mina", "Becca", "Serena", "Ash", "Bohdi", "Lexi"] as const;
 
-export const SPOTLIGHT_CHARS = ["Mina", "Becca", "Serena", "Ash"] as const;
+export const SPOTLIGHT_CHARS = ["Mina", "Becca", "Serena", "Ash", "Bohdi", "Lexi"] as const;
 
 export function matchesCharacterName(fullName: string, tokens: readonly string[]): boolean {
   return tokens.some((token) => fullName.includes(token));

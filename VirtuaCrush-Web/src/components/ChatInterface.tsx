@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
-import { fetchGreeting, fetchCharacterState, respondToDesire, fetchChatHistory, assetUrl, type CharacterState, type ChatHistoryDay } from "../lib/api";
+import { fetchGreeting, fetchCharacterState, respondToDesire, fetchChatHistory, type CharacterState, type ChatHistoryDay } from "../lib/api";
 import { splitNarration } from "../lib/narration";
 import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
@@ -20,33 +20,6 @@ function formatHistoryDate(day: string): string {
   const d = new Date(`${day}T12:00:00`);
   return d.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
 }
-
-// Photo backdrops served from the R2 bucket (via /api/assets) per date
-// location. Keys are the object names in the bucket — after uploading a new
-// image, add its location here. Locations without an entry fall back to the
-// SCENE_BG gradient alone.
-const SCENE_IMAGE: Record<string, string> = {
-  coffee_shop: "cafe.png",
-  restaurant: "restaurant.png",
-  mall: "mall.png",
-};
-
-// Subtle themed background per date location, layered under the photo (and
-// shown alone when no photo is mapped in SCENE_IMAGE above).
-const SCENE_BG: Record<string, string> = {
-  coffee_shop: "linear-gradient(160deg, rgba(120,72,40,0.20), rgba(60,40,30,0.10))",
-  restaurant: "linear-gradient(160deg, rgba(90,30,45,0.22), rgba(30,20,30,0.12))",
-  movie_theater: "linear-gradient(160deg, rgba(22,22,45,0.34), rgba(8,8,18,0.20))",
-  mall: "linear-gradient(160deg, rgba(40,80,120,0.18), rgba(30,40,70,0.10))",
-  park: "linear-gradient(160deg, rgba(40,110,60,0.18), rgba(30,70,50,0.10))",
-  concert: "linear-gradient(160deg, rgba(120,30,140,0.30), rgba(30,10,50,0.18))",
-  golf_course: "linear-gradient(160deg, rgba(50,130,70,0.20), rgba(30,80,50,0.10))",
-  sports_game: "linear-gradient(160deg, rgba(30,110,90,0.20), rgba(20,60,55,0.12))",
-  arcade: "linear-gradient(160deg, rgba(200,40,140,0.24), rgba(40,20,80,0.16))",
-  amusement_park: "linear-gradient(160deg, rgba(220,90,120,0.22), rgba(60,40,120,0.12))",
-  user_home: "linear-gradient(160deg, rgba(120,90,140,0.18), rgba(40,30,50,0.10))",
-  character_home: "linear-gradient(160deg, rgba(70,90,130,0.18), rgba(30,35,55,0.10))",
-};
 
 interface Props {
   character: Character;
@@ -68,8 +41,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     },
     onQuotaExceeded: (info) => { setQuotaLimit(info?.limit ?? null); setQuotaToast(true); },
     onDone: () => {
-      // The scene can change mid-conversation (e.g. arrival flips apart->together),
-      // so refresh the status strip after each reply.
+      // Refresh the status strip after each reply.
       fetchCharacterState(character.id)
         .then((st) => setStoryState(st))
         .catch(() => { /* non-fatal */ });
@@ -223,21 +195,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
       cancelled = true;
     };
   }, [showHistoryView, character.id]);
-
-  // Chat backdrop: the location photo (when one is mapped) over its gradient
-  // while on a date; otherwise none.
-  const sceneLocation =
-    storyState?.scene?.mode === "together" ? storyState.scene.location : null;
-  const chatBackdropStyle: React.CSSProperties | undefined =
-    sceneLocation && SCENE_BG[sceneLocation]
-      ? {
-          backgroundImage: `${
-            SCENE_IMAGE[sceneLocation] ? `url(${assetUrl(SCENE_IMAGE[sceneLocation])}), ` : ""
-          }${SCENE_BG[sceneLocation]}`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }
-      : undefined;
 
   const historyItems = (historyDays ?? []).map((d) => ({
     id: d.id,
@@ -418,7 +375,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
         <div
             ref={scrollRef}
             className="no-scrollbar flex-1 space-y-4 overflow-y-auto p-4 md:space-y-5 md:p-8"
-            style={chatBackdropStyle}
         >
           {messages.filter((m) => m.id !== "scene-header").length === 1 && (
             <div className="flex flex-col items-center justify-center space-y-6 py-16 text-center md:py-24">

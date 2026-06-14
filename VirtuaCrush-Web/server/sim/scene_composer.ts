@@ -4,7 +4,6 @@
 //   renderSceneHeader()     -> VN-style prose narration shown to the user
 //   renderSceneFactsBlock() -> compact facts block injected into the LLM prompt
 // Pure + seeded: the same inputs always compose the same scene.
-import { getLocation } from '../inworld/scenes';
 import type { DailyState } from '../db/story_util';
 import type { SceneState, ScenePhase } from '../db/scene_util';
 import { planDisruptions, type PlannedDisruption } from './interruptions';
@@ -116,19 +115,14 @@ export function composeScene(p: ComposeParams): SceneComposition {
   const cast: SceneCastMember[] = [];
 
   const pro = pronounsFor(p.characterId);
-  if (p.phase === 'on_date' && p.scene.location) {
-    const loc = getLocation(p.scene.location);
-    locationSlug = p.scene.location;
-    setting = loc ? `together ${loc.description}` : 'out together';
-    details = loc ? [loc.cues, ...pickSome(VENUE_DETAILS[loc.kind] ?? [], 1, r)] : [];
-  } else {
+  {
     const props = pickSome(HOME_PROPS, 2, r);
     setting = `at ${pro.possessive} place, ${props.join(' and ')} in frame of the story`;
     details = pickSome(HOME_DETAILS, 2, r);
 
-    // A friend may be over (home scenes only): canonical identity, rolled
-    // presence + agenda. The friend is an engine fact the LLM can voice but
-    // never rename or replace. First meetings stay one-on-one.
+    // A friend may be over: canonical identity, rolled presence + agenda.
+    // The friend is an engine fact the LLM can voice but never rename or replace.
+    // First meetings and arc-anchored scenes stay one-on-one.
     if (!p.firstMeeting && r() < 0.35) {
       const friend = friendFor(p.characterId);
       cast.push({ ...friend, agenda: pickFrom(FRIEND_AGENDAS, r) });
@@ -145,14 +139,14 @@ export function composeScene(p: ComposeParams): SceneComposition {
     setting,
     details,
     outfit,
-    activity: sceneActivity(p.state.activity, hour, p.phase !== 'on_date', r),
+    activity: sceneActivity(p.state.activity, hour, true, r),
     cast,
     firstMeeting: Boolean(p.firstMeeting),
     meetHook: p.firstMeeting
       ? (MEET_HOOK_BY_CHARACTER[p.characterId] ?? 'You matched online and it clicked immediately')
       : undefined,
     disruptions: planDisruptions(r, {
-      phase: p.phase,
+      phase: 'home',
       hasFriend: cast.length > 0,
       firstMeeting: Boolean(p.firstMeeting),
     }),
@@ -172,11 +166,7 @@ export function renderSceneHeader(c: SceneComposition, displayName: string, char
     return bits.join(' ');
   }
   bits.push(`${c.timeLabel} -- ${c.weather}.`);
-  if (c.phase === 'on_date') {
-    bits.push(`You're ${c.setting} with ${displayName}.`);
-  } else {
-    bits.push(`${displayName} is ${c.setting.replace(' in frame of the story', '')}, ${c.activity}.`);
-  }
+  bits.push(`${displayName} is ${c.setting.replace(' in frame of the story', '')}, ${c.activity}.`);
   if (c.details.length) bits.push(`${c.details.join('; ')}.`.replace(/\.\.$/, '.'));
   bits.push(`${pro.subjectCap}'s in ${c.outfit}.`);
   for (const m of c.cast) {
@@ -207,10 +197,10 @@ export function renderSceneFactsBlock(c: SceneComposition, displayName: string, 
       // Friends are always female (drawn from FRIEND_NAMES which are all female).
       lines.push(
         `ALSO PRESENT: ${m.name}, ${pro.possessive} ${m.role} -- ${m.vibe}. Right now ${m.name} ${m.agenda}. ` +
-          `Voice ${m.name} ONLY via [${m.name.toUpperCase()}] tagged lines; she can interject, react, or be overheard. ` +
-          `She is real and persistent -- never rename her or swap her for someone else.`,
+          `Voice ${m.name} ONLY via [${m.name.toUpperCase()}] tagged lines; she can interject, react, or be overheard. She is real and persistent -- never rename her or swap her for someone else.`,
       );
     }
   }
-  return lines.filter(Boolean).join('\n');
+  return lines.filter(Boolean).join(`
+`);
 }

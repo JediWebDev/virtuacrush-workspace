@@ -38,12 +38,14 @@ const SPOTS: Record<string, { day: string; eve: string }> = {
   becca: { day: 'mall', eve: 'movie_theater' },
   madison: { day: 'coffee_shop', eve: 'restaurant' },
   jordan: { day: 'golf_course', eve: 'restaurant' },
-  serena: { day: 'mall', eve: 'movie_theater' },
-  riot: { day: 'coffee_shop', eve: 'concert' },
+  bohdi: { day: 'beach', eve: 'bar' },
+  lexi: { day: 'race_track', eve: 'bar' },
+  serena: { day: 'arts_craft_store', eve: 'cemetary' },
+  riot: { day: 'coffee_shop', eve: 'bar' },
   avery: { day: 'coffee_shop', eve: 'mall' },
   jun: { day: 'coffee_shop', eve: 'restaurant' },
   iris: { day: 'park', eve: 'coffee_shop' },
-  ash: { day: 'park', eve: 'mall' },
+  ash: { day: 'dark_home', eve: 'open_market' },
 };
 
 function buildSchedule(id: string): ScheduleEntry[] {

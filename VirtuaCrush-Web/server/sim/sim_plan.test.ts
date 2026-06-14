@@ -25,12 +25,13 @@ test('roster: known companions seeded with goals + fashion prefs', () => {
   assert.equal(e.knowledge.knownPlayerFacts.length, 0);
 });
 
-test('planEffects: purchase -> bill item; insult -> negative affinity only', () => {
-  const buy = planEffects(consequencesFor({ type: 'transaction', subtype: 'buy', magnitude: 'lavish' }, world()));
-  assert.equal(buy.billItems[0].amount, 850);
+test('planEffects: insult -> negative affinity; buy -> no bill (buy gives affinity only)', () => {
   const insult = planEffects(consequencesFor({ type: 'conflict', subtype: 'insult' }, world()));
   assert.ok(insult.affinityByNpc.serena < 0);
-  assert.equal(insult.billItems.length, 0);
+
+  // buy returns [] consequences now (bill system removed)
+  const buy = planEffects(consequencesFor({ type: 'transaction', subtype: 'buy', magnitude: 'lavish' }, world()));
+  assert.deepEqual(buy.affinityByNpc, {});
 });
 
 test('planEffects: affinity deltas from multiple consequences sum per npc', () => {

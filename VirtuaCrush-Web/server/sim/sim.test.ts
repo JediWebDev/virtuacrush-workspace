@@ -65,10 +65,9 @@ test('conflict insult drops affinity; threaten also warns', () => {
   assert.ok(consequencesFor({ type: 'conflict', subtype: 'threaten' }, world()).some((c) => c.type === 'authority_warn'));
 });
 
-test('romance/social/transaction consequences', () => {
+test('romance/social consequences', () => {
   assert.ok(consequencesFor({ type: 'romance', subtype: 'confession' }, world()).some((c) => c.type === 'affinity' && c.delta > 1));
   assert.ok(consequencesFor({ type: 'social', subtype: 'compliment' }, world()).some((c) => c.type === 'affinity' && c.delta > 0));
-  assert.ok(consequencesFor({ type: 'transaction', subtype: 'buy', magnitude: 'lavish' }, world()).some((c) => c.type === 'bill_add' && c.amount === 850));
 });
 
 // --- Layer 3: agency acts on BELIEF, not omniscience -------------------------
@@ -98,7 +97,7 @@ test('social/lie is affinity-only (talk space, no criminal consequence)', () => 
   assert.ok(lie.every((c) => c.type !== 'authority_warn'));
 });
 
-test('transaction/buy bills ONLY with an explicit magnitude (no silent $80 default)', () => {
+test('transaction/buy without magnitude returns no consequences', () => {
   assert.deepEqual(consequencesFor({ type: 'transaction', subtype: 'buy' }, world()), []);
-  assert.ok(consequencesFor({ type: 'transaction', subtype: 'buy', magnitude: 'big' }, world()).some((c) => c.type === 'bill_add' && c.amount === 300));
+  assert.deepEqual(consequencesFor({ type: 'transaction', subtype: 'buy', magnitude: 'lavish' }, world()), []);
 });

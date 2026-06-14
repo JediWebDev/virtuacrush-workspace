@@ -1,26 +1,17 @@
-// Pure helpers for the scene/dating loop: prompt formatting and phase derivation.
-import { getLocation } from '../inworld/scenes';
+// Pure helpers for the scene system: prompt formatting and phase type.
 import type { DailyState } from './story_util';
-import type { Incident } from './world_util';
 
-export type SceneMode = 'apart' | 'together';
-export type ScenePhase = 'home' | 'on_date';
+export type ScenePhase = 'home' | 'on_date'; // 'on_date' reserved for future arc-driven scenes
 
 export interface SceneState {
-  mode: SceneMode;
-  location: string | null;        // venue slug when together
-  billPending: boolean;
-  incidents?: Incident[];          // priced mischief incidents on the current date
+  location: string | null; // venue slug (reserved; currently always null)
 }
 
 /**
- * The authoritative phase of the dating loop, derived from the scene:
- *  - 'on_date'  : physically together at a venue,
- *  - 'home'     : no date in progress; solo, reachable remotely.
- * Every system (UI gating, status strip, auto-spawn, prompt) keys off this.
+ * Derives scene phase from state. Always 'home' now that the date loop is
+ * removed; retained as a typed hook for future arc-driven co-present scenes.
  */
-export function scenePhase(scene: SceneState): ScenePhase {
-  if (scene.mode === 'together') return 'on_date';
+export function scenePhase(_scene: SceneState): ScenePhase {
   return 'home';
 }
 
@@ -32,39 +23,18 @@ function closenessNote(affinity?: number): string {
   );
 }
 
-const LOGISTICS_REALISM =
-  ` Be realistic about your own means and transport (see your ABOUT YOU facts). If the user proposes ` +
-  `something absurd, lazy, or one-sided — like making you do all the travelling or pay for everything — ` +
-  `react with mild, in-character annoyance instead of just going along with it.`;
-
 /**
- * Builds the situation block injected into the chat system prompt. Three cases:
- *  - together: anchored at the venue (authoritative),
- *  - apart with a planned date: getting ready / sorting logistics,
- *  - apart: at their own place, reachable remotely.
+ * Builds the remote-chat situation block injected into the chat system prompt.
+ * For arc-driven co-present scenes, chat.ts overrides this with a SceneAnchor
+ * block instead.
  */
 export function formatSituationBlock(
   state: Pick<DailyState, 'activity' | 'mood'>,
-  scene: SceneState,
-  characterName: string,
+  _scene: SceneState,
+  _characterName: string,
   affinity?: number,
 ): string {
   const closeness = closenessNote(affinity);
-
-  if (scene.mode === 'together') {
-    const loc = getLocation(scene.location);
-    if (loc) {
-      return (
-        `\n\n=== CURRENT SETTING (happening RIGHT NOW, in real time) ===\n` +
-        `You are physically OUT ON A DATE with the user, together ${loc.description}. ` +
-        `This is your current location: ${loc.label}. You are NOT at home and you are NOT apart from the user.\n` +
-        `If the user asks where you are, where you both are, or what you're doing, your answer is: here together at ${loc.label}. ` +
-        `Never say you are at home or alone. Stay present and let the place color your words — you can reference ${loc.cues}. ` +
-        `React directly to what the user does; don't give one-word non-answers.${closeness}`
-      );
-    }
-  }
-
   const activity = state.activity ? state.activity : 'taking it easy';
   return (
     `\n\n=== CURRENT SETTING ===\n` +
@@ -75,4 +45,3 @@ export function formatSituationBlock(
     closeness
   );
 }
-

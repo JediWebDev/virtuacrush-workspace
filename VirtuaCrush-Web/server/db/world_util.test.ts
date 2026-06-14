@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detectWorldEvent, formatWorldEventDirective, respondersFor, incidentForEvent, detectSpending, MISCHIEF_FEE, CRIME_FEES, SPEND_AMOUNTS, MISCHIEF_STRIKE_LIMIT, countMischief } from './world_util';
+import { detectWorldEvent, formatWorldEventDirective, respondersFor } from './world_util';
 
 test('detectWorldEvent: fire', () => {
   assert.deepEqual(detectWorldEvent('I set the curtains on fire'), { kind: 'crime', crimeType: 'fire' });
@@ -60,26 +60,12 @@ test('respondersFor + directive content', () => {
   assert.ok(m.includes('the café manager') && m.includes('warning'));
 });
 
-test('incidentForEvent: mischief -> flat cleanup fee, crime -> damages, none -> null', () => {
-  const m = incidentForEvent({ kind: 'mischief' });
-  assert.equal(m?.kind, 'mischief');
-  assert.equal(m?.amount, MISCHIEF_FEE);
-
-  const c = incidentForEvent({ kind: 'crime', crimeType: 'destruction' });
-  assert.equal(c?.kind, 'crime');
-  assert.equal(c?.amount, CRIME_FEES.destruction);
-  assert.ok((c?.label ?? '').toLowerCase().includes('destruction'));
-
-  assert.equal(incidentForEvent({ kind: 'none' }), null);
-});
-
-test('formatWorldEventDirective: off-date uses remote wording (no in-venue "thrown out")', () => {
-  const off = formatWorldEventDirective({ kind: 'mischief' }, 'the authorities', 'Mina', false);
-  assert.ok(off.includes('the authorities'));
-  assert.ok(off.includes('Mina'));
-  assert.ok(!off.includes('thrown out'));
-  // engine-authoritative framing present
-  assert.ok(off.toLowerCase().includes('decided by the simulation'));
+test('formatWorldEventDirective: always uses remote wording (no in-venue "thrown out")', () => {
+  const d = formatWorldEventDirective({ kind: 'mischief' }, 'the authorities', 'Mina');
+  assert.ok(d.includes('the authorities'));
+  assert.ok(d.includes('Mina'));
+  assert.ok(!d.includes('thrown out'));
+  assert.ok(d.toLowerCase().includes('decided by the simulation'));
 });
 
 test('detectWorldEvent: plainly-worded register robbery is theft (regression: Becca case)', () => {
@@ -99,23 +85,3 @@ test('detectWorldEvent: benign "take" does not false-positive as theft', () => {
   assert.equal(detectWorldEvent('I take your hand and smile').kind, 'none');
   assert.equal(detectWorldEvent('let me take a picture of us').kind, 'none');
 });
-
-test('detectSpending: tiers price deterministically; ordinary buys are ignored', () => {
-  assert.equal(detectSpending('I take you on a shopping spree at the boutique')?.amount, SPEND_AMOUNTS.lavish);
-  assert.equal(detectSpending('I buy us bottle service for the night')?.amount, SPEND_AMOUNTS.lavish);
-  assert.equal(detectSpending('we get front row seats')?.amount, SPEND_AMOUNTS.big);
-  assert.equal(detectSpending('I buy you a gift from the shop')?.amount, SPEND_AMOUNTS.modest);
-  assert.equal(detectSpending('I buy you a coffee'), null);
-  assert.equal(detectSpending('hey how are you'), null);
-});
-
-test('countMischief + strike limit: counts only mischief incidents', () => {
-  assert.ok(MISCHIEF_STRIKE_LIMIT >= 2);
-  assert.equal(countMischief(null), 0);
-  assert.equal(countMischief([
-    { kind: 'mischief', label: 'x', amount: 45 },
-    { kind: 'spend', label: 'y', amount: 80 },
-    { kind: 'mischief', label: 'z', amount: 45 },
-  ]), 2);
-});
-

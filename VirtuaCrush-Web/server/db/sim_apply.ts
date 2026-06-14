@@ -1,8 +1,7 @@
 // Executes an EffectPlan against persisted state, reusing the existing
-// affinity / bill helpers. This is the only place consequences become real;
+// affinity helpers. This is the only place consequences become real;
 // the planning that produced the plan is pure (sim/effects.ts).
 import type { EffectPlan } from '../sim/effects';
-import { appendIncident } from './state';
 import { incrementAffinity } from './affinity';
 
 export interface ApplyResult {
@@ -20,13 +19,5 @@ export async function applyEffects(
     const score = await incrementAffinity(userId, npcId, delta);
     if (npcId === companionId) companionScore = score;
   }
-
-  // Bill line items accrue on the current date (settled via the End-date flow).
-  for (const item of plan.billItems) {
-    if (item.amount > 0) {
-      await appendIncident(userId, companionId, { kind: 'spend', label: item.label, amount: item.amount });
-    }
-  }
-
   return { affinityScore: companionScore };
 }

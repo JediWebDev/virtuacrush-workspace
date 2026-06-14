@@ -21,8 +21,8 @@ export interface PlannedDisruption {
 interface DisruptionSpec {
   poolId: string;
   kind: DisruptionKind;
-  /** 'home' = texting scenes, 'on_date' = venue scenes, 'any' = both. */
-  phase: 'home' | 'on_date' | 'any';
+  /** 'home' = remote/texting scenes, 'any' = all scenes. */
+  phase: 'home' | 'any';
   requiresFriend?: boolean;
   /** Narrative tags used for arc-weighted selection. */
   tags: NarrativeTag[];
@@ -55,17 +55,7 @@ const TEXTURES: DisruptionSpec[] = [
     tags: ['stability'],
     directive: (n) => `${n} pads off mid-thought to refill ${n}'s drink and comes back settling deeper into the couch.`,
   },
-  {
-    poolId: 'venue_bustle', kind: 'texture', phase: 'on_date',
-    tags: ['social', 'chaos'],
-    directive: () => `A small commotion nearby — someone's order went wrong, or a chair scraped too loud. It passes.`,
-  },
-  {
-    poolId: 'venue_song', kind: 'texture', phase: 'on_date',
-    tags: ['romance', 'social'],
-    directive: (n, _f, pro) =>
-      `The music shifts to something ${n} clearly knows — it tugs ${pro.possessive} attention for a beat.`,
-  },
+
 ];
 
 const BEATS: DisruptionSpec[] = [
@@ -120,16 +110,14 @@ export function disruptionSpec(poolId: string): DisruptionSpec | null {
 // --- Planner (pure, seeded) ----------------------------------------------------
 
 export interface PlanOpts {
-  phase: 'home' | 'on_date';
+  phase: 'home';
   hasFriend: boolean;
   firstMeeting: boolean;
 }
 
-const phaseKey = (p: PlanOpts['phase']): 'home' | 'on_date' => p;
-
 function pickSpec(pool: DisruptionSpec[], opts: PlanOpts, r: () => number): DisruptionSpec | null {
   const ok = pool.filter(
-    (s) => (s.phase === 'any' || s.phase === phaseKey(opts.phase)) && (!s.requiresFriend || opts.hasFriend),
+    (s) => (s.phase === 'any' || s.phase === opts.phase) && (!s.requiresFriend || opts.hasFriend),
   );
   return ok.length ? pickFrom(ok, r) : null;
 }

@@ -10,9 +10,8 @@ import { requireAuth } from '../middleware/auth';
 import { enforceMessageQuota } from '../middleware/rateLimit';
 import { streamChat, completePrompt, type ChatMessage } from '../inworld/chat';
 import { buildDirectorPrompt, parseDirectorOutput, parseDirectorTurns, companionTagFor, turnsToTranscript, type Actor, type ArcContext } from '../inworld/director';
-import { selectArc, getArc } from '../inworld/arcs';
+import { selectArc, getArc, type SceneAnchor } from '../inworld/arcs';
 import { getArcState, setArcActive, clearArc as clearArcState, incrementAbandonmentStrikes, resetAbandonmentStrikes, saveCompletedArc, getCompletedArcIds } from '../db/arc_state';
-import { authorityActor } from '../inworld/npcs';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
 import { pool } from '../db/pool';
@@ -47,9 +46,8 @@ import {
   rerollUnfiredDisruptions,
   type PlannedDisruption,
 } from '../sim/interruptions';
-import { formatSituationBlock, scenePhase } from '../db/scene_util';
+import { formatSituationBlock } from '../db/scene_util';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
-import { getLocation } from '../inworld/scenes';
 import { runLightTick, assembleWorld, assembleFullWorld, applyTick, getWorldClock, MIN_IDLE_MINUTES, MAX_CATCHUP_MINUTES } from '../db/sim_world';
 import type { PlayerIntent } from '../sim/intent';
 import { validateIntent } from '../sim/intent';
@@ -71,6 +69,16 @@ import { budgetHistory } from '../llm/budget';
 // Bigger window = the model can see (and is told to avoid) its own recent
 // phrasing, which is the main lever against verbatim self-repetition.
 const RECENT_TURNS_FOR_PROMPT = 12;
+
+
+/** Formats a SceneAnchor as the authoritative "current setting" block, replacing
+ *  formatSituationBlock() for arcs that place the companion and player together. */
+function formatAnchorBlock(anchor: SceneAnchor): string {
+  return (
+    `\n\n=== CURRENT SETTING ===\n` +
+    anchor.situation
+  );
+}
 
 const router = Router();
 
@@ -245,12 +253,10 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   try { displayName = getCharacter(characterId).displayName; } catch { /* unknown id */ }
 
   const scene = situation.scene;
-  const phase = scenePhase(scene);
 
   let directorPrompt: string | undefined;
   let world: WorldState | undefined;
   let companionEntity: NpcEntity | undefined;
-  let onDate = false;
   let revealSecretNow = false;
   let emotions: EmotionState | undefined;
   let firedDisruption: PlannedDisruption | null = null;
@@ -264,8 +270,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     // engine consequences are known (warnings, responders stay causal).
     world = await assembleWorld(req.user!.id, characterId);
     companionEntity = world.npcs[characterId];
-    onDate = phase === 'on_date';
-    const authority = onDate ? (getLocation(scene.location)?.authority ?? 'a security guard') : 'the authorities';
+    const authority = 'the authorities';
 
     // Macro-world catch-up: advance the full roster while the player was away.
     try {
@@ -286,7 +291,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         const macroResult = simulateElapsed(fullWorld, clock.simMinutes, elapsed, { next: () => Math.random() });
         const companionPatch = macroResult.patches[characterId];
         if (companionPatch) {
-          const patch = onDate ? { ...companionPatch, location: undefined } : companionPatch;
+          const patch = companionPatch;
           world = stepWorld(world, { [characterId]: patch });
           companionEntity = world.npcs[characterId];
         }
@@ -298,9 +303,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     }
 
     const npcs: Actor[] = [];
-    if (onDate) {
-      npcs.push(authorityActor(authority, 'venue staff/security — bring them in only if the player causes a scene'));
-    }
 
     // Composed scene: authoritative time/setting/outfit facts + anyone else
     // present (e.g. her friend) registered as a voiceable actor. Fail-soft.
@@ -336,7 +338,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
             comp.disruptions ?? [],
             firedIds,
             activeArc.arcTags,
-            { phase: onDate ? 'on_date' : 'home', hasFriend: (comp.cast ?? []).length > 0 },
+            { phase: 'home', hasFriend: (comp.cast ?? []).length > 0 },
           );
           void pool.query(
             `UPDATE character_state
@@ -376,15 +378,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     // What the companion knows about the player (perception-gated).
     const playerKnown = companionEntity ? describeKnownPlayer(world.user.profile, companionEntity) : '';
     let lookNote = '';
-    if (onDate) {
-      const appearanceDesc = describeAppearance(world.user.profile.appearance);
-      const outfitDesc = describeOutfit(wornItems(world.user.presentation, world.user.inventory));
-      const groomingDesc = describeGrooming(world.user.presentation.grooming);
-      const bits = [appearanceDesc && `appearance — ${appearanceDesc}`, outfitDesc && `currently wearing ${outfitDesc}`, groomingDesc || ''].filter(Boolean);
-      lookNote = bits.length
-        ? `\n\nYOU CAN SEE THE PLAYER RIGHT NOW: ${bits.join('; ')}. Describe their looks ONLY as stated here — do NOT invent or change their clothing, hair, or features.`
-        : `\n\nYou can see the player, but their appearance and outfit are not defined — do NOT invent clothing or looks.`;
-    } else if (companionEntity) {
+    if (companionEntity) {
       const lastOutfit = describeLastSeenOutfit(companionEntity.knowledge.lastSeenOutfit, 'player', itemsById(world.user.inventory));
       lookNote = lastOutfit
         ? `\n\nLAST TIME YOU SAW THE PLAYER they were wearing ${lastOutfit}; you do not know if that has changed. Do NOT invent a different outfit.`
@@ -420,7 +414,12 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     const engineFacts = formatEngineFactsBlock(effectPlan, authority);
 
     const directives =
-      formatSituationBlock(situation.state, scene, displayName, affinity) +
+      // Arc-anchored scenes (meet arcs, future date arcs) declare their own
+      // physical setting via SceneAnchor, which takes precedence over the
+      // default home/remote block so the LLM knows where it actually is.
+      (activeArc?.sceneAnchor
+        ? formatAnchorBlock(activeArc.sceneAnchor)
+        : formatSituationBlock(situation.state, scene, displayName, affinity)) +
       sceneFacts +
       disruptionDirective +
       formatCharacterFactsBlock(getLore(characterId)) +
@@ -535,8 +534,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
       // Perception update for NEXT turn: companion learns name/bio, and outfit when co-present.
       if (companionEntity) {
-        const learnedFacts = observePlayer({ coPresent: onDate, message, profile: world!.user.profile, existingFacts: companionEntity.knowledge.knownPlayerFacts });
-        const lastSeenOutfit = onDate ? { ...companionEntity.knowledge.lastSeenOutfit, player: world!.user.presentation.wornItemIds } : companionEntity.knowledge.lastSeenOutfit;
+        const learnedFacts = observePlayer({ coPresent: activeArc?.sceneAnchor?.coPresent ?? false, message, profile: world!.user.profile, existingFacts: companionEntity.knowledge.knownPlayerFacts });
+        const lastSeenOutfit = companionEntity.knowledge.lastSeenOutfit;
         const knowledgePatch: Record<string, unknown> = {
           ...companionEntity.knowledge,
           knownPlayerFacts: learnedFacts,

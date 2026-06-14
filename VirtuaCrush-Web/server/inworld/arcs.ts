@@ -30,12 +30,29 @@ export type NarrativeTag =
   // Internal Psychological
   | 'stress' | 'growth' | 'isolation' | 'stability' | 'chaos';
 
+/**
+ * Declares the physical setting for an arc that places the companion and player
+ * in the same space (meet arcs, future date arcs). When present, chat.ts uses
+ * this instead of formatSituationBlock() so the LLM receives an accurate
+ * "where are we" block instead of the default home/remote framing.
+ */
+export interface SceneAnchor {
+  /** Short location phrase for renderSceneHeader (e.g. "in a cramped art supply store"). */
+  setting: string;
+  /** Authoritative situation injected in place of formatSituationBlock(). */
+  situation: string;
+  /** True when companion and player are physically together. */
+  coPresent: boolean;
+}
+
 export interface StoryArc {
   id: string;
   characterId: string;
   /** True for the first-encounter "cute meet" arc. selectArc() always plays
    *  this arc before any regular arc, regardless of rarity or completion state. */
   isMeetArc?: boolean;
+  /** Physical scene context — overrides the home/remote setting block in chat.ts. */
+  sceneAnchor?: SceneAnchor;
   introNarrative: string;
   npcInstruction: string;
   completionCriteria: string;
@@ -72,6 +89,12 @@ const ARCS: StoryArc[] = [
     id: 'serena_meet',
     characterId: 'serena',
     isMeetArc: true,
+    sceneAnchor: {
+      setting: 'in a cramped art supply store — a cascade of spray cans just came off the shelf and hit the player',
+      situation:
+        'You and the player are PHYSICALLY IN THE SAME SPACE — you are both in a cramped art supply store. A spray can you were reaching for just knocked an entire shelf onto this person. You can see them, speak to them face to face, and react to their physical presence in the room. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.',
+      coPresent: true,
+    },
     tone: 'light',
     rarity: 'common',
     repeatable: false,
@@ -95,6 +118,12 @@ const ARCS: StoryArc[] = [
     id: 'becca_meet',
     characterId: 'becca',
     isMeetArc: true,
+    sceneAnchor: {
+      setting: 'in the last video rental store in the city — you and the player both reached for the same DVD at exactly the same moment',
+      situation:
+        'You and the player are PHYSICALLY IN THE SAME SPACE — inside a video rental store. You both reached for the same obscure DVD at the exact same moment. You work here. You can see them, speak to them directly, and react to their presence in the store. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.',
+      coPresent: true,
+    },
     tone: 'light',
     rarity: 'common',
     repeatable: false,
@@ -118,6 +147,12 @@ const ARCS: StoryArc[] = [
     id: 'mina_meet',
     characterId: 'mina',
     isMeetArc: true,
+    sceneAnchor: {
+      setting: 'at Artist Alley in the middle of a convention — you just collided with the player at full speed',
+      situation:
+        'You and the player are PHYSICALLY IN THE SAME SPACE — in the middle of Artist Alley at a convention. You were moving too fast and wiped them out completely. Merch everywhere. You can see them, speak to them directly, and react to their physical presence. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.',
+      coPresent: true,
+    },
     tone: 'light',
     rarity: 'common',
     repeatable: false,
@@ -141,6 +176,12 @@ const ARCS: StoryArc[] = [
     id: 'madison_meet',
     characterId: 'madison',
     isMeetArc: true,
+    sceneAnchor: {
+      setting: 'at a coffee shop counter — you and the player both reached for the same drink at exactly the same moment',
+      situation:
+        'You and the player are PHYSICALLY IN THE SAME SPACE — at a coffee shop counter. You both reached for the same drink at exactly the same moment. You can see them, speak to them directly, and react to their presence in the café. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.',
+      coPresent: true,
+    },
     tone: 'light',
     rarity: 'common',
     repeatable: false,
@@ -164,6 +205,12 @@ const ARCS: StoryArc[] = [
     id: 'jordan_meet',
     characterId: 'jordan',
     isMeetArc: true,
+    sceneAnchor: {
+      setting: 'on a public basketball court in the park — you just recruited the player for your pickup game',
+      situation:
+        'You and the player are PHYSICALLY IN THE SAME SPACE — on the basketball courts in the park. You were one player short for the pickup game and conscripted this person walking by. You can see them, speak to them directly, and size them up in person. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.',
+      coPresent: true,
+    },
     tone: 'light',
     rarity: 'common',
     repeatable: false,
@@ -187,6 +234,12 @@ const ARCS: StoryArc[] = [
     id: 'riot_meet',
     characterId: 'riot',
     isMeetArc: true,
+    sceneAnchor: {
+      setting: "inside the concert venue after the show — doing load-out, your guitar case nearly took out the player's shins",
+      situation:
+        'You and the player are PHYSICALLY IN THE SAME SPACE — inside the concert venue after the show, during load-out. Your guitar case nearly clipped this person. You can see them, speak to them directly, and react to their presence in the room. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.',
+      coPresent: true,
+    },
     tone: 'light',
     rarity: 'common',
     repeatable: false,
@@ -210,6 +263,12 @@ const ARCS: StoryArc[] = [
     id: 'lexi_meet',
     characterId: 'lexi',
     isMeetArc: true,
+    sceneAnchor: {
+      setting: 'in a parking garage — the player just walked up to find you with a slim jim in their car door',
+      situation:
+        'You and the player are PHYSICALLY IN THE SAME SPACE — in a parking garage. The player just found you trying to break into what you genuinely thought was your car. You can see them, speak to them directly, and you are currently very caught. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.',
+      coPresent: true,
+    },
     tone: 'dramatic',
     rarity: 'common',
     repeatable: false,
@@ -233,6 +292,12 @@ const ARCS: StoryArc[] = [
     id: 'lin_meet',
     characterId: 'lin',
     isMeetArc: true,
+    sceneAnchor: {
+      setting: 'in a library — the player just caught a tall stack of books before they hit the floor',
+      situation:
+        'You and the player are PHYSICALLY IN THE SAME SPACE — in a library. The player just reached out and caught a stack of books you dropped before they crashed. You can see them, speak to them directly, and you are aware of their presence in the room. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.',
+      coPresent: true,
+    },
     tone: 'romantic',
     rarity: 'common',
     repeatable: false,
@@ -256,6 +321,12 @@ const ARCS: StoryArc[] = [
     id: 'iris_meet',
     characterId: 'iris',
     isMeetArc: true,
+    sceneAnchor: {
+      setting: 'in a botanical garden — you work here and have been watching the player stand lost in front of the same display for ten minutes',
+      situation:
+        "You and the player are PHYSICALLY IN THE SAME SPACE — in the botanical garden where you teach. This person has been standing lost in front of the same display for ten minutes and you've decided to help. You can see them, speak to them directly, and you are right there with them. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.",
+      coPresent: true,
+    },
     tone: 'romantic',
     rarity: 'common',
     repeatable: false,
@@ -279,6 +350,12 @@ const ARCS: StoryArc[] = [
     id: 'ash_meet',
     characterId: 'ash',
     isMeetArc: true,
+    sceneAnchor: {
+      setting: "in an airport terminal or transit hub — you've been stuck here four days and just watched the player circle past with the wrong map for the third time",
+      situation:
+        "You and the player are PHYSICALLY IN THE SAME SPACE — in an airport terminal or transit hub. You've been here four days. You just watched this person circle past with the wrong map for the third time and decided to help. You can see them, speak to them directly, and you are right there in the terminal with them. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.",
+      coPresent: true,
+    },
     tone: 'romantic',
     rarity: 'common',
     repeatable: false,

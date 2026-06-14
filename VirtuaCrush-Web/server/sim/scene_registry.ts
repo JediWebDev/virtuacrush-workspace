@@ -190,10 +190,9 @@ export function styleFor(characterId: string): StyleArchetype {
   return CHARACTER_STYLE[characterId] ?? 'cozy_casual';
 }
 
-export function outfitContextFor(phase: string, hour: number): OutfitContext {
-  if (phase === 'on_date') {
-    return hour >= 18 || hour < 4 ? 'date_out' : 'date_casual';
-  }
+export function outfitContextFor(_phase: string, hour: number): OutfitContext {
+  // Arc-anchored scenes (meet arcs, future date arcs) will extend this via SceneAnchor.
+  // For now all composed scenes are home-context.
   if (hour >= 23 || hour < 7) return 'sleep';
   if (hour >= 18) return 'home_evening';
   return 'home_day';
