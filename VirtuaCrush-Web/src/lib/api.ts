@@ -178,3 +178,72 @@ export async function getPlayerLocation(characterId: string): Promise<string | n
   const state = await fetchCharacterState(characterId);
   return state.sceneLocation ?? null;
 }
+
+// ============================================================================
+// Story Packs
+// ============================================================================
+
+export interface PackMeta {
+  id: string;
+  characterId: string;
+  title: string;
+  blurb: string;
+  tags: string[];
+  mood: 'romantic' | 'dramatic' | 'comedic' | 'thriller' | 'mystery';
+  estimatedMinutes: number;
+  coverGradient: [string, string];
+}
+
+export interface PackChoice {
+  id: string;
+  label: string;
+  next: string;
+  userMessage: string;
+}
+
+export interface PackSession {
+  sessionId: number;
+  packId: string;
+  characterId: string;
+  currentNode: string;
+  choices: PackChoice[] | null;
+  pack: PackMeta | null;
+}
+
+export interface PackGreetResult {
+  hasHistory: boolean;
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  introNarrative?: string | null;
+  choices: PackChoice[] | null;
+  currentNode: string;
+  pack: PackMeta;
+}
+
+export async function listPacks(characterId: string): Promise<PackMeta[]> {
+  const res = await api<{ packs: PackMeta[] }>(`/api/packs?characterId=${encodeURIComponent(characterId)}`);
+  return res.packs;
+}
+
+export async function startPack(packId: string): Promise<PackSession & { introNarrative?: string | null }> {
+  return api<PackSession & { introNarrative?: string | null }>(`/api/packs/${encodeURIComponent(packId)}/start`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export async function getPackSession(sessionId: number): Promise<PackSession> {
+  return api<PackSession>(`/api/packs/session/${sessionId}`);
+}
+
+export async function greetPackSession(sessionId: number): Promise<PackGreetResult> {
+  return api<PackGreetResult>(`/api/packs/session/${sessionId}/greet`);
+}
+
+export async function getActivePackSession(characterId: string): Promise<PackSession | null> {
+  const res = await api<{ session: PackSession | null }>(`/api/packs/active?characterId=${encodeURIComponent(characterId)}`);
+  return res.session;
+}
+
+export async function abandonPackSession(sessionId: number): Promise<void> {
+  await api<{ ok: boolean }>(`/api/packs/session/${sessionId}/abandon`, { method: 'POST', body: JSON.stringify({}) });
+}

@@ -14,6 +14,10 @@ import CityMap from "./CityMap";
 import UpgradeToast from "./UpgradeToast";
 import SecretCard from "./SecretCard";
 import DesireEventCard from "./DesireEventCard";
+import PackList from "./PackList";
+import ChoiceButtons from "./ChoiceButtons";
+import { getActivePackSession, startPack, type PackSession, type PackChoice } from "../lib/api";
+import { parseSSE } from "../lib/sse";
 
 function formatHistoryDate(day: string): string {
   // day is YYYY-MM-DD; anchor at noon to avoid timezone date shifts.
@@ -62,6 +66,14 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [playerLocation, setPlayerLocation] = useState<string | null>(null);
   const [isTraveling, setIsTraveling] = useState(false);
   const navigate = useNavigate();
+
+  // Pack mode
+  const [activePackSession, setActivePackSession] = useState<PackSession | null>(null);
+  const [activeThread, setActiveThread] = useState<'freeRoam' | 'pack'>('freeRoam');
+  const [packMessages, setPackMessages] = useState<{ id: string; role: 'user' | 'assistant'; content: string }[]>([]);
+  const [packChoices, setPackChoices] = useState<PackChoice[] | null>(null);
+  const [packLoading, setPackLoading] = useState(false);
+  const packAbortRef = useRef<AbortController | null>(null);
 
   const handleDesireRespond = async (choice: "encourage" | "redirect" | "decline") => {
     if (!storyState?.pendingEvent) return;
@@ -192,15 +204,76 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
         behavior: "smooth"
       });
     }
-  }, [messages, isLoading]);
+  }, [messages, isLoading, packMessages, packLoading]);
 
   // 2. Refactored handleSend using the hook
   const handleSend = async (overrideText?: string) => {
     const textToSend = overrideText || input;
-    if (!textToSend.trim() || isLoading) return;
-
+    const busy = activeThread === 'pack' ? packLoading : isLoading;
+    if (!textToSend.trim() || busy) return;
     setInput("");
-    await sendMessage(textToSend);
+    if (activeThread === 'pack' && activePackSession) {
+      void sendPackMessage(textToSend);
+    } else {
+      await sendMessage(textToSend);
+    }
+  };
+
+  const handlePackStart = (session: PackSession & { introNarrative?: string | null }) => {
+    setActivePackSession(session);
+    const msgs: { id: string; role: 'user' | 'assistant'; content: string }[] = [];
+    if (session.introNarrative) {
+      msgs.push({ id: 'pack-intro', role: 'assistant', content: `[NARRATOR] ${session.introNarrative}` });
+    }
+    setPackMessages(msgs);
+    setPackChoices((session as { choices?: PackChoice[] | null }).choices ?? null);
+    setActiveThread('pack');
+  };
+
+  const sendPackMessage = async (text: string, advanceNode?: string) => {
+    if (!activePackSession || packLoading) return;
+    const userMsgId = crypto.randomUUID();
+    const assistantMsgId = crypto.randomUUID();
+    setPackMessages((prev) => [
+      ...prev,
+      { id: userMsgId, role: 'user', content: text },
+      { id: assistantMsgId, role: 'assistant', content: '' },
+    ]);
+    setPackChoices(null);
+    setPackLoading(true);
+    const controller = new AbortController();
+    packAbortRef.current = controller;
+    try {
+      const res = await fetch(`/api/packs/session/${activePackSession.sessionId}/stream`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, advanceNode }),
+        signal: controller.signal,
+      });
+      if (!res.ok) return;
+      for await (const evt of parseSSE(res)) {
+        if (evt.event === 'chunk') {
+          setPackMessages((prev) => prev.map((m) =>
+            m.id === assistantMsgId ? { ...m, content: m.content + (evt.data.text ?? '') } : m
+          ));
+        } else if (evt.event === 'done') {
+          setPackChoices((evt.data as { choices?: PackChoice[] | null }).choices ?? null);
+          if ((evt.data as { currentNode?: string }).currentNode) {
+            setActivePackSession((prev) => prev ? { ...prev, currentNode: (evt.data as { currentNode: string }).currentNode } : null);
+          }
+        }
+      }
+    } catch (e: unknown) {
+      if ((e as { name?: string })?.name !== 'AbortError') console.error('[pack] stream error', e);
+    } finally {
+      setPackLoading(false);
+      packAbortRef.current = null;
+    }
+  };
+
+  const handlePackChoice = (choice: PackChoice) => {
+    void sendPackMessage(choice.userMessage, choice.next);
   };
 
   const suggestions = [
@@ -251,6 +324,9 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
       item.date.toLowerCase().includes(q)
     );
   });
+
+  const displayedMessages = activeThread === 'pack' ? packMessages : messages;
+  const displayedLoading = activeThread === 'pack' ? packLoading : isLoading;
 
   return (
     <motion.div
@@ -304,6 +380,11 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             Affinity {affinity}%
           </span>
           
+          <PackList
+            characterId={character.id}
+            activeSession={activePackSession}
+            onSessionStart={handlePackStart}
+          />
           <SecretCard secret={storyState?.secret} name={character.name} />
           <ActivityLog characterId={character.id} name={character.name} />
         </div>
@@ -408,13 +489,34 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           </div>
         ) : (
           <>
+        {/* Thread tab bar */}
+        {activePackSession && (
+          <div className="flex shrink-0 border-b border-black/[0.06] dark:border-white/[0.06]">
+            <button type="button" onClick={() => setActiveThread('freeRoam')}
+              className={`px-5 py-3 text-xs font-semibold transition-colors ${
+                activeThread === 'freeRoam'
+                  ? 'border-b-2 border-accent text-accent'
+                  : 'text-stone-500 hover:text-stone-700 dark:hover:text-stone-300'
+              }`}>
+              Free Roam
+            </button>
+            <button type="button" onClick={() => setActiveThread('pack')}
+              className={`px-5 py-3 text-xs font-semibold transition-colors ${
+                activeThread === 'pack'
+                  ? 'border-b-2 border-accent text-accent'
+                  : 'text-stone-500 hover:text-stone-700 dark:hover:text-stone-300'
+              }`}>
+              {activePackSession.pack?.title ?? 'Story'}
+            </button>
+          </div>
+        )}
         {/* Status strip removed: the daily-engine activity rarely matched the
             live conversation. The scene header narration owns scene-setting now. */}
         <div
             ref={scrollRef}
             className="no-scrollbar flex-1 space-y-4 overflow-y-auto p-4 md:space-y-5 md:p-8"
         >
-          {messages.filter((m) => m.id !== "scene-header").length === 1 && (
+          {displayedMessages.filter((m) => m.id !== "scene-header").length === 1 && (
             <div className="flex flex-col items-center justify-center space-y-6 py-16 text-center md:py-24">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10">
                     <Sparkles className="text-accent" size={26} />
@@ -446,7 +548,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                 …
               </div>
             </div>
-          ) : messages.flatMap((msg) => {
+          ) : displayedMessages.flatMap((msg) => {
             // User messages render as a single bubble.
             if (msg.role === "user") {
               return [
@@ -595,6 +697,9 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             />
           </div>
         ) : null}
+        {activeThread === 'pack' && packChoices && packChoices.length > 0 && !packLoading && (
+          <ChoiceButtons choices={packChoices} onChoice={handlePackChoice} disabled={packLoading} />
+        )}
         <div className="border-t border-black/[0.05] dark:border-white/[0.05] bg-gradient-to-t from-surface to-transparent p-4 md:p-8 md:pt-6">
           <div className="relative mx-auto max-w-3xl">
             <div className="relative flex items-center gap-2">
@@ -603,17 +708,17 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                placeholder={isLoading ? "…" : `Message ${character.name}…`}
-                disabled={isLoading}
+                placeholder={displayedLoading ? "…" : `Message ${character.name}…`}
+                disabled={displayedLoading}
                 className="min-h-[52px] flex-1 rounded-[1.75rem] border border-black/10 bg-stone-200/80 py-3.5 pl-5 pr-14 text-[15px] text-stone-800 outline-none transition-all placeholder:text-stone-500 focus:border-accent/35 focus:ring-2 focus:ring-accent/10 dark:border-white/10 dark:bg-stone-900/60 dark:text-stone-100"
                 />
                 <button
                 type="button"
                 onClick={() => handleSend()}
-                disabled={!input.trim() || isLoading}
+                disabled={!input.trim() || displayedLoading}
                 className="absolute right-1.5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-accent text-white shadow-md shadow-accent/25 transition-all hover:bg-accent-deep active:scale-95 disabled:opacity-45"
                 >
-                {isLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={19} />}
+                {displayedLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={19} />}
                 </button>
             </div>
           </div>
