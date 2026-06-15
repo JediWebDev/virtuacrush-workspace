@@ -21,5 +21,5 @@ test('formatSituationBlock: apart places them at home, remote', () => {
 
 test('scenePhase: home when remote, on_date when at a venue', () => {
   assert.equal(scenePhase({ location: null }), 'home');
-  assert.equal(scenePhase({ location: 'coffee_shop' }), 'on_date');
+  assert.equal(scenePhase({ location: 'the_grind' }), 'on_date');
 });

@@ -8,6 +8,10 @@ const MOOD_LABELS: Record<string, string> = {
   comedic: "Comedy",
   thriller: "Thriller",
   mystery: "Mystery",
+  playful: "Playful",
+  cozy: "Cozy",
+  gothic: "Gothic",
+  tense: "Tense",
 };
 
 interface PackListProps {

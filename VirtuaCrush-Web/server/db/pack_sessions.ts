@@ -88,6 +88,14 @@ export async function abandonPackSession(sessionId: number): Promise<void> {
   );
 }
 
+export async function countPackMessages(sessionId: number): Promise<number> {
+  const { rows } = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM chat_messages WHERE pack_session_id = $1`,
+    [sessionId],
+  );
+  return parseInt(rows[0]?.count ?? '0', 10);
+}
+
 export async function loadPackMessages(
   sessionId: number,
   limit = 30,

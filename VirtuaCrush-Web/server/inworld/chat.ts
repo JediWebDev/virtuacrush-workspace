@@ -58,4 +58,4 @@ export async function* streamChat(params: StreamChatParams): AsyncGenerator<Stre
 }
 
 // Re-export the provider entry points so existing import sites keep working.
-export { completePrompt, streamPrompt };
+export { completePrompt, streamPrompt } from '../llm';

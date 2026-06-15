@@ -25,6 +25,7 @@ import {
   completePackSession,
   abandonPackSession,
   loadPackMessages,
+  countPackMessages,
   persistPackTurn,
 } from '../db/pack_sessions';
 
@@ -268,12 +269,24 @@ router.post('/session/:sid/stream', requireAuth, async (req: Request, res: Respo
     const newNode = pack.nodes[currentNode];
     const choices: PackChoice[] | null = newNode?.choices ?? null;
 
-    // Check if this node is a terminal node (id === 'end' or no further nodes reachable)
+    // Option A: explicit end node
+    let sessionCompleted = false;
     if (currentNode === 'end') {
       await completePackSession(sessionId);
+      sessionCompleted = true;
     }
 
-    send('done', { choices, currentNode });
+    // Option C: turn-limit fallback — auto-complete after maxTurns messages
+    if (!sessionCompleted) {
+      const maxTurns = pack.maxTurns ?? 40;
+      const totalMessages = await countPackMessages(sessionId);
+      if (totalMessages >= maxTurns) {
+        await completePackSession(sessionId);
+        sessionCompleted = true;
+      }
+    }
+
+    send('done', { choices, currentNode, sessionCompleted });
     res.end();
   } catch (err) {
     console.error('[packs] stream error:', err);
