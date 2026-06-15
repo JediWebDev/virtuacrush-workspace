@@ -13,7 +13,6 @@ import SocialFeed from "./SocialFeed";
 import CityMap from "./CityMap";
 import UpgradeToast from "./UpgradeToast";
 import SecretCard from "./SecretCard";
-import DriveMeters from "./DriveMeters";
 import DesireEventCard from "./DesireEventCard";
 
 function formatHistoryDate(day: string): string {
@@ -305,7 +304,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             Affinity {affinity}%
           </span>
           
-          <DriveMeters drives={storyState?.drives} />
           <SecretCard secret={storyState?.secret} name={character.name} />
           <ActivityLog characterId={character.id} name={character.name} />
         </div>
@@ -718,8 +716,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                 <span className="mb-4 inline-flex items-center rounded-full border border-black/10 dark:border-white/10 bg-black/[0.04] dark:bg-white/[0.04] px-3 py-1 text-[11px] font-semibold text-stone-600 dark:text-stone-300">
                   Affinity {affinity}%
                 </span>
-                <DriveMeters drives={storyState?.drives} />
-                <SecretCard secret={storyState?.secret} name={character.name} />
+                      <SecretCard secret={storyState?.secret} name={character.name} />
                 <ActivityLog characterId={character.id} name={character.name} />
               </div>
             </motion.div>
