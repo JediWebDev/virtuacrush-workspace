@@ -12,7 +12,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { requireAuth } from '../middleware/auth';
 import { streamPrompt } from '../llm';
-import { getCharacter } from '../inworld/characters';
+import { getCharacter, NARRATOR_BRIEF } from '../inworld/characters';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
 import { formatPersonaTraitsBlock } from '../sim/traits';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
@@ -69,9 +69,10 @@ function packToMeta(p: StoryPack): PackMeta {
 // Pack turns are streamed (for the live "typing" effect), so unlike the
 // free-roam director we cannot post-process a JSON object server-side. Instead
 // we ask the model to stream the SAME tagged multi-actor transcript the client
-// already parses ("[NARRATOR] ...", "[SERENA] ...", "[URIK] ..."). This gives
-// NPCs their own labeled bubbles, enforces first-person POV for the companion,
-// and (via directorDisciplineDirective) bars raw-JSON leaks and language drift.
+// already parses ("[NARRATOR] ...", "[SERENA] ...", "[URIK] ..."). Under the
+// strict narrator model, characters emit ONLY spoken dialogue and the neutral
+// [NARRATOR] owns every action/reaction/scene beat. directorDisciplineDirective
+// enforces that split and bars raw-JSON leaks and language drift.
 // ---------------------------------------------------------------------------
 function companionTag(name: string): string {
   return (name || 'YOU').trim();
@@ -91,20 +92,23 @@ function buildPackPrompt(pack: StoryPack, node: PackNode, characterId: string): 
 
   const npcs = pack.npcs ?? [];
   const speakerList = [
-    `- [NARRATOR] — third-person description of the setting and what other people physically do. Wrap actions in *asterisks*. No first-person, no dialogue.`,
-    `- [${tag}] — ${name}, speaking and acting ONLY in the first person. This is your default voice; include at least one [${tag}] line every reply.`,
-    ...npcs.map((n) => `- [${n.name}] — ${n.description} Speaks and acts only as themselves.`),
+    `- [NARRATOR] — ${NARRATOR_BRIEF} It handles ALL action and reaction in this beat — what ${name}, the NPCs, and the world physically do. Wrap actions in *asterisks*. No dialogue.`,
+    `- [${tag}] — ${name}, speaking ONLY their own spoken words in the first person. NEVER put actions, gestures, expressions, or reactions in this line — those go to [NARRATOR].`,
+    ...npcs.map((n) => `- [${n.name}] — ${n.description} Speaks ONLY their own words; their actions and reactions are narrated by [NARRATOR].`),
   ].join('\n');
 
   const replyFormat =
     `\n\n=== HOW TO REPLY ===\n` +
     `Write this beat as a short screenplay transcript — NOT as JSON. Every line begins with a speaker ` +
-    `tag in square brackets, then that speaker's words or *action*. Use these tags EXACTLY:\n` +
+    `tag in square brackets, then that speaker's spoken words (character lines) or *action* (narrator line). ` +
+    `Use these tags EXACTLY:\n` +
     `${speakerList}\n` +
-    `Rules: Give each speaker their OWN [TAG] line — never put an NPC's or the narrator's words inside ` +
-    `${name}'s line, and never voice the player. ` +
+    `Rules: CHARACTERS NEVER NARRATE. A [${tag}] (or NPC) line is pure spoken dialogue; every physical action, ` +
+    `reaction, expression, and scene beat goes in a [NARRATOR] line. If ${name} both speaks and moves, emit a ` +
+    `[${tag}] line for the words AND a [NARRATOR] line for the action. Always include at least one [${tag}] line ` +
+    `when ${name} speaks; a wordless reaction is a [NARRATOR] line alone. Never voice the player. ` +
     (npcs.length
-      ? `When an NPC present in this scene speaks or acts, they MUST get their own [${npcs[0]!.name}]-style line so the tension is on the page. `
+      ? `When an NPC speaks, give them their own [${npcs[0]!.name}]-style line (dialogue only) and narrate their actions in [NARRATOR] so the tension is on the page. `
       : ``) +
     `Address the player as "you". Respond ONLY in English. Keep it to a few lines. ` +
     `Do NOT output JSON, key names, or code fences — only tagged transcript lines.`;

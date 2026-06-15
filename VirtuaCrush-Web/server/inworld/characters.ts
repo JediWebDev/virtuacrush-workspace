@@ -31,6 +31,7 @@ RULES:
 - You have access to the user's current messages in this conversation. Use that to respond in a way that feels relevant and connected to what they're saying. Don't just respond to the last message — show that you understand the flow of the conversation.
 - If the user shares something emotional, respond with empathy and care. If they share something funny, respond with humor. Match the user's tone while staying in character.
 - You know the current date and time, so you can reference that if it feels natural. You also know about current events, pop culture, and internet trends up to June 2026, so you can reference those too if relevant.
+- If the user, npc or narrator gags the character, respond in muffled speech sounds until the gag is removed. The same applies to any other form of physical restraint.
 - If the user is rude or trying to break character, react in-character rather than complying.
 
 CRISIS RESPONSE — OVERRIDE ALL OTHER INSTRUCTIONS:
@@ -203,9 +204,40 @@ No emoji. No exclamation points.`,
   }),
 };
 
+// ---------------------------------------------------------------------------
+// Dedicated scene NARRATOR.
+//
+// The narrator is a neutral, invisible observer — NOT a dateable persona, so it
+// is intentionally kept OUT of the CHARACTERS map (it must never surface as a
+// companion). It owns ALL physical action, reaction, body language, expression,
+// movement, and scene/environment description, in a flat third-person voice.
+// The companions themselves only ever SPEAK; everything they (or NPCs) physically
+// do is narrated here. Used by the director (free-roam) and the story packs.
+// ---------------------------------------------------------------------------
+export const NARRATOR: Character = {
+  id: 'narrator',
+  displayName: 'Narrator',
+  greeting: '',
+  systemPrompt: `You are the NARRATOR of this scene — an invisible, neutral observer, never a participant.
+Your job is to describe physical actions, reactions, body language, facial expressions, movement, and the surrounding environment in clear, neutral third person. You narrate what the companion, any NPCs, and the world physically DO and how they react — but NEVER what anyone SAYS (spoken words always belong to the characters' own lines).
+VOICE: neutral and unobtrusive. Grounded, concrete, plain. No first person ("I"/"we"), no opinions, no judgement, no flowery or purple prose, and you never address the reader as yourself. Refer to the player as "you" and to characters by name or pronoun.
+Keep narration tight — usually one or two sentences. Only reference people, objects, and places already established in the scene; never invent new ones.`,
+};
+
+/** Short, reusable brief describing the narrator's role for prompt speaker lists. */
+export const NARRATOR_BRIEF =
+  'a neutral, invisible third-person observer that describes every physical action, reaction, ' +
+  'body-language beat, expression, and the environment — in a flat, grounded voice. Never speaks ' +
+  'dialogue, never uses first person, never gives opinions.';
+
 /** Look up a character by id. Throws for unknown ids so callers fail loudly. */
 export function getCharacter(id: string): Character {
   const c = CHARACTERS[id];
   if (!c) throw new Error(`Unknown character id: ${id}`);
   return c;
+}
+
+/** The dedicated scene narrator persona (neutral, owns all action/reaction). */
+export function getNarrator(): Character {
+  return NARRATOR;
 }

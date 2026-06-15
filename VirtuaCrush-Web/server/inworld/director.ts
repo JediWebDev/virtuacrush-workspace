@@ -8,6 +8,7 @@
 // All parsing is fail-soft so a malformed model response never blanks a turn.
 import type { ChatMessage } from './chat';
 import { validateIntent, type PlayerIntent } from '../sim/intent';
+import { NARRATOR_BRIEF } from './characters';
 
 export type ActorKind = 'companion' | 'narrator' | 'npc';
 export interface Actor { tag: string; name: string; kind: ActorKind; brief?: string }
@@ -132,9 +133,9 @@ function salvageIntent(raw: string): PlayerIntent | null {
 export function buildDirectorPrompt(stage: DirectorStage): string {
   const turns = stage.history.slice(-MAX_HISTORY_TURNS).map((m) => (m.role === 'user' ? `User: ${m.content}` : m.content)).join('\n');
   const speakerLines = [
-    `- "${stage.companionName}" — you, speaking and acting in the FIRST person. Your default voice; usually the only speaker.`,
-    `- "narrator" — third-person narration of non-verbal beats and what the world or other people do. No first-person, no dialogue; wrap actions in *asterisks*.`,
-    ...stage.npcs.map((n) => `- "${n.name}" — ${n.brief ?? 'present in the scene'}. Speaks and acts only as themselves.`),
+    `- "${stage.companionName}" — you, speaking ONLY your own spoken words in the FIRST person. Never put actions, gestures, expressions, or reactions in this line.`,
+    `- "narrator" — ${NARRATOR_BRIEF} It owns EVERY action and reaction in the scene (yours, the NPCs', and the world's); wrap physical actions in *asterisks*. No dialogue.`,
+    ...stage.npcs.map((n) => `- "${n.name}" — ${n.brief ?? 'present in the scene'}. Speaks ONLY their own words; their actions and reactions are narrated by "narrator".`),
   ].join('\n');
 
   const arcBlock = stage.arcContext ? `
@@ -166,7 +167,7 @@ This is a live scene that may include more than just you. ${outputSchema}
 Allowed speakers in "lines" (use these names exactly):
 ${speakerLines}
 
-Guidance: ALWAYS include at least one "${stage.companionName}" line so the player gets a reply (usually that is the only line). Add a "narrator" line or another speaker ONLY when something warrants it. Keep it short. Never write a line for the player. ADDRESS THE PLAYER AS "you" (second person) — never call them "the user" or "the player".
+Guidance: ALWAYS include at least one "${stage.companionName}" line with their spoken reply so the player gets an answer. Put ANY physical action, reaction, expression, or scene beat in a "narrator" line — characters NEVER narrate themselves, so most turns also include a "narrator" line. (Only a pure, wordless reaction may be a "narrator" line alone.) Keep it short. Never write a line for the player. ADDRESS THE PLAYER AS "you" (second person) — never call them "the user" or "the player".
 Output ONLY the JSON object — no preamble, no code fences, no commentary.
 
 ${turns ? turns + '\n' : ''}User: ${stage.userMessage}
@@ -265,9 +266,9 @@ export interface SceneResult { intent: PlayerIntent | null; turns: DirectorTurn[
 export function buildScenePrompt(stage: DirectorStage): string {
   const turns = stage.history.slice(-MAX_HISTORY_TURNS).map((m) => (m.role === 'user' ? `Player: ${m.content}` : m.content)).join('\n');
   const speakerLines = [
-    `- "${stage.companionName}" — you, in the FIRST person (your default voice).`,
-    `- "narrator" — third-person beats and what the world or others do (wrap actions in *asterisks*; no dialogue).`,
-    ...stage.npcs.map((n) => `- "${n.name}" — ${n.brief ?? 'present in the scene'}.`),
+    `- "${stage.companionName}" — you, speaking ONLY your own words in the FIRST person (no actions/reactions here).`,
+    `- "narrator" — ${NARRATOR_BRIEF} Owns every action and reaction (wrap actions in *asterisks*; no dialogue).`,
+    ...stage.npcs.map((n) => `- "${n.name}" — ${n.brief ?? 'present in the scene'}. Speaks only their own words; actions are narrated by "narrator".`),
   ].join('\n');
   // ORDER MATTERS FOR COST: the prompt is laid out stable-prefix-first so
   // providers with prompt caching (DeepSeek, OpenAI, ...) can reuse the
@@ -290,7 +291,8 @@ HOW THE WORLD REACTS (make your narration match your classification):
 - otherwise → just play the scene naturally.
 
 RULES:
-- ALWAYS include at least one "${stage.companionName}" line. Address the player as "you".
+- ALWAYS include at least one "${stage.companionName}" line with their spoken reply. Address the player as "you".
+- Characters speak ONLY dialogue — put EVERY action, reaction, gesture, expression, and scene beat (for the companion, NPCs, and the world) in a "narrator" line. No actions inside a character's line.
 - NEVER put another speaker's words, name, or a "Narrator" label inside your own line — give each speaker their own entry in "lines".
 - Keep it short. Output ONLY the JSON object — no prose, no code fences.
 

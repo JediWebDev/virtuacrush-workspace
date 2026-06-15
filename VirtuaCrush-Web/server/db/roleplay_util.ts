@@ -40,31 +40,42 @@ export function formatRoleplayDirectives(characterName: string): string {
 
 /**
  * Voice discipline for the multi-actor director path. Unlike
- * characterDisciplineDirective (single persona), this PERMITS the model to voice
- * the narrator and NPCs via tags, while keeping the companion's own lines in
- * first person and barring invented details.
+ * characterDisciplineDirective (single persona), this voices a dedicated
+ * NARRATOR plus the companion and NPCs via tags.
+ *
+ * STRICT SEPARATION (new model): characters NEVER narrate. A character's line
+ * contains ONLY their spoken words. Every physical action, reaction, gesture,
+ * expression, and scene/environment beat — for the companion, the NPCs, and the
+ * world — belongs to the neutral [NARRATOR]. This keeps the companion's voice
+ * pure dialogue and routes all "*she steps closer*"-style beats to one neutral
+ * narrating voice.
  */
 export function directorDisciplineDirective(characterName: string): string {
+  const TAG = characterName.toUpperCase();
   return (
-    `\n\nVOICE DISCIPLINE: In a [${characterName.toUpperCase()}] line, speak in FIRST person as ${characterName} ` +
-    `only — do not describe yourself in the third person there (use a [NARRATOR] line for third-person description). ` +
-    `NEVER prefix your dialogue with your own name (do not write "${characterName}:" or "${characterName}\":"). ` +
-    `If you perform a physical action in your own line, you MUST wrap it entirely in asterisks (e.g. *looks up from the photo*). ` +
-    `Do not write actions as plain text outside asterisks. ` +
-    `Keep ${characterName} fully in character. Only reference people, pets, objects, and places that are actually ` +
-    `established in this conversation, your memory, or the current scene — never invent new ones (for example, do not ` +
-    `claim a pet, friend, or item is present unless it was actually established). When you mention real movies, shows, ` +
-    `music, or facts, only reference ones you are confident are real — do NOT invent titles, plots, quotes, or details; ` +
-    `speak in general terms if you are unsure. NEVER repeat sentences, pet names, or signature phrases you already ` +
-    `used earlier in this conversation — re-read your previous lines and say something NEW each time; advance the ` +
-    `conversation instead of restating it. PERSPECTIVE: only address the player as "you" when they are present in ` +
-    `the scene (or you are texting them). If the player has stepped away or left the scene, refer to them in the ` +
-    `THIRD person ("he"/"she"/"they") in narration and dialogue until they return.\n\n` +
-    `ENVIRONMENTAL GROUNDING: You MUST frequently ground your narration in the physical setting. Interact with the ` +
-    `specific props, weather, location cues, and time of day provided in your CURRENT SETTING. Do not ignore the ` +
-    `environment. Make the scene feel alive and lived-in.\n\n` +
+    `\n\nVOICE DISCIPLINE — DIALOGUE vs NARRATION (strict):\n` +
+    `• A [${TAG}] line contains ONLY ${characterName}'s spoken words, in the FIRST person — the literal words ` +
+    `coming out of their mouth. Do NOT put actions, movements, gestures, facial expressions, or reactions in a ` +
+    `[${TAG}] line. No *asterisk* stage directions in a character line. No self-narration. NEVER prefix dialogue ` +
+    `with the speaker's own name (do not write "${characterName}:").\n` +
+    `• Every physical action, reaction, body-language beat, expression, and scene description — whether it is ` +
+    `${characterName}, an NPC, or the world doing it — goes in a [NARRATOR] line. The narrator is a NEUTRAL, ` +
+    `invisible third-person observer: grounded and plain, no first person, no opinions, no dialogue. When the ` +
+    `companion or an NPC reacts or moves, narrate it: e.g. [NARRATOR] *She sets the cup down and leans back.*\n` +
+    `• NPC lines (e.g. [URIK]) likewise contain ONLY that NPC's spoken words; their actions and reactions are ` +
+    `narrated by [NARRATOR] too.\n` +
+    `• Never write the player's words or actions for them.\n` +
+    `• If a turn has both speech and action, emit BOTH: the character's [${TAG}] dialogue line AND a [NARRATOR] ` +
+    `line for the action/reaction. If a turn is pure reaction with no words, emit only a [NARRATOR] line.\n\n` +
+    `GROUNDING & CONTINUITY: Only reference people, pets, objects, and places actually established in this ` +
+    `conversation, your memory, or the current scene — never invent new ones. When mentioning real movies, shows, ` +
+    `music, or facts, only reference ones you are confident are real; speak in general terms if unsure. NEVER repeat ` +
+    `sentences or signature phrases you already used — say something NEW each turn and advance the scene. The narrator ` +
+    `MUST keep grounding the scene in the specific props, weather, location, and time of day from the CURRENT SETTING. ` +
+    `Respond ONLY in English. PERSPECTIVE: address the player as "you" only when they are present (or you are texting ` +
+    `them); if they have left the scene, refer to them in the THIRD person until they return.\n\n` +
     `CRITICAL: If you are returning a JSON object, ensure it is perfectly valid JSON. NEVER leak raw JSON keys ` +
-    `(like 'character_actions': or 'character_lines':) into the actual dialogue or action strings. Your text output ` +
-    `must read as natural prose and dialogue.`
+    `(like 'character_actions': or 'character_lines':) into the dialogue or action strings. Your text output must ` +
+    `read as natural dialogue and neutral narration.`
   );
 }
