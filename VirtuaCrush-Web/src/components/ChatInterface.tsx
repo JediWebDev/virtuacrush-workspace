@@ -17,7 +17,6 @@ import DesireEventCard from "./DesireEventCard";
 import PackList from "./PackList";
 import ChoiceButtons from "./ChoiceButtons";
 import { getActivePackSession, greetPackSession, abandonPackSession, fetchPackStories, type PackSession, type PackChoice, type PackStory } from "../lib/api";
-import { parseSSE } from "../lib/sse";
 import NoticeToast from "./NoticeToast";
 
 function formatHistoryDate(day: string): string {
@@ -76,7 +75,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [packChoices, setPackChoices] = useState<PackChoice[] | null>(null);
   const [packLoading, setPackLoading] = useState(false);
   const [packCompleted, setPackCompleted] = useState(false);
-  const packAbortRef = useRef<AbortController | null>(null);
   // Completion celebration: affinity-earned toast, "saved to history" toast,
   // and a timer that auto-closes the finished story tab.
   const [affinityToast, setAffinityToast] = useState<{ open: boolean; amount: number }>({ open: false, amount: 0 });
@@ -334,93 +332,62 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const sendPackMessage = async (text: string, advanceNode?: string) => {
     if (!activePackSession || packLoading || packCompleted) return;
     const userMsgId = crypto.randomUUID();
-    const assistantMsgId = crypto.randomUUID();
-    setPackMessages((prev) => [
-      ...prev,
-      { id: userMsgId, role: 'user', content: text },
-      { id: assistantMsgId, role: 'assistant', content: '' },
-    ]);
+    // Show the player's turn immediately; the "typing…" indicator (displayedLoading)
+    // covers the single director call, then we reveal the parsed scene.
+    setPackMessages((prev) => [...prev, { id: userMsgId, role: 'user', content: text }]);
     setPackChoices(null);
     setPackLoading(true);
-    const controller = new AbortController();
-    packAbortRef.current = controller;
 
-    // Replace the streaming assistant bubble with a narrator note (used for
-    // any error path so the AI never silently "stops typing" with a blank bubble).
-    const setNarratorNote = (note: string) =>
-      setPackMessages((prev) => prev.map((m) =>
-        m.id === assistantMsgId ? { ...m, content: `[NARRATOR] ${note}` } : m
-      ));
+    const addNarrator = (note: string) =>
+      setPackMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: `[NARRATOR] ${note}` }]);
 
-    let gotChunk = false;
-    let streamFailed = false;
     try {
-      const res = await fetch(`/api/packs/session/${activePackSession.sessionId}/stream`, {
+      const res = await fetch(`/api/packs/session/${activePackSession.sessionId}/turn`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, advanceNode }),
-        signal: controller.signal,
       });
 
       if (!res.ok) {
-        // Most common: the story already ended (session_not_active). Surface it
-        // instead of leaving a blank, never-resolving bubble.
         let errCode = '';
         try { errCode = (await res.json())?.error ?? ''; } catch { /* ignore */ }
         if (errCode === 'session_not_active') {
-          setNarratorNote('This story has already ended.');
+          addNarrator('This story has already ended.');
           setPackCompleted(true);
         } else if (errCode === 'session_not_found') {
-          setNarratorNote('This story is no longer available.');
+          addNarrator('This story is no longer available.');
           setPackCompleted(true);
         } else {
-          setNarratorNote("Something interrupted the story. Try again in a moment.");
+          addNarrator('Something interrupted the story. Try again in a moment.');
         }
         setPackChoices(null);
         return;
       }
 
-      for await (const evt of parseSSE(res)) {
-        if (evt.event === 'chunk') {
-          gotChunk = true;
-          setPackMessages((prev) => prev.map((m) =>
-            m.id === assistantMsgId ? { ...m, content: m.content + (evt.data.text ?? '') } : m
-          ));
-        } else if (evt.event === 'error') {
-          streamFailed = true;
-          setNarratorNote("Something interrupted the story. Try again in a moment.");
-        } else if (evt.event === 'done') {
-          const data = evt.data as { choices?: PackChoice[] | null; currentNode?: string; sessionCompleted?: boolean; finalText?: string; affinityAwarded?: number; affinity?: number };
-          // Replace the streamed bubble with the server's cleaned transcript so
-          // any stray JSON/formatting artifact never lingers on screen.
-          if (data.finalText && data.finalText.trim()) {
-            setPackMessages((prev) => prev.map((m) =>
-              m.id === assistantMsgId ? { ...m, content: data.finalText! } : m
-            ));
-          }
-          setPackChoices(data.choices ?? null);
-          if (data.currentNode) {
-            setActivePackSession((prev) => prev ? { ...prev, currentNode: data.currentNode! } : null);
-          }
-          if (data.sessionCompleted) {
-            finishPackStory({ affinityAwarded: data.affinityAwarded, affinity: data.affinity });
-          }
-        }
-      }
+      const data = (await res.json()) as {
+        transcript?: string;
+        choices?: PackChoice[] | null;
+        currentNode?: string;
+        sessionCompleted?: boolean;
+        affinityAwarded?: number;
+        affinity?: number;
+      };
 
-      // Guard against a 200 stream that yielded nothing (e.g. upstream hiccup).
-      if (!gotChunk && !streamFailed) {
-        setNarratorNote("…she trails off. Try sending that again.");
+      const transcript = (data.transcript ?? '').trim() || '[NARRATOR] *A quiet beat passes.*';
+      setPackMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: transcript }]);
+      setPackChoices(data.choices ?? null);
+      if (data.currentNode) {
+        setActivePackSession((prev) => (prev ? { ...prev, currentNode: data.currentNode! } : null));
       }
-    } catch (e: unknown) {
-      if ((e as { name?: string })?.name !== 'AbortError') {
-        console.error('[pack] stream error', e);
-        setNarratorNote("Something interrupted the story. Try again in a moment.");
+      if (data.sessionCompleted) {
+        finishPackStory({ affinityAwarded: data.affinityAwarded, affinity: data.affinity });
       }
+    } catch (e) {
+      console.error('[pack] turn error', e);
+      addNarrator('Something interrupted the story. Try again in a moment.');
     } finally {
       setPackLoading(false);
-      packAbortRef.current = null;
     }
   };
 

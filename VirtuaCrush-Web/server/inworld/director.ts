@@ -260,6 +260,78 @@ export function turnsToTranscript(turns: DirectorTurn[]): string {
     .join('\n');
 }
 
+// === Story-pack scene (one merged call) ======================================
+// The pack director returns, in a SINGLE JSON object: the multi-actor scene
+// (`lines`), a navigation decision (`advance`), an optional set of EVOLVED
+// choice buttons (`choices`, used only when the player drifts off the authored
+// branches), and an `arcStatus`. This lets free-text input be understood in
+// context and advance the story without breaking the offered choices.
+export interface PackSceneChoice {
+  /** Short button label. */
+  label: string;
+  /** First-person line/action committed if the player taps this button. */
+  userMessage: string;
+  /** Authored beat id to advance to, or 'dynamic' to keep improvising, or 'end'. */
+  next: string;
+}
+export interface PackSceneResult {
+  /** 'stay' | 'end' | an authored beat id | 'dynamic'. */
+  advance: string;
+  turns: DirectorTurn[];
+  /** Evolved choices the model wants to override the authored ones with (drift). Empty = keep authored. */
+  choices: PackSceneChoice[];
+  arcStatus: 'ongoing' | 'climax' | 'completed' | null;
+}
+
+function mapPackChoices(arr: unknown[]): PackSceneChoice[] {
+  return (Array.isArray(arr) ? arr : [])
+    .map((it) => {
+      const o = (it ?? {}) as Record<string, unknown>;
+      const label = cleanLine(asStr(o.label));
+      return {
+        label,
+        userMessage: asStr(o.userMessage) || label,
+        next: asStr(o.next) || 'dynamic',
+      };
+    })
+    .filter((c) => c.label && c.userMessage);
+}
+
+/**
+ * Parses the pack director's single JSON object. Fail-soft like the others:
+ * lines fall back to parseDirectorTurns, advance defaults to 'stay', choices to
+ * [] (meaning: keep the authored buttons).
+ */
+export function parsePackScene(raw: string, companionName: string): PackSceneResult {
+  const text = (raw ?? '').trim();
+  let advance = 'stay';
+  let turns: DirectorTurn[] = [];
+  let choices: PackSceneChoice[] = [];
+  let arcStatus: PackSceneResult['arcStatus'] = null;
+
+  const start = text.indexOf('{');
+  if (start >= 0) {
+    const lastClose = text.lastIndexOf('}');
+    const candidate = lastClose > start ? text.slice(start, lastClose + 1) : text.slice(start);
+    for (const json of [candidate, repairJson(candidate)]) {
+      try {
+        const obj = JSON.parse(json) as Record<string, unknown>;
+        if (Array.isArray(obj.lines)) {
+          const t = mapLines(obj.lines as unknown[], companionName);
+          if (t.length) turns = t;
+        }
+        if (Array.isArray(obj.choices)) choices = mapPackChoices(obj.choices as unknown[]);
+        if (typeof obj.advance === 'string' && obj.advance.trim()) advance = obj.advance.trim();
+        const st = typeof obj.arcStatus === 'string' ? obj.arcStatus : null;
+        if (st && VALID_ARC_STATUSES.has(st)) arcStatus = st as PackSceneResult['arcStatus'];
+        if (turns.length) break;
+      } catch { /* try repaired, then fall through */ }
+    }
+  }
+  if (turns.length === 0) turns = parseDirectorTurns(text, companionName);
+  return { advance, turns, choices, arcStatus };
+}
+
 // === MERGED single-call scene (referee + director in one round) ==============
 export interface SceneResult { intent: PlayerIntent | null; turns: DirectorTurn[] }
 

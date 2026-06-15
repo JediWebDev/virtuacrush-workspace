@@ -11,8 +11,9 @@ import { Router, type Request, type Response } from 'express';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { requireAuth } from '../middleware/auth';
-import { streamPrompt } from '../llm';
+import { completePrompt } from '../llm';
 import { getCharacter, NARRATOR_BRIEF } from '../inworld/characters';
+import { turnsToTranscript, parsePackScene } from '../inworld/director';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
 import { formatPersonaTraitsBlock } from '../sim/traits';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
@@ -69,27 +70,26 @@ function packToMeta(p: StoryPack): PackMeta {
 }
 
 // ---------------------------------------------------------------------------
-// Build the system prompt for a pack turn.
+// Build the pack DIRECTOR prompt for a turn.
 //
-// Pack turns are streamed (for the live "typing" effect), so unlike the
-// free-roam director we cannot post-process a JSON object server-side. Instead
-// we ask the model to stream the SAME tagged multi-actor transcript the client
-// already parses ("[NARRATOR] ...", "[SERENA] ...", "[URIK] ..."). Under the
-// strict narrator model, characters emit ONLY spoken dialogue and the neutral
-// [NARRATOR] owns every action/reaction/scene beat. directorDisciplineDirective
-// enforces that split and bars raw-JSON leaks and language drift.
+// One merged call: the model returns a single JSON object with the multi-actor
+// scene (`lines`), a navigation decision (`advance`), optional EVOLVED choice
+// buttons (`choices`, used only when the player drifts off the authored
+// branches), and an `arcStatus`. This lets free-text input be understood in
+// context and advance the story without breaking the offered choices.
+//
+// Under the strict narrator model, characters emit ONLY spoken dialogue and the
+// neutral "narrator" owns every action/reaction; directorDisciplineDirective
+// enforces that split. The "speaker" field uses the NAME and is rendered into a
+// "[TAG] ..." transcript line by turnsToTranscript (the client already parses
+// those into narrator / companion / NPC bubbles).
 // ---------------------------------------------------------------------------
-function companionTag(name: string): string {
-  return (name || 'YOU').trim();
-}
-
-function buildPackPrompt(pack: StoryPack, node: PackNode, characterId: string): string {
+function buildPackDirectorPrompt(pack: StoryPack, node: PackNode, characterId: string): string {
   let character;
   try { character = getCharacter(characterId as Parameters<typeof getCharacter>[0]); }
   catch { return ''; }
 
   const name = character.displayName ?? characterId;
-  const tag = companionTag(name);
   const lore = getLore(characterId);
   const sceneBlock = pack.sceneAnchor
     ? `\n\n=== CURRENT SETTING ===\n${pack.sceneAnchor.situation}`
@@ -97,26 +97,41 @@ function buildPackPrompt(pack: StoryPack, node: PackNode, characterId: string): 
 
   const npcs = pack.npcs ?? [];
   const speakerList = [
-    `- [NARRATOR] — ${NARRATOR_BRIEF} It handles ALL action and reaction in this beat — what ${name}, the NPCs, and the world physically do. Wrap actions in *asterisks*. No dialogue.`,
-    `- [${tag}] — ${name}, speaking ONLY their own spoken words in the first person. NEVER put actions, gestures, expressions, or reactions in this line — those go to [NARRATOR].`,
-    ...npcs.map((n) => `- [${n.name}] — ${n.description} Speaks ONLY their own words; their actions and reactions are narrated by [NARRATOR].`),
+    `- "narrator" — ${NARRATOR_BRIEF} Owns ALL action/reaction in the scene (${name}, the NPCs, and the world); wrap actions in *asterisks*; no dialogue.`,
+    `- "${name}" — speaks ONLY their own spoken words, first person; no actions or reactions in this line.`,
+    ...npcs.map((n) => `- "${n.name}" — ${n.description} Speaks only their own words; their actions are narrated by "narrator".`),
   ].join('\n');
 
-  const replyFormat =
-    `\n\n=== HOW TO REPLY ===\n` +
-    `Write this beat as a short screenplay transcript — NOT as JSON. Every line begins with a speaker ` +
-    `tag in square brackets, then that speaker's spoken words (character lines) or *action* (narrator line). ` +
-    `Use these tags EXACTLY:\n` +
-    `${speakerList}\n` +
-    `Rules: CHARACTERS NEVER NARRATE. A [${tag}] (or NPC) line is pure spoken dialogue; every physical action, ` +
-    `reaction, expression, and scene beat goes in a [NARRATOR] line. If ${name} both speaks and moves, emit a ` +
-    `[${tag}] line for the words AND a [NARRATOR] line for the action. Always include at least one [${tag}] line ` +
-    `when ${name} speaks; a wordless reaction is a [NARRATOR] line alone. Never voice the player. ` +
-    (npcs.length
-      ? `When an NPC speaks, give them their own [${npcs[0]!.name}]-style line (dialogue only) and narrate their actions in [NARRATOR] so the tension is on the page. `
-      : ``) +
-    `Address the player as "you". Respond ONLY in English. Keep it to a few lines. ` +
-    `Do NOT output JSON, key names, or code fences — only tagged transcript lines.`;
+  const authoredChoices = (node.choices && node.choices.length)
+    ? node.choices.map((c) => `- "${c.label}" → advance "${c.next}"  (the player choosing this means: ${c.userMessage})`).join('\n')
+    : '(this beat has no preset choices)';
+
+  const beatMap = Object.entries(pack.nodes)
+    .map(([id, n]) => (n.choices == null ? `- ${id}  (ENDING — concludes the story)` : `- ${id}`))
+    .join('\n');
+
+  const npcSpeakerExample = npcs.length ? ` | "${npcs[0]!.name}"` : '';
+  const schema =
+    `\n\n=== HOW TO REPLY (ONE JSON OBJECT) ===\n` +
+    `Reply with ONE JSON object only — no prose, no code fences:\n` +
+    `{\n` +
+    `  "lines": [ { "speaker": "narrator" | "${name}"${npcSpeakerExample}, "text": "spoken words — or an *action* for the narrator" } ],\n` +
+    `  "advance": "stay" | "end" | "<a beat id below>",\n` +
+    `  "choices": [ { "label": "short button text", "userMessage": "first-person line/action if the player picks it", "next": "<beat id> | dynamic | end" } ],\n` +
+    `  "arcStatus": "ongoing" | "climax" | "completed"\n` +
+    `}\n\n` +
+    `READ THE PLAYER — they may TAP a choice or TYPE freely. Interpret what they actually did:\n` +
+    `- If their input matches one of THIS BEAT'S CHOICES, set "advance" to that choice's target beat.\n` +
+    `- If they are continuing within this beat without deciding, set "advance":"stay".\n` +
+    `- If their input brings the scene to a natural close, set "advance":"end".\n\n` +
+    `CHOICES — keep the authored story intact:\n` +
+    `- Leave "choices" EMPTY ([]) to reuse the story's authored buttons for the resulting beat. This is the DEFAULT — do it almost every turn.\n` +
+    `- ONLY when the player clearly pulls the scene away from ALL the authored choices, return 2–3 NEW choices that fit the new direction (each "next":"dynamic", or a beat id if it rejoins the story) and steer back toward an ENDING.\n\n` +
+    `NARRATION: characters speak ONLY dialogue; "narrator" owns ALL action and reaction. Include at least one "${name}" line whenever ${name} speaks. Respond ONLY in English. Never write the player's words or actions.\n\n` +
+    `KEEP IT MOVING toward an ENDING — never loop the same beat. When the scene has resolved, set "advance":"end" and "arcStatus":"completed".\n\n` +
+    `SPEAKERS (use the exact name in "speaker"):\n${speakerList}\n\n` +
+    `THIS BEAT'S CHOICES (the player's options right now):\n${authoredChoices}\n\n` +
+    `STORY BEATS you may advance to:\n${beatMap}`;
 
   return (
     character.systemPrompt +
@@ -127,7 +142,7 @@ function buildPackPrompt(pack: StoryPack, node: PackNode, characterId: string): 
     formatPersonaTraitsBlock(lore, { discovered: false, revealNow: false }) +
     ROLEPLAY_INPUT_DIRECTIVE +
     directorDisciplineDirective(name) +
-    replyFormat
+    schema
   );
 }
 
@@ -283,11 +298,16 @@ router.get('/session/:sid/greet', requireAuth, async (req: Request, res: Respons
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/packs/session/:sid/stream
+// POST /api/packs/session/:sid/turn
 // Body: { message: string, advanceNode?: string }
-// SSE: event: chunk { text }, event: done { choices, currentNode }, event: error
+// Returns (JSON): { transcript, choices, currentNode, sessionCompleted,
+//                   affinityAwarded, affinity }
+//
+// One merged director call per turn: it narrates the scene AND decides how the
+// story advances from the player's input (a tapped choice OR free text), and
+// may evolve the choice buttons when the player drifts off the authored path.
 // ---------------------------------------------------------------------------
-router.post('/session/:sid/stream', requireAuth, async (req: Request, res: Response) => {
+router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Response) => {
   const sessionId = Number(req.params.sid);
   if (!Number.isFinite(sessionId)) return res.status(400).json({ error: 'invalid_session' });
 
@@ -307,110 +327,111 @@ router.post('/session/:sid/stream', requireAuth, async (req: Request, res: Respo
   const pack = loadPack(session.packId);
   if (!pack) return res.status(404).json({ error: 'pack_not_found' });
 
-  // Advance the node if the player picked a choice
+  // A tapped AUTHORED choice (advanceNode is a real beat id) advances
+  // deterministically. Free text — or a "dynamic" choice whose next isn't an
+  // authored beat — stays on the current beat and lets the director interpret it.
+  const explicitAdvance = !!(advanceNode && pack.nodes[advanceNode]);
   let currentNode = session.currentNode;
-  if (advanceNode && pack.nodes[advanceNode]) {
-    currentNode = advanceNode;
+  if (explicitAdvance) {
+    currentNode = advanceNode!;
     await updatePackNode(sessionId, currentNode);
   }
 
   const node = pack.nodes[currentNode];
   if (!node) return res.status(400).json({ error: 'invalid_node' });
 
-  const history = await loadPackMessages(sessionId, 30);
-  const systemPrompt = buildPackPrompt(pack, node, session.characterId);
+  let companionName = session.characterId;
+  try { companionName = getCharacter(session.characterId as Parameters<typeof getCharacter>[0]).displayName ?? session.characterId; }
+  catch { /* keep id */ }
 
-  // History: the player's turns are prefixed "Player:"; the companion's stored
-  // turns are already tagged transcripts ("[SERENA] ..."), so they're passed
-  // through verbatim. We end on "Player: <message>" and let the model produce
-  // the next tagged lines (no trailing companion label, which would otherwise
-  // bias it toward a single untagged blob).
-  const turns = history
+  const history = await loadPackMessages(sessionId, 30);
+  const directorPrompt = buildPackDirectorPrompt(pack, node, session.characterId);
+  const turnsStr = history
     .map((m) => (m.role === 'user' ? `Player: ${m.content}` : m.content))
     .join('\n');
-  const fullPrompt = `${systemPrompt}\n\n${turns ? turns + '\n' : ''}Player: ${message}\n`;
+  const fullPrompt = `${directorPrompt}\n\n${turnsStr ? turnsStr + '\n' : ''}Player: ${message}\n\nJSON:`;
 
-  // SSE headers
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-
-  const send = (event: string, data: unknown) => {
-    res.write(`event: ${event}\n`);
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
-
-  let fullText = '';
-  const abortController = new AbortController();
-  req.on('close', () => abortController.abort());
-
+  let result;
   try {
-    for await (const chunk of streamPrompt(fullPrompt)) {
-      if (abortController.signal.aborted) break;
-      if (chunk) {
-        fullText += chunk;
-        send('chunk', { text: chunk });
-      }
-    }
+    const raw = await completePrompt(fullPrompt, { json: true });
+    result = parsePackScene(raw, companionName);
+  } catch (err) {
+    console.error('[packs] turn generation error:', err);
+    return res.status(502).json({ error: 'generation_failed' });
+  }
 
-    // Clean any leaked JSON artifacts before persisting / sending the final
-    // text (live chunks may contain a stray fragment from a weaker model).
-    const cleanText = sanitizePackTranscript(fullText);
+  // Resolve where the story goes next.
+  //  - explicit authored choice → already advanced above.
+  //  - free text → honor the director's "advance" (a beat id moves there;
+  //    'end' completes; 'stay'/'dynamic'/unknown stays put).
+  let nextNode = currentNode;
+  let completeNow = false;
+  if (!explicitAdvance) {
+    const adv = result.advance;
+    if (adv === 'end') completeNow = true;
+    else if (adv && adv !== 'stay' && adv !== 'dynamic' && pack.nodes[adv]) nextNode = adv;
+  }
+  if (nextNode !== currentNode) await updatePackNode(sessionId, nextNode);
 
-    if (cleanText && !abortController.signal.aborted) {
-      await persistPackTurn(req.user!.id, session.characterId, sessionId, message, cleanText);
-    }
+  // Landing on a terminal beat, an explicit 'end', or a 'completed' arc finishes it.
+  if (pack.nodes[nextNode]?.choices == null) completeNow = true;
+  if (result.arcStatus === 'completed') completeNow = true;
 
-    // Return choices for the CURRENT node (post-advance)
-    const newNode = pack.nodes[currentNode];
-    const choices: PackChoice[] | null = newNode?.choices ?? null;
+  const transcript = sanitizePackTranscript(turnsToTranscript(result.turns)) || '[NARRATOR] *A quiet beat passes.*';
 
-    // Terminal nodes have no choices (choices === null). The session completes
-    // when the player reaches ANY terminal node — they are named per pack
-    // (e.g. "confess_end", "stay_end"), so we detect by shape, not a fixed id.
-    let sessionCompleted = false;
-    const isTerminal = !newNode || newNode.choices == null;
-    if (isTerminal) {
+  // Choices to present next: authored by default; evolve ONLY on real drift
+  // (the director returned its own choices and the player wasn't on a tapped
+  // authored choice). Cleared when the story is ending.
+  let choices: PackChoice[] | null;
+  if (completeNow) {
+    choices = null;
+  } else if (!explicitAdvance && result.choices.length > 0) {
+    choices = result.choices.slice(0, 3).map((c, i) => ({
+      id: `dyn_${i}`,
+      label: c.label,
+      userMessage: c.userMessage,
+      next: c.next || 'dynamic',
+    }));
+  } else {
+    choices = pack.nodes[nextNode]?.choices ?? null;
+  }
+
+  // Persist the player's turn + the companion's narrated transcript.
+  if (transcript) {
+    try { await persistPackTurn(req.user!.id, session.characterId, sessionId, message, transcript); }
+    catch (e) { console.error('[packs] persist failed:', e); }
+  }
+
+  // Completion + turn-limit backstop.
+  let sessionCompleted = false;
+  if (completeNow) {
+    await completePackSession(sessionId);
+    sessionCompleted = true;
+  } else {
+    const maxTurns = pack.maxTurns ?? 40;
+    const totalMessages = await countPackMessages(sessionId);
+    if (totalMessages >= maxTurns) {
       await completePackSession(sessionId);
       sessionCompleted = true;
     }
-
-    // Option C: turn-limit fallback — auto-complete after maxTurns messages
-    if (!sessionCompleted) {
-      const maxTurns = pack.maxTurns ?? 40;
-      const totalMessages = await countPackMessages(sessionId);
-      if (totalMessages >= maxTurns) {
-        await completePackSession(sessionId);
-        sessionCompleted = true;
-      }
-    }
-
-    // Reward: finishing a story grants a one-time affinity bonus. This runs only
-    // on the turn that flips the session to 'completed' (a later stream on the
-    // same session is rejected with session_not_active), so it can't double-pay.
-    let affinityAwarded = 0;
-    let affinity: number | undefined;
-    if (sessionCompleted) {
-      affinityAwarded = pack.affinityReward ?? DEFAULT_AFFINITY_REWARD;
-      try {
-        affinity = await incrementAffinity(req.user!.id, session.characterId, affinityAwarded);
-      } catch (e) {
-        console.error('[packs] affinity award failed:', e);
-        affinityAwarded = 0; // don't claim a reward the bar didn't actually get
-      }
-    }
-
-    // finalText lets the client replace the streamed bubble with the cleaned
-    // transcript, so a mid-stream artifact never lingers on screen.
-    send('done', { choices, currentNode, sessionCompleted, finalText: cleanText, affinityAwarded, affinity });
-    res.end();
-  } catch (err) {
-    console.error('[packs] stream error:', err);
-    send('error', { message: 'stream_failed' });
-    res.end();
   }
+
+  // One-time affinity reward on completion (can't double-pay: a later turn on a
+  // completed session is rejected with session_not_active above).
+  let affinityAwarded = 0;
+  let affinity: number | undefined;
+  if (sessionCompleted) {
+    choices = null;
+    affinityAwarded = pack.affinityReward ?? DEFAULT_AFFINITY_REWARD;
+    try {
+      affinity = await incrementAffinity(req.user!.id, session.characterId, affinityAwarded);
+    } catch (e) {
+      console.error('[packs] affinity award failed:', e);
+      affinityAwarded = 0;
+    }
+  }
+
+  return res.json({ transcript, choices, currentNode: nextNode, sessionCompleted, affinityAwarded, affinity });
 });
 
 // ---------------------------------------------------------------------------
