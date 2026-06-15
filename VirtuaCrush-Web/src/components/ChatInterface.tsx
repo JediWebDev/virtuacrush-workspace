@@ -843,7 +843,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
                 placeholder={composerLocked ? "This story has ended — switch to Free Roam to keep chatting" : displayedLoading ? "…" : `Message ${character.name}…`}
                 disabled={inputDisabled}
-                className="min-h-[52px] flex-1 rounded-[1.75rem] border border-purple-200/60 bg-white/90 py-3.5 pl-5 pr-14 text-[15px] text-stone-800 outline-none transition-all placeholder:text-purple-400/70 focus:border-purple-400/50 focus:ring-2 focus:ring-purple-300/25 dark:border-white/10 dark:bg-stone-900/60 dark:text-stone-100 dark:placeholder:text-stone-500 dark:focus:border-accent/35 dark:focus:ring-accent/10"
+                className="min-h-[52px] flex-1 rounded-[1.75rem] border border-purple-200/60 bg-white/90 py-3.5 pl-5 pr-14 text-[15px] text-stone-800 outline-none transition-all placeholder:text-purple-400/70 focus:border-purple-400/50 focus:ring-2 focus:ring-purple-300/25 dark:border-white/20 dark:bg-stone-600/75 dark:text-stone-50 dark:placeholder:text-stone-300 dark:focus:border-purple-300/40 dark:focus:ring-purple-400/20"
                 />
                 <button
                 type="button"
