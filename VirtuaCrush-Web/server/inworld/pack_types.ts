@@ -19,6 +19,14 @@ export interface PackNode {
   choices: PackChoice[] | null;
 }
 
+/** A named non-companion character who can speak/act in the scene (e.g. Urik). */
+export interface PackNpc {
+  /** Display name; also used as the [TAG] the model must use for this speaker. */
+  name: string;
+  /** One-line brief describing who they are and how they behave. */
+  description: string;
+}
+
 export type PackMood =
   | 'romantic'
   | 'dramatic'
@@ -43,7 +51,9 @@ export interface StoryPack {
   coverGradient: [string, string];
   systemInstruction: string;
   sceneAnchor?: PackSceneAnchor;
-  /** Keyed by node id. Must contain "start" and "end". */
+  /** Named NPCs present in this story who may speak/act in their own tagged lines. */
+  npcs?: PackNpc[];
+  /** Keyed by node id. Must contain a "start" node; terminal nodes have choices: null. */
   nodes: Record<string, PackNode>;
 }
 

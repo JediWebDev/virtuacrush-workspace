@@ -15,7 +15,7 @@ import { streamPrompt } from '../llm';
 import { getCharacter } from '../inworld/characters';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
 import { formatPersonaTraitsBlock } from '../sim/traits';
-import { ROLEPLAY_INPUT_DIRECTIVE } from '../db/roleplay_util';
+import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
 import type { StoryPack, PackMeta, PackNode, PackChoice } from '../inworld/pack_types';
 import {
   createPackSession,
@@ -64,17 +64,50 @@ function packToMeta(p: StoryPack): PackMeta {
 }
 
 // ---------------------------------------------------------------------------
-// Build the system prompt for a pack turn
+// Build the system prompt for a pack turn.
+//
+// Pack turns are streamed (for the live "typing" effect), so unlike the
+// free-roam director we cannot post-process a JSON object server-side. Instead
+// we ask the model to stream the SAME tagged multi-actor transcript the client
+// already parses ("[NARRATOR] ...", "[SERENA] ...", "[URIK] ..."). This gives
+// NPCs their own labeled bubbles, enforces first-person POV for the companion,
+// and (via directorDisciplineDirective) bars raw-JSON leaks and language drift.
 // ---------------------------------------------------------------------------
+function companionTag(name: string): string {
+  return (name || 'YOU').trim();
+}
+
 function buildPackPrompt(pack: StoryPack, node: PackNode, characterId: string): string {
   let character;
   try { character = getCharacter(characterId as Parameters<typeof getCharacter>[0]); }
   catch { return ''; }
 
+  const name = character.displayName ?? characterId;
+  const tag = companionTag(name);
   const lore = getLore(characterId);
   const sceneBlock = pack.sceneAnchor
     ? `\n\n=== CURRENT SETTING ===\n${pack.sceneAnchor.situation}`
     : '';
+
+  const npcs = pack.npcs ?? [];
+  const speakerList = [
+    `- [NARRATOR] — third-person description of the setting and what other people physically do. Wrap actions in *asterisks*. No first-person, no dialogue.`,
+    `- [${tag}] — ${name}, speaking and acting ONLY in the first person. This is your default voice; include at least one [${tag}] line every reply.`,
+    ...npcs.map((n) => `- [${n.name}] — ${n.description} Speaks and acts only as themselves.`),
+  ].join('\n');
+
+  const replyFormat =
+    `\n\n=== HOW TO REPLY ===\n` +
+    `Write this beat as a short screenplay transcript — NOT as JSON. Every line begins with a speaker ` +
+    `tag in square brackets, then that speaker's words or *action*. Use these tags EXACTLY:\n` +
+    `${speakerList}\n` +
+    `Rules: Give each speaker their OWN [TAG] line — never put an NPC's or the narrator's words inside ` +
+    `${name}'s line, and never voice the player. ` +
+    (npcs.length
+      ? `When an NPC present in this scene speaks or acts, they MUST get their own [${npcs[0]!.name}]-style line so the tension is on the page. `
+      : ``) +
+    `Address the player as "you". Respond ONLY in English. Keep it to a few lines. ` +
+    `Do NOT output JSON, key names, or code fences — only tagged transcript lines.`;
 
   return (
     character.systemPrompt +
@@ -83,8 +116,36 @@ function buildPackPrompt(pack: StoryPack, node: PackNode, characterId: string): 
     sceneBlock +
     formatCharacterFactsBlock(lore) +
     formatPersonaTraitsBlock(lore, { discovered: false, revealNow: false }) +
-    ROLEPLAY_INPUT_DIRECTIVE
+    ROLEPLAY_INPUT_DIRECTIVE +
+    directorDisciplineDirective(name) +
+    replyFormat
   );
+}
+
+// Conservative cleanup for a streamed pack transcript. Preserves "[TAG]" line
+// prefixes and *action* asterisks while removing code fences and any leaked
+// JSON-key artifacts a weaker model might emit. Used for the final persisted
+// text and the `finalText` sent on the done event (so the bubble renders clean
+// even if a stray fragment slipped through mid-stream).
+function sanitizePackTranscript(raw: string): string {
+  const noFences = (raw ?? '').replace(/```[a-z]*|```/gi, '');
+  const lines = noFences
+    .split('\n')
+    .map((line) =>
+      line
+        // leaked per-character keys: serena_actions": [ , serena_lines": "
+        .replace(/"?[A-Za-z0-9_]+_(?:actions|lines)"?\s*:\s*\[?\s*/gi, '')
+        // leaked schema keys: "lines": / "speaker": / "text": / "intent":
+        .replace(/"(?:lines|speaker|text|intent|arcStatus)"\s*:\s*"?/gi, '')
+        .trimEnd(),
+    )
+    // drop lines that are now only JSON punctuation / empty quotes
+    .filter((line) => {
+      const t = line.trim();
+      if (!t) return false;
+      return !/^[{}\[\],"'`]+$/.test(t);
+    });
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -250,11 +311,15 @@ router.post('/session/:sid/stream', requireAuth, async (req: Request, res: Respo
   const history = await loadPackMessages(sessionId, 30);
   const systemPrompt = buildPackPrompt(pack, node, session.characterId);
 
-  // Build a simple prompt: system + history + new message
+  // History: the player's turns are prefixed "Player:"; the companion's stored
+  // turns are already tagged transcripts ("[SERENA] ..."), so they're passed
+  // through verbatim. We end on "Player: <message>" and let the model produce
+  // the next tagged lines (no trailing companion label, which would otherwise
+  // bias it toward a single untagged blob).
   const turns = history
-    .map((m) => `${m.role === 'user' ? 'User' : session.characterId}: ${m.content}`)
+    .map((m) => (m.role === 'user' ? `Player: ${m.content}` : m.content))
     .join('\n');
-  const fullPrompt = `${systemPrompt}\n\n${turns ? turns + '\n' : ''}User: ${message}\n${session.characterId}:`;
+  const fullPrompt = `${systemPrompt}\n\n${turns ? turns + '\n' : ''}Player: ${message}\n`;
 
   // SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
@@ -281,17 +346,24 @@ router.post('/session/:sid/stream', requireAuth, async (req: Request, res: Respo
       }
     }
 
-    if (fullText && !abortController.signal.aborted) {
-      await persistPackTurn(req.user!.id, session.characterId, sessionId, message, fullText);
+    // Clean any leaked JSON artifacts before persisting / sending the final
+    // text (live chunks may contain a stray fragment from a weaker model).
+    const cleanText = sanitizePackTranscript(fullText);
+
+    if (cleanText && !abortController.signal.aborted) {
+      await persistPackTurn(req.user!.id, session.characterId, sessionId, message, cleanText);
     }
 
     // Return choices for the CURRENT node (post-advance)
     const newNode = pack.nodes[currentNode];
     const choices: PackChoice[] | null = newNode?.choices ?? null;
 
-    // Option A: explicit end node
+    // Terminal nodes have no choices (choices === null). The session completes
+    // when the player reaches ANY terminal node — they are named per pack
+    // (e.g. "confess_end", "stay_end"), so we detect by shape, not a fixed id.
     let sessionCompleted = false;
-    if (currentNode === 'end') {
+    const isTerminal = !newNode || newNode.choices == null;
+    if (isTerminal) {
       await completePackSession(sessionId);
       sessionCompleted = true;
     }
@@ -306,7 +378,9 @@ router.post('/session/:sid/stream', requireAuth, async (req: Request, res: Respo
       }
     }
 
-    send('done', { choices, currentNode, sessionCompleted });
+    // finalText lets the client replace the streamed bubble with the cleaned
+    // transcript, so a mid-stream artifact never lingers on screen.
+    send('done', { choices, currentNode, sessionCompleted, finalText: cleanText });
     res.end();
   } catch (err) {
     console.error('[packs] stream error:', err);

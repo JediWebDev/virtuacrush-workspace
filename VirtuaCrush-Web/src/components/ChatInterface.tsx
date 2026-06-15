@@ -348,7 +348,14 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           streamFailed = true;
           setNarratorNote("Something interrupted the story. Try again in a moment.");
         } else if (evt.event === 'done') {
-          const data = evt.data as { choices?: PackChoice[] | null; currentNode?: string; sessionCompleted?: boolean };
+          const data = evt.data as { choices?: PackChoice[] | null; currentNode?: string; sessionCompleted?: boolean; finalText?: string };
+          // Replace the streamed bubble with the server's cleaned transcript so
+          // any stray JSON/formatting artifact never lingers on screen.
+          if (data.finalText && data.finalText.trim()) {
+            setPackMessages((prev) => prev.map((m) =>
+              m.id === assistantMsgId ? { ...m, content: data.finalText! } : m
+            ));
+          }
           setPackChoices(data.choices ?? null);
           if (data.currentNode) {
             setActivePackSession((prev) => prev ? { ...prev, currentNode: data.currentNode! } : null);

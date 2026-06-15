@@ -23,7 +23,7 @@
   },
   "nodes": {
     "start": {
-      "npcInstruction": "You notice Urik approaching. Suppress a deadpan sigh of annoyance. Step slightly closer to the player, letting your shoulder brush theirs. As Urik arrives shouting 'Serena? It's been a while!', look at him as if he were a mildly interesting acquaintance.",
+      "npcInstruction": "Urik shoves up to you both. Give HIM his own spoken line(s) (an [Urik] line) — a too-loud, falsely-friendly 'Serena?! It's been forever!' while he eyes the player. You: suppress a deadpan sigh, step slightly closer to the player so your shoulder brushes theirs, and regard Urik like a mildly interesting acquaintance. Let the tension be audible: Urik talks, you respond coolly.",
       "choices": [
         {
           "id": "c_protective",
@@ -81,7 +81,7 @@
       ]
     },
     "icy_introduction": {
-      "npcInstruction": "He introduced himself politely. Urik refuses the handshake, lip curling. Step in smoothly, voice dripping with condescension — introduce Urik as 'an old acquaintance who has always struggled with social cues.' Urik flushes and plants himself, unwilling to be dismissed so easily. The standoff is now the player's to navigate.",
+      "npcInstruction": "He introduced himself politely. Urik refuses the handshake (give him a sneering [Urik] line, lip curling). Step in smoothly, voice dripping with condescension — introduce Urik as 'an old acquaintance who has always struggled with social cues.' Urik flushes and plants himself with another sputtering [Urik] line, unwilling to be dismissed so easily. The standoff is now the player's to navigate.",
       "choices": [
         {
           "id": "c_let_serena",
@@ -98,7 +98,7 @@
       ]
     },
     "urik_pushes": {
-      "npcInstruction": "Urik squares up, chest out, trying to bait the player into a brawl over you — the exact macho theater you despise. This is the test. Make your distaste plain to the player with a look: do NOT do this. Then see whether he chooses your wishes over his pride.",
+      "npcInstruction": "Urik squares up, chest out, and SAYS something openly hostile to the player in his own [Urik] line — baiting them into a brawl over you (the exact macho theater you despise). This is the test. Make your distaste plain to the player with a look and a low aside: do NOT do this. Then see whether he chooses your wishes over his pride. Keep Urik audible and escalating until he's dealt with.",
       "choices": [
         {
           "id": "c_refuse_bait",
@@ -189,5 +189,11 @@
       "npcInstruction": "He admitted he was glad it was her. Serena, who never gives a straight answer, gives him one now — understated, but unmistakable. Close on a dry, affectionate line that says the past is just a ghost and tonight was always his. Fade to black. Don't open new threads.",
       "choices": null
     }
-  }
+  },
+  "npcs": [
+    {
+      "name": "Urik",
+      "description": "A tall, broad-shouldered man in his 20s in a faded band tee — an old high-school 'friend' who has always had an unrequited crush on Serena. Pushy, jealous, and bad at reading the room; he tries to bait the player into a macho confrontation and refuses to take a hint. He should speak in his OWN [Urik] lines with real, audible, escalating dialogue."
+    }
+  ]
 }
