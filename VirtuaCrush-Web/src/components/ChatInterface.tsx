@@ -833,7 +833,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             </div>
           </div>
         )}
-        <div className="border-t border-black/[0.05] dark:border-white/[0.05] bg-gradient-to-t from-surface to-transparent p-4 md:p-8 md:pt-6">
+        <div className="border-t border-purple-200/40 bg-gradient-to-t from-purple-200/90 via-purple-100/40 to-transparent p-4 dark:border-white/[0.05] dark:from-surface dark:via-surface/80 md:p-8 md:pt-6">
           <div className="relative mx-auto max-w-3xl">
             <div className="relative flex items-center gap-2">
                 <input
@@ -843,7 +843,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
                 placeholder={composerLocked ? "This story has ended — switch to Free Roam to keep chatting" : displayedLoading ? "…" : `Message ${character.name}…`}
                 disabled={inputDisabled}
-                className="min-h-[52px] flex-1 rounded-[1.75rem] border border-black/10 bg-stone-200/80 py-3.5 pl-5 pr-14 text-[15px] text-stone-800 outline-none transition-all placeholder:text-stone-500 focus:border-accent/35 focus:ring-2 focus:ring-accent/10 dark:border-white/10 dark:bg-stone-900/60 dark:text-stone-100"
+                className="min-h-[52px] flex-1 rounded-[1.75rem] border border-purple-200/60 bg-white/90 py-3.5 pl-5 pr-14 text-[15px] text-stone-800 outline-none transition-all placeholder:text-purple-400/70 focus:border-purple-400/50 focus:ring-2 focus:ring-purple-300/25 dark:border-white/10 dark:bg-stone-900/60 dark:text-stone-100 dark:placeholder:text-stone-500 dark:focus:border-accent/35 dark:focus:ring-accent/10"
                 />
                 <button
                 type="button"
