@@ -86,6 +86,42 @@ export async function abandonPackSession(sessionId: number): Promise<void> {
   );
 }
 
+export interface CompletedPackStory {
+  sessionId: number;
+  packId: string;
+  completedAt: Date | null;
+  lastLine: string | null;
+}
+
+/**
+ * Completed story sessions for a (user, character), most recent first, each with
+ * its final narrated/spoken line for a history preview.
+ */
+export async function getCompletedPackSessions(
+  userId: string,
+  characterId: string,
+): Promise<CompletedPackStory[]> {
+  const { rows } = await pool.query<{
+    id: number; pack_id: string; completed_at: Date | null; last_line: string | null;
+  }>(
+    `SELECT s.id, s.pack_id, s.completed_at,
+            (SELECT content FROM chat_messages m
+              WHERE m.pack_session_id = s.id
+              ORDER BY m.created_at DESC, m.id DESC
+              LIMIT 1) AS last_line
+       FROM pack_sessions s
+      WHERE s.user_id = $1 AND s.character_id = $2 AND s.status = 'completed'
+      ORDER BY s.completed_at DESC NULLS LAST, s.id DESC`,
+    [userId, characterId],
+  );
+  return rows.map((r) => ({
+    sessionId: r.id,
+    packId: r.pack_id,
+    completedAt: r.completed_at,
+    lastLine: r.last_line,
+  }));
+}
+
 export async function countPackMessages(sessionId: number): Promise<number> {
   const { rows } = await pool.query<{ count: string }>(
     `SELECT COUNT(*)::text AS count FROM chat_messages WHERE pack_session_id = $1`,

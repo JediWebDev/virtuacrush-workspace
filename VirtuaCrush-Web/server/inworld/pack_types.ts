@@ -48,6 +48,8 @@ export interface StoryPack {
   estimatedMinutes: number;
   /** Auto-complete the session after this many total messages (Option C fallback). Default 40. */
   maxTurns?: number;
+  /** Affinity points awarded once, when the player completes the story. Default 10. */
+  affinityReward?: number;
   coverGradient: [string, string];
   systemInstruction: string;
   sceneAnchor?: PackSceneAnchor;

@@ -6,7 +6,7 @@ import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info } from "lucide-react";
+import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked } from "lucide-react";
 import { Character } from "../types/character";
 import type { UserTier } from "../types/subscription";
 import SocialFeed from "./SocialFeed";
@@ -16,8 +16,9 @@ import SecretCard from "./SecretCard";
 import DesireEventCard from "./DesireEventCard";
 import PackList from "./PackList";
 import ChoiceButtons from "./ChoiceButtons";
-import { getActivePackSession, greetPackSession, abandonPackSession, type PackSession, type PackChoice } from "../lib/api";
+import { getActivePackSession, greetPackSession, abandonPackSession, fetchPackStories, type PackSession, type PackChoice, type PackStory } from "../lib/api";
 import { parseSSE } from "../lib/sse";
+import NoticeToast from "./NoticeToast";
 
 function formatHistoryDate(day: string): string {
   // day is YYYY-MM-DD; anchor at noon to avoid timezone date shifts.
@@ -58,6 +59,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [historySearch, setHistorySearch] = useState("");
   const [historyDays, setHistoryDays] = useState<ChatHistoryDay[] | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [packStories, setPackStories] = useState<PackStory[] | null>(null);
   const [feedOpen, setFeedOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [storyState, setStoryState] = useState<CharacterState | null>(null);
@@ -75,6 +77,11 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [packLoading, setPackLoading] = useState(false);
   const [packCompleted, setPackCompleted] = useState(false);
   const packAbortRef = useRef<AbortController | null>(null);
+  // Completion celebration: affinity-earned toast, "saved to history" toast,
+  // and a timer that auto-closes the finished story tab.
+  const [affinityToast, setAffinityToast] = useState<{ open: boolean; amount: number }>({ open: false, amount: 0 });
+  const [historyToast, setHistoryToast] = useState<{ open: boolean; title: string }>({ open: false, title: '' });
+  const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Restore an in-progress story when the chat is (re)opened so the Story tab
   // survives navigating away and coming back. Only ACTIVE sessions are
@@ -82,11 +89,14 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   useEffect(() => {
     let cancelled = false;
     // Reset pack UI when switching characters.
+    if (completeTimerRef.current) { clearTimeout(completeTimerRef.current); completeTimerRef.current = null; }
     setActivePackSession(null);
     setPackMessages([]);
     setPackChoices(null);
     setPackCompleted(false);
     setActiveThread('freeRoam');
+    setAffinityToast({ open: false, amount: 0 });
+    setHistoryToast({ open: false, title: '' });
 
     (async () => {
       try {
@@ -111,7 +121,10 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (completeTimerRef.current) { clearTimeout(completeTimerRef.current); completeTimerRef.current = null; }
+    };
   }, [character.id]);
 
   const handleDesireRespond = async (choice: "encourage" | "redirect" | "decline") => {
@@ -288,6 +301,36 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     try { await abandonPackSession(sid); } catch { /* non-fatal */ }
   };
 
+  // Close a FINISHED story tab: clear the pack thread, return to Free Roam, and
+  // announce that the story was archived to chat history.
+  const closeFinishedStory = (storyTitle: string) => {
+    setActivePackSession(null);
+    setPackMessages([]);
+    setPackChoices(null);
+    setPackCompleted(false);
+    setActiveThread('freeRoam');
+    setHistoryToast({ open: true, title: storyTitle });
+  };
+
+  // Completion sequence: bump the affinity bar + toast the reward, then after a
+  // beat (so the player reads the ending) auto-close the tab and note the save.
+  const finishPackStory = (info: { affinityAwarded?: number; affinity?: number }) => {
+    setPackCompleted(true);
+    setPackChoices(null);
+    if (typeof info.affinity === 'number') {
+      setAffinity(info.affinity);
+      onAffinityChange?.(character.id, info.affinity);
+    }
+    const amount = info.affinityAwarded ?? 0;
+    if (amount > 0) setAffinityToast({ open: true, amount });
+    const storyTitle = activePackSession?.pack?.title ?? 'Your story';
+    if (completeTimerRef.current) clearTimeout(completeTimerRef.current);
+    completeTimerRef.current = setTimeout(() => {
+      completeTimerRef.current = null;
+      closeFinishedStory(storyTitle);
+    }, 3800);
+  };
+
   const sendPackMessage = async (text: string, advanceNode?: string) => {
     if (!activePackSession || packLoading || packCompleted) return;
     const userMsgId = crypto.randomUUID();
@@ -348,7 +391,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           streamFailed = true;
           setNarratorNote("Something interrupted the story. Try again in a moment.");
         } else if (evt.event === 'done') {
-          const data = evt.data as { choices?: PackChoice[] | null; currentNode?: string; sessionCompleted?: boolean; finalText?: string };
+          const data = evt.data as { choices?: PackChoice[] | null; currentNode?: string; sessionCompleted?: boolean; finalText?: string; affinityAwarded?: number; affinity?: number };
           // Replace the streamed bubble with the server's cleaned transcript so
           // any stray JSON/formatting artifact never lingers on screen.
           if (data.finalText && data.finalText.trim()) {
@@ -361,8 +404,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             setActivePackSession((prev) => prev ? { ...prev, currentNode: data.currentNode! } : null);
           }
           if (data.sessionCompleted) {
-            setPackCompleted(true);
-            setPackChoices(null);
+            finishPackStory({ affinityAwarded: data.affinityAwarded, affinity: data.affinity });
           }
         }
       }
@@ -403,12 +445,14 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     if (!showHistoryView) return;
     let cancelled = false;
     setHistoryLoading(true);
-    fetchChatHistory(character.id)
-      .then((r) => {
-        if (!cancelled) setHistoryDays(r.days);
-      })
-      .catch(() => {
-        if (!cancelled) setHistoryDays([]);
+    Promise.all([
+      fetchChatHistory(character.id).then((r) => r.days).catch(() => []),
+      fetchPackStories(character.id).catch(() => [] as PackStory[]),
+    ])
+      .then(([days, stories]) => {
+        if (cancelled) return;
+        setHistoryDays(days);
+        setPackStories(stories);
       })
       .finally(() => {
         if (!cancelled) setHistoryLoading(false);
@@ -435,6 +479,19 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     );
   });
 
+  const storyItems = (packStories ?? []).map((s) => ({
+    id: `story-${s.sessionId}`,
+    title: s.title,
+    date: s.completedAt ? formatHistoryDate(s.completedAt.slice(0, 10)) : "Completed",
+    preview: s.lastLine ? s.lastLine.replace(/^\[[^\]]+\]\s*/, "").replace(/\*/g, "").slice(0, 140) : (s.blurb ?? ""),
+  }));
+
+  const filteredStories = storyItems.filter((item) => {
+    const q = historySearch.trim().toLowerCase();
+    if (!q) return true;
+    return item.title.toLowerCase().includes(q) || item.preview.toLowerCase().includes(q);
+  });
+
   const displayedMessages = activeThread === 'pack' ? packMessages : messages;
   const displayedLoading = activeThread === 'pack' ? packLoading : isLoading;
   // In a finished story the composer is locked; the user must switch threads or
@@ -454,6 +511,22 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
         limit={quotaLimit}
         onClose={() => setQuotaToast(false)}
         onUpgrade={() => { setQuotaToast(false); navigate("/how-it-works"); }}
+      />
+      <NoticeToast
+        open={affinityToast.open}
+        title={`+${affinityToast.amount} affinity with ${character.name}`}
+        detail="Your bond grew stronger by finishing this story."
+        icon={<Heart size={18} className="fill-accent" />}
+        onClose={() => setAffinityToast((t) => ({ ...t, open: false }))}
+        offsetRem={6}
+      />
+      <NoticeToast
+        open={historyToast.open}
+        title="Story saved to your chat history"
+        detail={`"${historyToast.title}" is now in your history.`}
+        icon={<BookMarked size={18} />}
+        onClose={() => setHistoryToast((t) => ({ ...t, open: false }))}
+        offsetRem={1.5}
       />
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(201,113,125,0.12),transparent)]" />
 
@@ -574,32 +647,64 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               </div>
             </div>
             <div className="no-scrollbar flex-1 overflow-y-auto p-4 md:p-6">
-              {historyLoading && historyDays === null ? (
+              {historyLoading && historyDays === null && packStories === null ? (
                 <p className="flex items-center justify-center gap-2 py-8 text-sm text-stone-900 dark:text-stone-500">
                   <Loader2 size={16} className="animate-spin" /> Loading conversations…
                 </p>
-              ) : filteredHistory.length === 0 ? (
+              ) : filteredHistory.length === 0 && filteredStories.length === 0 ? (
                 <p className="py-8 text-center text-sm text-stone-900 dark:text-stone-500">
-                  {historyItems.length === 0 ? "No past conversations yet." : "No conversations match your search."}
+                  {historyItems.length === 0 && storyItems.length === 0 ? "No past conversations yet." : "Nothing matches your search."}
                 </p>
               ) : (
-                <ul className="space-y-1">
-                  {filteredHistory.map((item) => (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        onClick={() => setShowHistoryView(false)}
-                        className="flex w-full flex-col gap-1 rounded-xl px-4 py-3 text-left transition-colors hover:bg-black/[0.04] dark:bg-white/[0.04]"
-                      >
-                        <span className="text-[11px] font-medium uppercase tracking-wide text-stone-900 dark:text-stone-500">
-                          {item.date}
-                        </span>
-                        <span className="text-sm font-semibold text-stone-800 dark:text-stone-100">{item.title}</span>
-                        <span className="line-clamp-2 text-sm text-stone-600 dark:text-stone-400">{item.preview}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <div className="space-y-6">
+                  {filteredStories.length > 0 && (
+                    <div>
+                      <div className="mb-2 flex items-center gap-1.5 px-1">
+                        <BookMarked size={13} className="text-accent" />
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-accent">Completed Stories</p>
+                      </div>
+                      <ul className="space-y-1">
+                        {filteredStories.map((item) => (
+                          <li key={item.id}>
+                            <div className="flex w-full flex-col gap-1 rounded-xl border border-accent/15 bg-accent/[0.04] px-4 py-3 text-left">
+                              <span className="text-[11px] font-medium uppercase tracking-wide text-accent/80">
+                                Story · {item.date}
+                              </span>
+                              <span className="text-sm font-semibold text-stone-800 dark:text-stone-100">{item.title}</span>
+                              {item.preview ? (
+                                <span className="line-clamp-2 text-sm italic text-stone-600 dark:text-stone-400">{item.preview}</span>
+                              ) : null}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {filteredHistory.length > 0 && (
+                    <div>
+                      {filteredStories.length > 0 && (
+                        <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-stone-500">Conversations</p>
+                      )}
+                      <ul className="space-y-1">
+                        {filteredHistory.map((item) => (
+                          <li key={item.id}>
+                            <button
+                              type="button"
+                              onClick={() => setShowHistoryView(false)}
+                              className="flex w-full flex-col gap-1 rounded-xl px-4 py-3 text-left transition-colors hover:bg-black/[0.04] dark:bg-white/[0.04]"
+                            >
+                              <span className="text-[11px] font-medium uppercase tracking-wide text-stone-900 dark:text-stone-500">
+                                {item.date}
+                              </span>
+                              <span className="text-sm font-semibold text-stone-800 dark:text-stone-100">{item.title}</span>
+                              <span className="line-clamp-2 text-sm text-stone-600 dark:text-stone-400">{item.preview}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

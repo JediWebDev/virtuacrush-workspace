@@ -16,6 +16,7 @@ import { getCharacter, NARRATOR_BRIEF } from '../inworld/characters';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
 import { formatPersonaTraitsBlock } from '../sim/traits';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
+import { incrementAffinity } from '../db/affinity';
 import type { StoryPack, PackMeta, PackNode, PackChoice } from '../inworld/pack_types';
 import {
   createPackSession,
@@ -27,7 +28,11 @@ import {
   loadPackMessages,
   countPackMessages,
   persistPackTurn,
+  getCompletedPackSessions,
 } from '../db/pack_sessions';
+
+/** Affinity awarded for finishing a story when the pack doesn't specify its own. */
+const DEFAULT_AFFINITY_REWARD = 10;
 
 const router = Router();
 
@@ -382,9 +387,24 @@ router.post('/session/:sid/stream', requireAuth, async (req: Request, res: Respo
       }
     }
 
+    // Reward: finishing a story grants a one-time affinity bonus. This runs only
+    // on the turn that flips the session to 'completed' (a later stream on the
+    // same session is rejected with session_not_active), so it can't double-pay.
+    let affinityAwarded = 0;
+    let affinity: number | undefined;
+    if (sessionCompleted) {
+      affinityAwarded = pack.affinityReward ?? DEFAULT_AFFINITY_REWARD;
+      try {
+        affinity = await incrementAffinity(req.user!.id, session.characterId, affinityAwarded);
+      } catch (e) {
+        console.error('[packs] affinity award failed:', e);
+        affinityAwarded = 0; // don't claim a reward the bar didn't actually get
+      }
+    }
+
     // finalText lets the client replace the streamed bubble with the cleaned
     // transcript, so a mid-stream artifact never lingers on screen.
-    send('done', { choices, currentNode, sessionCompleted, finalText: cleanText });
+    send('done', { choices, currentNode, sessionCompleted, finalText: cleanText, affinityAwarded, affinity });
     res.end();
   } catch (err) {
     console.error('[packs] stream error:', err);
@@ -430,6 +450,28 @@ router.get('/active', requireAuth, async (req: Request, res: Response) => {
       pack: pack ? packToMeta(pack) : null,
     },
   });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/packs/history?characterId=lexi  — completed stories for the history panel
+// ---------------------------------------------------------------------------
+router.get('/history', requireAuth, async (req: Request, res: Response) => {
+  const { characterId } = req.query as { characterId?: string };
+  if (!characterId) return res.status(400).json({ error: 'missing_character_id' });
+
+  const sessions = await getCompletedPackSessions(req.user!.id, characterId);
+  const stories = sessions.map((s) => {
+    const pack = loadPack(s.packId);
+    return {
+      sessionId: s.sessionId,
+      packId: s.packId,
+      title: pack?.title ?? 'Story',
+      blurb: pack?.blurb ?? null,
+      completedAt: s.completedAt,
+      lastLine: s.lastLine,
+    };
+  });
+  return res.json({ stories });
 });
 
 export default router;

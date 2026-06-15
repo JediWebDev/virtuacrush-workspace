@@ -256,3 +256,18 @@ export async function getActivePackSession(characterId: string): Promise<PackSes
 export async function abandonPackSession(sessionId: number): Promise<void> {
   await api<{ ok: boolean }>(`/api/packs/session/${sessionId}/abandon`, { method: 'POST', body: JSON.stringify({}) });
 }
+
+export interface PackStory {
+  sessionId: number;
+  packId: string;
+  title: string;
+  blurb: string | null;
+  completedAt: string | null;
+  lastLine: string | null;
+}
+
+/** Completed story sessions for the chat-history panel. */
+export async function fetchPackStories(characterId: string): Promise<PackStory[]> {
+  const res = await api<{ stories: PackStory[] }>(`/api/packs/history?characterId=${encodeURIComponent(characterId)}`);
+  return res.stories;
+}
