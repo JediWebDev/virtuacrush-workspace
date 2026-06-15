@@ -71,7 +71,9 @@ export function directorDisciplineDirective(characterName: string): string {
     `conversation, your memory, or the current scene — never invent new ones. When mentioning real movies, shows, ` +
     `music, or facts, only reference ones you are confident are real; speak in general terms if unsure. NEVER repeat ` +
     `sentences or signature phrases you already used — say something NEW each turn and advance the scene. The narrator ` +
-    `MUST keep grounding the scene in the specific props, weather, location, and time of day from the CURRENT SETTING. ` +
+    `MUST keep the scene grounded in concrete, specific physical detail (props, light, sound, location, time of day) of ` +
+    `wherever the characters CURRENTLY are — follow the latest established location, and do NOT re-assert an earlier one ` +
+    `if the scene has since moved. ` +
     `Respond ONLY in English. PERSPECTIVE: address the player as "you" only when they are present (or you are texting ` +
     `them); if they have left the scene, refer to them in the THIRD person until they return.\n\n` +
     `CRITICAL: If you are returning a JSON object, ensure it is perfectly valid JSON. NEVER leak raw JSON keys ` +

@@ -91,8 +91,16 @@ function buildPackDirectorPrompt(pack: StoryPack, node: PackNode, characterId: s
 
   const name = character.displayName ?? characterId;
   const lore = getLore(characterId);
-  const sceneBlock = pack.sceneAnchor
-    ? `\n\n=== CURRENT SETTING ===\n${pack.sceneAnchor.situation}`
+  // The anchor describes where the story OPENS, not a fixed setting. The player
+  // can move the scene (e.g. garage → their apartment); the SCENE CONTINUITY
+  // rule below tells the director to follow the latest established location and
+  // not re-assert the opening one. Strip any embedded "CURRENT SETTING" header
+  // from the authored situation so the opening framing reads cleanly.
+  const openingSituation = (pack.sceneAnchor?.situation ?? '')
+    .replace(/^\s*===\s*CURRENT SETTING\s*===\s*/i, '')
+    .trim();
+  const sceneBlock = openingSituation
+    ? `\n\n=== WHERE THIS STORY OPENS (the scene may move from here as the player acts) ===\n${openingSituation}`
     : '';
 
   const npcs = pack.npcs ?? [];
@@ -128,6 +136,7 @@ function buildPackDirectorPrompt(pack: StoryPack, node: PackNode, characterId: s
     `- Leave "choices" EMPTY ([]) to reuse the story's authored buttons for the resulting beat. This is the DEFAULT — do it almost every turn.\n` +
     `- ONLY when the player clearly pulls the scene away from ALL the authored choices, return 2–3 NEW choices that fit the new direction (each "next":"dynamic", or a beat id if it rejoins the story) and steer back toward an ENDING.\n\n` +
     `NARRATION: characters speak ONLY dialogue; "narrator" owns ALL action and reaction. Include at least one "${name}" line whenever ${name} speaks. Respond ONLY in English. Never write the player's words or actions.\n\n` +
+    `SCENE CONTINUITY (important): The story OPENS at the setting above, but the player can move it elsewhere. Always narrate the location, props, and circumstances established by the MOST RECENT events in the conversation. If the scene has moved (a different room, building, or place), do NOT reintroduce the opening location or its details — keep the characters exactly where they actually are now, and never describe two places at once. Treat CURRENT BEAT as the dramatic INTENT of this moment, not a fixed location: adapt that intent to wherever the scene currently is.\n\n` +
     `KEEP IT MOVING toward an ENDING — never loop the same beat. When the scene has resolved, set "advance":"end" and "arcStatus":"completed".\n\n` +
     `SPEAKERS (use the exact name in "speaker"):\n${speakerList}\n\n` +
     `THIS BEAT'S CHOICES (the player's options right now):\n${authoredChoices}\n\n` +
