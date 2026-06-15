@@ -112,7 +112,7 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
     // Check for existing history
     const { rows } = await pool.query(
       `SELECT 1 FROM chat_messages
-       WHERE user_id = $1 AND character_id = $2
+       WHERE user_id = $1 AND character_id = $2 AND pack_session_id IS NULL
        LIMIT 1`,
       [req.user!.id, characterId],
     );
@@ -165,7 +165,7 @@ router.get('/history/:characterId', requireAuth, async (req: Request, res: Respo
          (array_agg(role ORDER BY created_at DESC))[1] AS last_role,
          count(*)::int AS message_count
        FROM chat_messages
-       WHERE user_id = $1 AND character_id = $2
+       WHERE user_id = $1 AND character_id = $2 AND pack_session_id IS NULL
        GROUP BY created_at::date
        ORDER BY created_at::date DESC`,
       [req.user!.id, characterId],
@@ -581,8 +581,8 @@ async function loadRecentTurns(
   // Query DESC + LIMIT to get the N most-recent turns, then reverse for chronological order.
   const { rows } = await pool.query<{ role: 'user' | 'assistant'; content: string }>(
     `SELECT role, content FROM chat_messages
-     WHERE user_id = $1 AND character_id = $2
-     ORDER BY created_at DESC
+     WHERE user_id = $1 AND character_id = $2 AND pack_session_id IS NULL
+     ORDER BY created_at DESC, id DESC
      LIMIT $3`,
     [userId, characterId, limit],
   );

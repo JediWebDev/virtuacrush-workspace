@@ -16,7 +16,7 @@ import SecretCard from "./SecretCard";
 import DesireEventCard from "./DesireEventCard";
 import PackList from "./PackList";
 import ChoiceButtons from "./ChoiceButtons";
-import { getActivePackSession, startPack, type PackSession, type PackChoice } from "../lib/api";
+import { getActivePackSession, greetPackSession, abandonPackSession, type PackSession, type PackChoice } from "../lib/api";
 import { parseSSE } from "../lib/sse";
 
 function formatHistoryDate(day: string): string {
@@ -73,7 +73,46 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [packMessages, setPackMessages] = useState<{ id: string; role: 'user' | 'assistant'; content: string }[]>([]);
   const [packChoices, setPackChoices] = useState<PackChoice[] | null>(null);
   const [packLoading, setPackLoading] = useState(false);
+  const [packCompleted, setPackCompleted] = useState(false);
   const packAbortRef = useRef<AbortController | null>(null);
+
+  // Restore an in-progress story when the chat is (re)opened so the Story tab
+  // survives navigating away and coming back. Only ACTIVE sessions are
+  // restored; completed/abandoned stories stay closed.
+  useEffect(() => {
+    let cancelled = false;
+    // Reset pack UI when switching characters.
+    setActivePackSession(null);
+    setPackMessages([]);
+    setPackChoices(null);
+    setPackCompleted(false);
+    setActiveThread('freeRoam');
+
+    (async () => {
+      try {
+        const session = await getActivePackSession(character.id);
+        if (cancelled || !session) return;
+        setActivePackSession(session);
+        // Rehydrate the thread's transcript + current choices.
+        const greet = await greetPackSession(session.sessionId);
+        if (cancelled) return;
+        const msgs: { id: string; role: 'user' | 'assistant'; content: string }[] = [];
+        if (greet.hasHistory && greet.history?.length) {
+          greet.history.forEach((m, i) =>
+            msgs.push({ id: `pack-history-${i}`, role: m.role, content: m.content }),
+          );
+        } else if (greet.introNarrative) {
+          msgs.push({ id: 'pack-intro', role: 'assistant', content: `[NARRATOR] ${greet.introNarrative}` });
+        }
+        setPackMessages(msgs);
+        setPackChoices(greet.choices ?? null);
+      } catch {
+        /* no active story — non-fatal */
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [character.id]);
 
   const handleDesireRespond = async (choice: "encourage" | "redirect" | "decline") => {
     if (!storyState?.pendingEvent) return;
@@ -221,6 +260,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
 
   const handlePackStart = (session: PackSession & { introNarrative?: string | null }) => {
     setActivePackSession(session);
+    setPackCompleted(false);
     const msgs: { id: string; role: 'user' | 'assistant'; content: string }[] = [];
     if (session.introNarrative) {
       msgs.push({ id: 'pack-intro', role: 'assistant', content: `[NARRATOR] ${session.introNarrative}` });
@@ -230,8 +270,26 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     setActiveThread('pack');
   };
 
+  // Resume the already-loaded in-progress story (just switch to its tab).
+  const handlePackResume = () => {
+    if (!activePackSession) return;
+    setActiveThread('pack');
+  };
+
+  // Abandon the active story so a new one can be started.
+  const handlePackAbandon = async () => {
+    if (!activePackSession) return;
+    const sid = activePackSession.sessionId;
+    setActivePackSession(null);
+    setPackMessages([]);
+    setPackChoices(null);
+    setPackCompleted(false);
+    setActiveThread('freeRoam');
+    try { await abandonPackSession(sid); } catch { /* non-fatal */ }
+  };
+
   const sendPackMessage = async (text: string, advanceNode?: string) => {
-    if (!activePackSession || packLoading) return;
+    if (!activePackSession || packLoading || packCompleted) return;
     const userMsgId = crypto.randomUUID();
     const assistantMsgId = crypto.randomUUID();
     setPackMessages((prev) => [
@@ -243,6 +301,16 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     setPackLoading(true);
     const controller = new AbortController();
     packAbortRef.current = controller;
+
+    // Replace the streaming assistant bubble with a narrator note (used for
+    // any error path so the AI never silently "stops typing" with a blank bubble).
+    const setNarratorNote = (note: string) =>
+      setPackMessages((prev) => prev.map((m) =>
+        m.id === assistantMsgId ? { ...m, content: `[NARRATOR] ${note}` } : m
+      ));
+
+    let gotChunk = false;
+    let streamFailed = false;
     try {
       const res = await fetch(`/api/packs/session/${activePackSession.sessionId}/stream`, {
         method: 'POST',
@@ -251,21 +319,56 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
         body: JSON.stringify({ message: text, advanceNode }),
         signal: controller.signal,
       });
-      if (!res.ok) return;
+
+      if (!res.ok) {
+        // Most common: the story already ended (session_not_active). Surface it
+        // instead of leaving a blank, never-resolving bubble.
+        let errCode = '';
+        try { errCode = (await res.json())?.error ?? ''; } catch { /* ignore */ }
+        if (errCode === 'session_not_active') {
+          setNarratorNote('This story has already ended.');
+          setPackCompleted(true);
+        } else if (errCode === 'session_not_found') {
+          setNarratorNote('This story is no longer available.');
+          setPackCompleted(true);
+        } else {
+          setNarratorNote("Something interrupted the story. Try again in a moment.");
+        }
+        setPackChoices(null);
+        return;
+      }
+
       for await (const evt of parseSSE(res)) {
         if (evt.event === 'chunk') {
+          gotChunk = true;
           setPackMessages((prev) => prev.map((m) =>
             m.id === assistantMsgId ? { ...m, content: m.content + (evt.data.text ?? '') } : m
           ));
+        } else if (evt.event === 'error') {
+          streamFailed = true;
+          setNarratorNote("Something interrupted the story. Try again in a moment.");
         } else if (evt.event === 'done') {
-          setPackChoices((evt.data as { choices?: PackChoice[] | null }).choices ?? null);
-          if ((evt.data as { currentNode?: string }).currentNode) {
-            setActivePackSession((prev) => prev ? { ...prev, currentNode: (evt.data as { currentNode: string }).currentNode } : null);
+          const data = evt.data as { choices?: PackChoice[] | null; currentNode?: string; sessionCompleted?: boolean };
+          setPackChoices(data.choices ?? null);
+          if (data.currentNode) {
+            setActivePackSession((prev) => prev ? { ...prev, currentNode: data.currentNode! } : null);
+          }
+          if (data.sessionCompleted) {
+            setPackCompleted(true);
+            setPackChoices(null);
           }
         }
       }
+
+      // Guard against a 200 stream that yielded nothing (e.g. upstream hiccup).
+      if (!gotChunk && !streamFailed) {
+        setNarratorNote("…she trails off. Try sending that again.");
+      }
     } catch (e: unknown) {
-      if ((e as { name?: string })?.name !== 'AbortError') console.error('[pack] stream error', e);
+      if ((e as { name?: string })?.name !== 'AbortError') {
+        console.error('[pack] stream error', e);
+        setNarratorNote("Something interrupted the story. Try again in a moment.");
+      }
     } finally {
       setPackLoading(false);
       packAbortRef.current = null;
@@ -327,6 +430,10 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
 
   const displayedMessages = activeThread === 'pack' ? packMessages : messages;
   const displayedLoading = activeThread === 'pack' ? packLoading : isLoading;
+  // In a finished story the composer is locked; the user must switch threads or
+  // start a new story.
+  const composerLocked = activeThread === 'pack' && packCompleted;
+  const inputDisabled = displayedLoading || composerLocked;
 
   return (
     <motion.div
@@ -382,8 +489,10 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           
           <PackList
             characterId={character.id}
-            activeSession={activePackSession}
+            activeSession={packCompleted ? null : activePackSession}
             onSessionStart={handlePackStart}
+            onResume={handlePackResume}
+            onAbandon={handlePackAbandon}
           />
           <SecretCard secret={storyState?.secret} name={character.name} />
           <ActivityLog characterId={character.id} name={character.name} />
@@ -654,8 +763,8 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               );
             });
           })}
-          {isLoading && !greetingLoading && (
-            <motion.div 
+          {displayedLoading && !greetingLoading && (
+            <motion.div
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="flex justify-start pl-1"
@@ -697,8 +806,25 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             />
           </div>
         ) : null}
-        {activeThread === 'pack' && packChoices && packChoices.length > 0 && !packLoading && (
+        {activeThread === 'pack' && !packCompleted && packChoices && packChoices.length > 0 && !packLoading && (
           <ChoiceButtons choices={packChoices} onChoice={handlePackChoice} disabled={packLoading} />
+        )}
+        {activeThread === 'pack' && packCompleted && (
+          <div className="mx-auto mt-3 w-full max-w-[520px] px-4">
+            <div className="flex flex-col items-center gap-2 rounded-2xl border border-accent/25 bg-accent/[0.06] px-4 py-4 text-center">
+              <p className="text-sm font-semibold text-stone-800 dark:text-stone-100">The End</p>
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                This story has wrapped up. Pick a new story from {character.name}'s profile, or switch to Free Roam to keep chatting.
+              </p>
+              <button
+                type="button"
+                onClick={() => setActiveThread('freeRoam')}
+                className="mt-1 rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent-deep"
+              >
+                Back to Free Roam
+              </button>
+            </div>
+          </div>
         )}
         <div className="border-t border-black/[0.05] dark:border-white/[0.05] bg-gradient-to-t from-surface to-transparent p-4 md:p-8 md:pt-6">
           <div className="relative mx-auto max-w-3xl">
@@ -708,14 +834,14 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                placeholder={displayedLoading ? "…" : `Message ${character.name}…`}
-                disabled={displayedLoading}
+                placeholder={composerLocked ? "This story has ended — switch to Free Roam to keep chatting" : displayedLoading ? "…" : `Message ${character.name}…`}
+                disabled={inputDisabled}
                 className="min-h-[52px] flex-1 rounded-[1.75rem] border border-black/10 bg-stone-200/80 py-3.5 pl-5 pr-14 text-[15px] text-stone-800 outline-none transition-all placeholder:text-stone-500 focus:border-accent/35 focus:ring-2 focus:ring-accent/10 dark:border-white/10 dark:bg-stone-900/60 dark:text-stone-100"
                 />
                 <button
                 type="button"
                 onClick={() => handleSend()}
-                disabled={!input.trim() || displayedLoading}
+                disabled={!input.trim() || inputDisabled}
                 className="absolute right-1.5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-accent text-white shadow-md shadow-accent/25 transition-all hover:bg-accent-deep active:scale-95 disabled:opacity-45"
                 >
                 {displayedLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={19} />}

@@ -189,7 +189,16 @@ export interface PackMeta {
   title: string;
   blurb: string;
   tags: string[];
-  mood: 'romantic' | 'dramatic' | 'comedic' | 'thriller' | 'mystery';
+  mood:
+    | 'romantic'
+    | 'dramatic'
+    | 'comedic'
+    | 'thriller'
+    | 'mystery'
+    | 'playful'
+    | 'cozy'
+    | 'gothic'
+    | 'tense';
   estimatedMinutes: number;
   coverGradient: [string, string];
 }

@@ -108,6 +108,26 @@ router.post('/:id/start', requireAuth, async (req: Request, res: Response) => {
   if (!pack) return res.status(404).json({ error: 'pack_not_found' });
 
   try {
+    // Guardrail: only one active story per (user, character) at a time.
+    // If a story is already in progress, refuse and return it so the client
+    // can offer to resume or abandon it.
+    const existing = await getActivePackSession(req.user!.id, pack.characterId);
+    if (existing) {
+      const existingPack = loadPack(existing.packId);
+      const existingNode = existingPack?.nodes[existing.currentNode];
+      return res.status(409).json({
+        error: 'story_in_progress',
+        active: {
+          sessionId: existing.id,
+          packId: existing.packId,
+          characterId: existing.characterId,
+          currentNode: existing.currentNode,
+          choices: existingNode?.choices ?? null,
+          pack: existingPack ? packToMeta(existingPack) : null,
+        },
+      });
+    }
+
     const session = await createPackSession(req.user!.id, pack.characterId, id);
     const startNode = pack.nodes['start'];
     return res.json({

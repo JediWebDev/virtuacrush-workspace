@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { BookOpen, Clock, Zap } from "lucide-react";
-import { listPacks, startPack, type PackMeta, type PackSession } from "../lib/api";
+import { BookOpen, Clock, Zap, Lock } from "lucide-react";
+import { listPacks, startPack, ApiError, type PackMeta, type PackSession } from "../lib/api";
 
 const MOOD_LABELS: Record<string, string> = {
   romantic: "Romance",
@@ -18,12 +18,17 @@ interface PackListProps {
   characterId: string;
   activeSession: PackSession | null;
   onSessionStart: (session: PackSession & { introNarrative?: string | null }) => void;
+  /** Switch to the already-active story's tab. */
+  onResume?: () => void;
+  /** Abandon the active story so a new one can begin. */
+  onAbandon?: () => void;
 }
 
-export default function PackList({ characterId, activeSession, onSessionStart }: PackListProps) {
+export default function PackList({ characterId, activeSession, onSessionStart, onResume, onAbandon }: PackListProps) {
   const [packs, setPacks] = useState<PackMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState<string | null>(null);
+  const [abandoning, setAbandoning] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -39,10 +44,25 @@ export default function PackList({ characterId, activeSession, onSessionStart }:
     try {
       const session = await startPack(pack.id);
       onSessionStart(session);
-    } catch {
-      // ignore
+    } catch (e) {
+      // Guardrail: another story is already in progress. Resume it instead of
+      // silently failing.
+      if (e instanceof ApiError && e.status === 409 && e.body?.error === 'story_in_progress') {
+        const active = e.body.active as (PackSession & { introNarrative?: string | null }) | undefined;
+        if (active) onSessionStart(active);
+      }
     } finally {
       setStarting(null);
+    }
+  };
+
+  const handleAbandon = async () => {
+    if (abandoning) return;
+    setAbandoning(true);
+    try {
+      await onAbandon?.();
+    } finally {
+      setAbandoning(false);
     }
   };
 
@@ -65,6 +85,7 @@ export default function PackList({ characterId, activeSession, onSessionStart }:
       <div className="flex flex-col gap-3">
         {packs.map((pack) => {
           const isActive = activeSession?.packId === pack.id;
+          const hasOtherActive = !!activeSession && !isActive;
           const isStarting = starting === pack.id;
           const [from, to] = pack.coverGradient;
 
@@ -119,9 +140,34 @@ export default function PackList({ characterId, activeSession, onSessionStart }:
 
                 {/* Action */}
                 {isActive ? (
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-accent">
-                    <Zap size={11} className="fill-accent" />
-                    Active — switch to this story
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-accent">
+                      <Zap size={11} className="fill-accent" />
+                      In progress
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onResume?.()}
+                        className="flex-1 rounded-xl py-2 text-xs font-semibold text-white transition-opacity"
+                        style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
+                      >
+                        Resume story
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAbandon}
+                        disabled={abandoning}
+                        className="rounded-xl border border-black/10 dark:border-white/10 px-3 py-2 text-xs font-semibold text-stone-600 dark:text-stone-300 transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.04] disabled:opacity-50"
+                      >
+                        {abandoning ? "…" : "Abandon"}
+                      </button>
+                    </div>
+                  </div>
+                ) : hasOtherActive ? (
+                  <div className="flex items-center justify-center gap-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] py-2 text-xs font-medium text-stone-500 dark:text-stone-400">
+                    <Lock size={11} />
+                    Finish your active story first
                   </div>
                 ) : (
                   <button

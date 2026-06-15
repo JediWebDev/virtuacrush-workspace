@@ -17,12 +17,10 @@ export async function createPackSession(
   characterId: string,
   packId: string,
 ): Promise<PackSessionRow> {
-  // Abandon any prior active session for this (user, character) before starting a new one.
-  await pool.query(
-    `UPDATE pack_sessions SET status = 'abandoned'
-     WHERE user_id = $1 AND character_id = $2 AND status = 'active'`,
-    [userId, characterId],
-  );
+  // NOTE: We intentionally do NOT auto-abandon prior active sessions here.
+  // The one-active-story-per-character guardrail is enforced at the route
+  // layer (POST /api/packs/:id/start), which refuses to start a new story
+  // while another is still active. See routes/packs.ts.
   const { rows } = await pool.query<{
     id: number; user_id: string; character_id: string; pack_id: string;
     current_node: string; status: string; started_at: Date; completed_at: Date | null;
@@ -103,7 +101,7 @@ export async function loadPackMessages(
   const { rows } = await pool.query<{ role: 'user' | 'assistant'; content: string }>(
     `SELECT role, content FROM chat_messages
      WHERE pack_session_id = $1
-     ORDER BY created_at DESC
+     ORDER BY created_at DESC, id DESC
      LIMIT $2`,
     [sessionId, limit],
   );
