@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Lock, MapPin, Home, Coffee, ShoppingBag, Film, Palette } from "lucide-react";
+import { useState, useEffect } from "react";
+import { MapPin } from "lucide-react";
 
 // ── Location data mirrored from server/inworld/locations.ts ──────────────────
 // Kept in sync manually; the travel API validates slugs server-side.
@@ -39,29 +39,21 @@ const LOCATIONS: MapLocation[] = [
 const W = 440;
 const H = 240;
 
-// City block rectangles [x, y, w, h]
 const BLOCKS: [number, number, number, number][] = [
-  // Arts district
   [18, 60, 88, 120],
-  // Downtown blocks
   [150, 30, 140, 70], [160, 115, 120, 65],
-  // Residential zone
   [310, 10, 120, 220],
-  // Player home zone
   [10, 160, 80, 68],
-  // Mid connectors
   [120, 80, 30, 80], [280, 60, 30, 130],
 ];
 
-// Zone background fills [x, y, w, h, fill]
-const ZONES: [number, number, number, number, string][] = [
-  [8,   52,  112, 138, "rgba(139,92,246,0.06)"],   // arts — violet tint
-  [142, 22,  164,  168, "rgba(59,130,246,0.05)"],  // downtown — blue tint
-  [302, 6,   132, 228, "rgba(236,72,153,0.05)"],   // residential — pink tint
-  [6,   152,  90,  84, "rgba(245,158,11,0.08)"],   // player home — amber tint
+const ZONES: [number, number, number, number, string, string][] = [
+  [8,   52,  112, 138, "arts",       "rgba(139,92,246,0.06)"],
+  [142, 22,  164,  168, "downtown",  "rgba(59,130,246,0.05)"],
+  [302, 6,   132, 228, "residential","rgba(236,72,153,0.05)"],
+  [6,   152,  90,  84, "player",    "rgba(245,158,11,0.08)"],
 ];
 
-// Zone labels [x, y, text]
 const ZONE_LABELS: [number, number, string][] = [
   [64,   50, "ARTS"],
   [222,  20, "DOWNTOWN"],
@@ -69,35 +61,120 @@ const ZONE_LABELS: [number, number, string][] = [
   [51,  148, "HOME"],
 ];
 
-// Pin color by type/state
-function pinColor(loc: MapLocation, isActive: boolean, isLocked: boolean): string {
-  if (isActive) return "#f59e0b";      // amber — current location
-  if (isLocked) return "#4b5563";      // dark gray — locked
-  if (loc.type === "player_home") return "#f59e0b"; // amber
-  if (loc.type === "public") return "#8b5cf6";       // violet
-  return "#ec4899";                                   // pink — character home
+/** Subtle topographic contour curves for map depth. */
+const CONTOURS: string[] = [
+  "M-10,95 Q80,75 160,90 T340,82 T450,98",
+  "M-10,130 Q100,110 200,125 T420,118",
+  "M-10,175 Q120,155 240,168 T450,160",
+  "M-10,205 Q90,190 180,200 T360,195 T450,208",
+];
+
+interface MapTheme {
+  bg: string;
+  bgGradientInner: string;
+  bgGradientOuter: string;
+  gridMinor: string;
+  gridMajor: string;
+  blockFill: string;
+  blockStroke: string;
+  zoneLabels: string;
+  affinityLabel: string;
+  pinLabel: string;
+  pinLabelLocked: string;
+  travelingOverlay: string;
+  travelingText: string;
+  contour: string;
+  zones: Record<string, string>;
+  pinLocked: string;
+}
+
+const MAP_THEMES: Record<"light" | "dark", MapTheme> = {
+  light: {
+    bg: "#f1f0f8",
+    bgGradientInner: "rgba(196,181,253,0.35)",
+    bgGradientOuter: "rgba(241,240,248,0)",
+    gridMinor: "#c8bfd9",
+    gridMajor: "#a898c4",
+    blockFill: "#e4dff0",
+    blockStroke: "#c9bfd8",
+    zoneLabels: "rgba(71,56,105,0.42)",
+    affinityLabel: "rgba(190,24,93,0.55)",
+    pinLabel: "#1e293b",
+    pinLabelLocked: "rgba(71,85,105,0.65)",
+    travelingOverlay: "rgba(241,240,248,0.82)",
+    travelingText: "#334155",
+    contour: "rgba(139,92,246,0.14)",
+    zones: {
+      arts: "rgba(124,58,237,0.14)",
+      downtown: "rgba(37,99,235,0.12)",
+      residential: "rgba(219,39,119,0.12)",
+      player: "rgba(217,119,6,0.16)",
+    },
+    pinLocked: "#64748b",
+  },
+  dark: {
+    bg: "#13111c",
+    bgGradientInner: "rgba(139,92,246,0.12)",
+    bgGradientOuter: "rgba(19,17,28,0)",
+    gridMinor: "#1e1a2e",
+    gridMajor: "#2a2540",
+    blockFill: "#1e1a30",
+    blockStroke: "#252038",
+    zoneLabels: "rgba(255,255,255,0.08)",
+    affinityLabel: "rgba(236,72,153,0.25)",
+    pinLabel: "rgba(255,255,255,0.7)",
+    pinLabelLocked: "rgba(156,163,175,0.5)",
+    travelingOverlay: "rgba(0,0,0,0.5)",
+    travelingText: "white",
+    contour: "rgba(139,92,246,0.07)",
+    zones: {
+      arts: "rgba(139,92,246,0.06)",
+      downtown: "rgba(59,130,246,0.05)",
+      residential: "rgba(236,72,153,0.05)",
+      player: "rgba(245,158,11,0.08)",
+    },
+    pinLocked: "#4b5563",
+  },
+};
+
+function useIsDarkMode(): boolean {
+  const [isDark, setIsDark] = useState(
+    () => typeof document !== "undefined" && document.documentElement.classList.contains("dark"),
+  );
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => setIsDark(root.classList.contains("dark"));
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark;
+}
+
+function pinColor(loc: MapLocation, isActive: boolean, isLocked: boolean, theme: MapTheme): string {
+  if (isLocked) return theme.pinLocked;
+  if (isActive) return "#d97706";
+  if (loc.type === "player_home") return "#d97706";
+  if (loc.type === "public") return "#7c3aed";
+  return "#db2777";
 }
 
 function pinGlow(loc: MapLocation, isActive: boolean, isLocked: boolean): string {
-  if (isActive) return "rgba(245,158,11,0.4)";
+  if (isActive) return "rgba(217,119,6,0.45)";
   if (isLocked) return "none";
-  if (loc.type === "player_home") return "rgba(245,158,11,0.2)";
-  if (loc.type === "public") return "rgba(139,92,246,0.2)";
-  return "rgba(236,72,153,0.2)";
+  if (loc.type === "player_home") return "rgba(217,119,6,0.25)";
+  if (loc.type === "public") return "rgba(124,58,237,0.28)";
+  return "rgba(219,39,119,0.28)";
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface Props {
-  /** The character whose conversation context this map is in. */
   characterId: string;
-  /** Player's current location slug (null = player_home). */
   currentLocation: string | null;
-  /** Player's current affinity with this character (0–100). */
   currentAffinity: number;
-  /** Called when a pin is clicked (passes the slug). */
   onTravel: (slug: string) => void;
-  /** Show a spinner overlay while a travel request is in flight. */
   isTraveling?: boolean;
 }
 
@@ -109,12 +186,13 @@ export default function CityMap({
   isTraveling = false,
 }: Props) {
   const [tooltip, setTooltip] = useState<{ slug: string; x: number; y: number } | null>(null);
+  const isDark = useIsDarkMode();
+  const theme = MAP_THEMES[isDark ? "dark" : "light"];
 
   const activeSlug = currentLocation ?? "player_home";
 
-  // Only show the active character's home + all public + player_home
   const visibleLocations = LOCATIONS.filter(
-    (l) => l.type !== "character_home" || l.characterId === characterId
+    (l) => l.type !== "character_home" || l.characterId === characterId,
   );
 
   function isLocked(loc: MapLocation): boolean {
@@ -133,54 +211,104 @@ export default function CityMap({
   }
 
   return (
-    <div className="relative select-none">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-black/[0.06] dark:border-white/[0.06]">
+    <div className="relative select-none overflow-hidden rounded-2xl border border-black/10 bg-white/50 shadow-[0_8px_32px_rgba(0,0,0,0.06)] backdrop-blur-2xl backdrop-saturate-150 dark:border-white/[0.08] dark:bg-white/[0.04] dark:shadow-[0_8px_32px_rgba(0,0,0,0.18)]">
+      {/* Header — glass strip */}
+      <div className="flex items-center justify-between border-b border-black/[0.06] bg-white/60 px-3 py-2 backdrop-blur-xl dark:border-white/[0.06] dark:bg-white/[0.04]">
         <div className="flex items-center gap-1.5">
-          <MapPin size={13} className="text-violet-500 dark:text-violet-400" />
-          <span className="text-xs font-semibold text-stone-600 dark:text-stone-300 tracking-wide uppercase">City Map</span>
+          <MapPin size={13} className="text-violet-600 dark:text-violet-400" />
+          <span className="text-xs font-semibold uppercase tracking-wide text-stone-700 dark:text-stone-300">
+            City Map
+          </span>
         </div>
-        <span className="text-[10px] text-stone-400 dark:text-stone-500">
+        <span className="text-[10px] font-medium text-stone-500 dark:text-stone-400">
           {LOCATIONS.find((l) => l.slug === activeSlug)?.name ?? "Home"}
         </span>
       </div>
 
       {/* SVG Map */}
-      <div className="relative overflow-hidden">
+      <div className="relative overflow-hidden bg-slate-100 dark:bg-[#13111c]">
         <svg
           viewBox={`0 0 ${W} ${H}`}
           className="w-full"
           style={{ height: "auto", aspectRatio: `${W}/${H}` }}
           aria-label="City map"
         >
-          {/* Background */}
-          <rect width={W} height={H} fill="#13111c" />
+          <defs>
+            <radialGradient id="mapBgGlow" cx="50%" cy="40%" r="70%">
+              <stop offset="0%" stopColor={theme.bgGradientInner} />
+              <stop offset="100%" stopColor={theme.bgGradientOuter} />
+            </radialGradient>
+            <pattern id="mapFineGrid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path
+                d="M 20 0 L 0 0 0 20"
+                fill="none"
+                stroke={theme.gridMinor}
+                strokeWidth={0.35}
+                opacity={isDark ? 0.6 : 0.85}
+              />
+            </pattern>
+          </defs>
 
-          {/* Street grid */}
+          {/* Base + radial depth */}
+          <rect width={W} height={H} fill={theme.bg} />
+          <rect width={W} height={H} fill="url(#mapBgGlow)" />
+          <rect width={W} height={H} fill="url(#mapFineGrid)" />
+
+          {/* Major street grid */}
           {[40, 80, 120, 160, 200].map((y) => (
-            <line key={`hy${y}`} x1={0} y1={y} x2={W} y2={y} stroke="#1e1a2e" strokeWidth={0.5} />
+            <line key={`hy${y}`} x1={0} y1={y} x2={W} y2={y} stroke={theme.gridMajor} strokeWidth={isDark ? 0.5 : 0.75} />
           ))}
           {[60, 120, 180, 240, 300, 360].map((x) => (
-            <line key={`vx${x}`} x1={x} y1={0} x2={x} y2={H} stroke="#1e1a2e" strokeWidth={0.5} />
+            <line key={`vx${x}`} x1={x} y1={0} x2={x} y2={H} stroke={theme.gridMajor} strokeWidth={isDark ? 0.5 : 0.75} />
+          ))}
+
+          {/* Topographic contour lines */}
+          {CONTOURS.map((d, i) => (
+            <path
+              key={`contour-${i}`}
+              d={d}
+              fill="none"
+              stroke={theme.contour}
+              strokeWidth={isDark ? 0.6 : 0.9}
+            />
           ))}
 
           {/* Zone fills */}
-          {ZONES.map(([x, y, w, h, fill], i) => (
-            <rect key={i} x={x} y={y} width={w} height={h} fill={fill} rx={4} />
+          {ZONES.map(([x, y, w, h, zoneKey, darkFill], i) => (
+            <rect
+              key={i}
+              x={x}
+              y={y}
+              width={w}
+              height={h}
+              fill={isDark ? darkFill : theme.zones[zoneKey]}
+              rx={4}
+            />
           ))}
 
           {/* City blocks */}
           {BLOCKS.map(([x, y, w, h], i) => (
-            <rect key={i} x={x} y={y} width={w} height={h} fill="#1e1a30" rx={3} />
+            <rect
+              key={i}
+              x={x}
+              y={y}
+              width={w}
+              height={h}
+              fill={theme.blockFill}
+              stroke={theme.blockStroke}
+              strokeWidth={isDark ? 0 : 0.5}
+              rx={3}
+            />
           ))}
 
           {/* Zone labels */}
           {ZONE_LABELS.map(([x, y, text], i) => (
             <text
               key={i}
-              x={x} y={y}
+              x={x}
+              y={y}
               textAnchor="middle"
-              fill="rgba(255,255,255,0.08)"
+              fill={theme.zoneLabels}
               fontSize={7}
               fontFamily="monospace"
               letterSpacing={2}
@@ -190,8 +318,14 @@ export default function CityMap({
             </text>
           ))}
 
-          {/* Affinity gate label */}
-          <text x={368} y={H - 4} textAnchor="middle" fill="rgba(236,72,153,0.25)" fontSize={6} fontFamily="monospace">
+          <text
+            x={368}
+            y={H - 4}
+            textAnchor="middle"
+            fill={theme.affinityLabel}
+            fontSize={6}
+            fontFamily="monospace"
+          >
             UNLOCK AT 25 AFFINITY
           </text>
 
@@ -201,7 +335,7 @@ export default function CityMap({
             const cy = loc.mapY * H;
             const active = loc.slug === activeSlug;
             const locked = isLocked(loc);
-            const color = pinColor(loc, active, locked);
+            const color = pinColor(loc, active, locked, theme);
             const glow = pinGlow(loc, active, locked);
             const hovering = tooltip?.slug === loc.slug;
 
@@ -215,36 +349,43 @@ export default function CityMap({
                 onMouseLeave={() => setTooltip(null)}
                 aria-label={loc.name}
               >
-                {/* Glow ring for active */}
                 {active && (
-                  <circle r={11} fill="none" stroke={color} strokeWidth={1.5} opacity={0.5}>
+                  <circle r={11} fill="none" stroke={color} strokeWidth={isDark ? 1.5 : 2} opacity={0.55}>
                     <animate attributeName="r" values="9;13;9" dur="2.5s" repeatCount="indefinite" />
-                    <animate attributeName="opacity" values="0.5;0.15;0.5" dur="2.5s" repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="0.55;0.2;0.55" dur="2.5s" repeatCount="indefinite" />
                   </circle>
                 )}
 
-                {/* Hover glow */}
-                {hovering && !locked && !active && (
-                  <circle r={10} fill={glow} />
-                )}
+                {hovering && !locked && !active && <circle r={10} fill={glow} />}
 
-                {/* Pin body */}
-                <circle r={active ? 6 : 5} fill={color} opacity={locked ? 0.35 : 1} />
+                <circle
+                  r={active ? 6 : 5}
+                  fill={color}
+                  stroke={isDark ? "none" : "white"}
+                  strokeWidth={isDark ? 0 : 1.25}
+                  opacity={locked ? 0.45 : 1}
+                />
 
-                {/* Lock icon for locked homes */}
                 {locked && (
-                  <text x={0} y={2} textAnchor="middle" fontSize={5} fill="#9ca3af">🔒</text>
+                  <text x={0} y={2} textAnchor="middle" fontSize={5} fill={isDark ? "#9ca3af" : "#475569"}>
+                    🔒
+                  </text>
                 )}
 
-                {/* Short label below pin */}
                 <text
                   x={0}
                   y={active ? 14 : 13}
                   textAnchor="middle"
                   fontSize={active ? 7 : 6}
                   fontFamily="system-ui, sans-serif"
-                  fontWeight={active ? "700" : "500"}
-                  fill={locked ? "rgba(156,163,175,0.5)" : active ? color : "rgba(255,255,255,0.7)"}
+                  fontWeight={active ? "700" : "600"}
+                  fill={
+                    locked
+                      ? theme.pinLabelLocked
+                      : active
+                        ? color
+                        : theme.pinLabel
+                  }
                 >
                   {loc.shortName}
                 </text>
@@ -252,18 +393,25 @@ export default function CityMap({
             );
           })}
 
-          {/* Traveling spinner overlay */}
           {isTraveling && (
             <g>
-              <rect width={W} height={H} fill="rgba(0,0,0,0.5)" />
-              <text x={W / 2} y={H / 2 - 6} textAnchor="middle" fill="white" fontSize={11} fontFamily="system-ui">
+              <rect width={W} height={H} fill={theme.travelingOverlay} />
+              <text
+                x={W / 2}
+                y={H / 2 - 6}
+                textAnchor="middle"
+                fill={theme.travelingText}
+                fontSize={11}
+                fontFamily="system-ui"
+                fontWeight={600}
+              >
                 Traveling…
               </text>
             </g>
           )}
         </svg>
 
-        {/* Tooltip */}
+        {/* Tooltip — glassmorphism */}
         {tooltip && (() => {
           const loc = LOCATIONS.find((l) => l.slug === tooltip.slug);
           if (!loc) return null;
@@ -273,44 +421,43 @@ export default function CityMap({
           const pxY = (tooltip.y / H) * 100;
           return (
             <div
-              className="pointer-events-none absolute z-10 rounded-lg border border-black/20 dark:border-white/10 bg-stone-900/90 backdrop-blur px-2.5 py-1.5 shadow-lg"
+              className="pointer-events-none absolute z-10 min-w-[110px] rounded-xl border border-black/10 bg-white/85 px-2.5 py-1.5 shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-stone-900/85"
               style={{
                 left: `${Math.min(pxX, 72)}%`,
                 top: `${Math.max(pxY - 16, 2)}%`,
                 transform: "translate(-50%, -100%)",
-                minWidth: 110,
               }}
             >
-              <p className="text-xs font-semibold text-white leading-tight">{loc.name}</p>
+              <p className="text-xs font-semibold leading-tight text-stone-800 dark:text-white">{loc.name}</p>
               {active && (
-                <p className="text-[10px] text-amber-400 mt-0.5">You're here</p>
+                <p className="mt-0.5 text-[10px] text-amber-600 dark:text-amber-400">You&apos;re here</p>
               )}
               {locked && (
-                <p className="text-[10px] text-rose-400 mt-0.5">
+                <p className="mt-0.5 text-[10px] text-rose-600 dark:text-rose-400">
                   Requires {loc.affinityRequired} affinity ({Math.round(currentAffinity)} now)
                 </p>
               )}
               {!active && !locked && (
-                <p className="text-[10px] text-stone-400 mt-0.5">Click to travel</p>
+                <p className="mt-0.5 text-[10px] text-stone-500 dark:text-stone-400">Click to travel</p>
               )}
             </div>
           );
         })()}
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center gap-3 px-3 py-1.5 border-t border-black/[0.06] dark:border-white/[0.06]">
+      {/* Legend — glass strip */}
+      <div className="flex items-center gap-3 border-t border-black/[0.06] bg-white/60 px-3 py-1.5 backdrop-blur-xl dark:border-white/[0.06] dark:bg-white/[0.04]">
         <span className="flex items-center gap-1">
-          <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
-          <span className="text-[10px] text-stone-500 dark:text-stone-400">Home</span>
+          <span className="inline-block h-2 w-2 rounded-full bg-amber-500 shadow-sm ring-1 ring-amber-600/30" />
+          <span className="text-[10px] font-medium text-stone-600 dark:text-stone-400">Home</span>
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block w-2 h-2 rounded-full bg-violet-500" />
-          <span className="text-[10px] text-stone-500 dark:text-stone-400">Public</span>
+          <span className="inline-block h-2 w-2 rounded-full bg-violet-600 shadow-sm ring-1 ring-violet-700/30" />
+          <span className="text-[10px] font-medium text-stone-600 dark:text-stone-400">Public</span>
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block w-2 h-2 rounded-full bg-pink-500" />
-          <span className="text-[10px] text-stone-500 dark:text-stone-400">Private</span>
+          <span className="inline-block h-2 w-2 rounded-full bg-pink-600 shadow-sm ring-1 ring-pink-700/30" />
+          <span className="text-[10px] font-medium text-stone-600 dark:text-stone-400">Private</span>
         </span>
       </div>
     </div>

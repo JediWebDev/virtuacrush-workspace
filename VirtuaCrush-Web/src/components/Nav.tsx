@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Sparkles, User, Menu, X, Sun, Moon, Shirt } from "lucide-react";
+import { User, Menu, X, Sun, Moon, Shirt } from "lucide-react";
 import { useSession } from "../lib/auth-client";
+import VirtuaCrushLogo from "./VirtuaCrushLogo";
 
 const navLinkClass = (active: boolean) =>
   `text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 ${
@@ -57,8 +58,8 @@ export default function Nav() {
           onClick={() => setIsMobileMenuOpen(false)}
           className="flex items-center gap-3 transition-all duration-200 hover:scale-[1.02] hover:opacity-90 active:scale-[0.98]"
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent shadow-lg shadow-accent/25">
-            <Sparkles className="text-white" size={20} />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-white shadow-lg shadow-accent/25">
+            <VirtuaCrushLogo className="h-6 w-6" />
           </div>
           <span className="font-serif text-2xl font-bold tracking-tight text-stone-900 dark:text-white">
             Virtua Crush

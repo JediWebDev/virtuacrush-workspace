@@ -749,21 +749,21 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                           "max-w-full rounded-2xl rounded-tl-sm border px-4 py-3 text-[15px] leading-relaxed shadow-sm backdrop-blur-sm " +
                           (isNpc
                             ? "border-amber-500/25 bg-amber-500/10 text-stone-800 dark:text-stone-100"
-                            : "border-black/[0.07] bg-stone-200 text-stone-800 dark:border-white/[0.07] dark:bg-stone-800/90 dark:text-stone-100")
+                            : "border-purple-400/25 bg-gradient-to-br from-purple-500 to-purple-300 text-white shadow-purple-500/15 dark:border-purple-400/20 dark:from-purple-600 dark:to-purple-400")
                         }
                       >
                         {segs.map((seg, j) => (
                           <span key={j}>
                             {j > 0 ? " " : ""}
                             {seg.type === "narration" ? (
-                              <em className="italic text-stone-500 dark:text-stone-400">{seg.text}</em>
+                              <em className={isNpc ? "italic text-stone-500 dark:text-stone-400" : "italic text-white/85"}>{seg.text}</em>
                             ) : (
                               seg.text
                             )}
                           </span>
                         ))}
                       </div>
-                      <p className="pl-1 text-left text-[10px] font-medium tabular-nums text-stone-900 dark:text-stone-500">Just now</p>
+                      <p className={"pl-1 text-left text-[10px] font-medium tabular-nums " + (isNpc ? "text-stone-900 dark:text-stone-500" : "text-purple-700 dark:text-stone-500")}>Just now</p>
                     </div>
                   </div>
                 </motion.div>
@@ -776,13 +776,13 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                 animate={{ opacity: 1, y: 0 }}
                 className="flex justify-start pl-1"
             >
-               <div className="inline-flex items-center gap-2 rounded-2xl rounded-tl-sm border border-black/[0.07] dark:border-white/[0.07] bg-stone-200 dark:bg-stone-800/90 px-4 py-3 shadow-sm backdrop-blur-sm">
+               <div className="inline-flex items-center gap-2 rounded-2xl rounded-tl-sm border border-purple-400/20 bg-gradient-to-br from-purple-500 to-purple-300 px-4 py-3 shadow-sm backdrop-blur-sm dark:border-white/[0.07] dark:from-purple-600 dark:to-purple-400">
                     <span className="flex gap-1" aria-hidden>
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-duration:0.55s]" />
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:0.12s] [animation-duration:0.55s]" />
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-stone-400 [animation-delay:0.24s] [animation-duration:0.55s]" />
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-white/80 [animation-duration:0.55s]" />
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-white/80 [animation-delay:0.12s] [animation-duration:0.55s]" />
+                        <span className="h-2 w-2 animate-bounce rounded-full bg-white/80 [animation-delay:0.24s] [animation-duration:0.55s]" />
                     </span>
-                    <span className="text-sm text-stone-600 dark:text-stone-400">Typing…</span>
+                    <span className="text-sm text-white/90">Typing…</span>
                </div>
             </motion.div>
           )}
