@@ -17,7 +17,7 @@ export interface StreamChatParams {
   history: ChatMessage[];   // Prior turns, oldest first. Last item is NOT the current user message.
   userMessage: string;
   memoryContext?: string;   // Long-term memory block injected into the system prompt (RAG).
-  systemOverride?: string;  // Replaces the character persona (e.g. the jail narrator).
+  systemOverride?: string;  // Replaces the character persona when a custom system prompt is needed.
 }
 
 export interface StreamChatChunk {

@@ -33,6 +33,7 @@ import assetsRouter from './server/routes/assets';
 import diaryRouter from './server/routes/diary';
 import interestRouter from './server/routes/interest';
 import travelRouter from './server/routes/travel';
+import packsRouter from './server/routes/packs';
 import { syncCuratedPosts } from './server/jobs/curated_posts';
 import { summarizePendingDiaries } from './server/db/diary';
 
@@ -92,6 +93,7 @@ app.use('/api/assets', assetsRouter);
 app.use('/api/diary', diaryRouter);
 app.use('/api/interest', interestRouter);
 app.use('/api/travel', travelRouter);
+app.use('/api/packs', packsRouter);
 
 // --- Health check -----------------------------------------------------------
 app.get('/api/health', (_req, res) => res.json({ ok: true }));

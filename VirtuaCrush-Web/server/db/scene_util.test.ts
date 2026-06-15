@@ -19,7 +19,7 @@ test('formatSituationBlock: apart places them at home, remote', () => {
   assert.ok(b.toLowerCase().includes('texting'));
 });
 
-test('scenePhase: always returns home', () => {
+test('scenePhase: home when remote, on_date when at a venue', () => {
   assert.equal(scenePhase({ location: null }), 'home');
-  assert.equal(scenePhase({ location: 'coffee_shop' }), 'home');
+  assert.equal(scenePhase({ location: 'coffee_shop' }), 'on_date');
 });

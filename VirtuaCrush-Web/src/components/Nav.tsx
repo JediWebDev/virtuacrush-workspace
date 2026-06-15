@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Sparkles, User, Mail, Menu, X, Sun, Moon, Shirt } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { Sparkles, User, Menu, X, Sun, Moon, Shirt } from "lucide-react";
 import { useSession } from "../lib/auth-client";
 
 const navLinkClass = (active: boolean) =>
@@ -13,27 +13,15 @@ const iconButtonClass =
 
 export default function Nav() {
   const { pathname } = useLocation();
-  const navigate = useNavigate();
   const { data: session } = useSession();
   const authed = Boolean(session?.user);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [hasUnread, setHasUnread] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
-  const notificationsRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   const browseActive = pathname === "/characters";
   const howItWorksActive = pathname === "/how-it-works";
   const avatarActive = pathname === "/avatar";
-
-  const toggleNotifications = () => {
-    setIsNotificationsOpen((open) => {
-      const next = !open;
-      if (next) setHasUnread(false);
-      return next;
-    });
-  };
 
   useEffect(() => {
     const root = document.documentElement;
@@ -43,17 +31,6 @@ export default function Nav() {
       root.classList.remove("dark");
     }
   }, [isDarkMode]);
-
-  useEffect(() => {
-    if (!isNotificationsOpen) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
-        setIsNotificationsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isNotificationsOpen]);
 
   useEffect(() => {
     if (!isMobileMenuOpen) return;
@@ -69,12 +46,6 @@ export default function Nav() {
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [pathname]);
-
-  const openCallieChat = () => {
-    setHasUnread(false);
-    setIsNotificationsOpen(false);
-    navigate("/chat/callie", { state: { openMessage: "audio-1" } });
-  };
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 

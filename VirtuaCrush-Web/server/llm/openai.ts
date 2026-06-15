@@ -236,7 +236,7 @@ export const openAiProvider: LlmProvider = {
   complete,
   async *stream(prompt: string) {
     // Non-streaming for simplicity/robustness: yield the full reply at once. The
-    // director path uses complete() anyway; the jail narrator just appears whole.
+    // Director path uses complete() anyway; yield the full reply at once.
     const text = await complete(prompt);
     if (text) yield text;
   },

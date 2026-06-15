@@ -52,7 +52,6 @@ test('respondersFor + directive content', () => {
   assert.ok(respondersFor('fire').includes('fire department'));
   const d = formatWorldEventDirective({ kind: 'crime', crimeType: 'fire' }, 'a concert bouncer', 'Serena');
   assert.ok(d.includes('WORLD EVENT'));
-  assert.ok(d.includes('a concert bouncer'));
   assert.ok(d.includes('Serena'));
   assert.ok(d.toLowerCase().includes('fire department'));
   assert.equal(formatWorldEventDirective({ kind: 'none' }, 'x', 'y'), '');

@@ -19,11 +19,7 @@ import privacyMd from "./content/legal/privacy.md?raw";
 import acceptableUseMd from "./content/legal/acceptable-use.md?raw";
 import aiDisclaimerMd from "./content/legal/ai-disclaimer.md?raw";
 import { joinInterestList, fetchUsage } from "./lib/api";
-import { useSession, signOut } from './lib/auth-client';
-
-type AppLocationState = {
-  openMessage?: string;
-};
+import { useSession } from './lib/auth-client';
 
 export default function App() {
   const navigate = useNavigate();

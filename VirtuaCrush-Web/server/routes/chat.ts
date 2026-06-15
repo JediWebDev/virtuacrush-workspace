@@ -48,11 +48,10 @@ import {
 } from '../sim/interruptions';
 import { formatSituationBlock, formatLocationBlock } from '../db/scene_util';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
-import { runLightTick, assembleWorld, assembleFullWorld, applyTick, getWorldClock, MIN_IDLE_MINUTES, MAX_CATCHUP_MINUTES } from '../db/sim_world';
+import { assembleWorld } from '../db/sim_world';
 import type { PlayerIntent } from '../sim/intent';
 import { validateIntent } from '../sim/intent';
 import { extractIntent, refereeInputFromWorld } from '../sim/referee';
-import { simulateElapsed, stepWorld } from '../sim/tick';
 import type { WorldState, NpcEntity } from '../sim/world';
 import { consequencesFor } from '../sim/rules';
 import { planEffects, formatEngineFactsBlock, type EffectPlan } from '../sim/effects';
@@ -265,7 +264,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let firedDisruption: PlannedDisruption | null = null;
   let newPendingEvent: DriveEventCard | undefined;
   let appliedAffinity: number | null = null;
-  let worldEventFired = false;
   let effIntent: PlayerIntent | undefined;
   let effectPlan: EffectPlan | undefined;
   {
@@ -274,36 +272,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     world = await assembleWorld(req.user!.id, characterId);
     companionEntity = world.npcs[characterId];
     const authority = 'the authorities';
-
-    // Macro-world catch-up: advance the full roster while the player was away.
-    try {
-      const { rows: lastMsgRows } = await pool.query<{ created_at: Date }>(
-        `SELECT created_at FROM chat_messages
-         WHERE user_id = $1 AND character_id = $2 AND role = 'user'
-         ORDER BY created_at DESC LIMIT 1`,
-        [req.user!.id, characterId],
-      );
-      const lastMsgAt = lastMsgRows[0]?.created_at;
-      const elapsedMin = lastMsgAt ? (Date.now() - new Date(lastMsgAt).getTime()) / 60000 : 0;
-      if (elapsedMin >= MIN_IDLE_MINUTES) {
-        const elapsed = Math.min(elapsedMin, MAX_CATCHUP_MINUTES);
-        const [clock, fullWorld] = await Promise.all([
-          getWorldClock(req.user!.id),
-          assembleFullWorld(req.user!.id),
-        ]);
-        const macroResult = simulateElapsed(fullWorld, clock.simMinutes, elapsed, { next: () => Math.random() });
-        const companionPatch = macroResult.patches[characterId];
-        if (companionPatch) {
-          const patch = companionPatch;
-          world = stepWorld(world, { [characterId]: patch });
-          companionEntity = world.npcs[characterId];
-        }
-        void applyTick(req.user!.id, fullWorld, macroResult, clock.simMinutes + elapsed)
-          .catch((e) => console.warn('[chat] macro catch-up persist failed:', e));
-      }
-    } catch (macroErr) {
-      console.warn('[chat] macro catch-up failed:', macroErr);
-    }
 
     const npcs: Actor[] = [];
 
@@ -494,7 +462,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       const intent = effIntent!;
       const applied = await applyEffects(req.user!.id, characterId, plan);
       appliedAffinity = applied.affinityScore;
-      worldEventFired = plan.warnings.length > 0;
 
       if (companionEntity && emotions) {
         emotions = applyEmotionDeltas(emotions, emotionDeltasForIntent(intent));
@@ -597,9 +564,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     }
 
     send('done', { remaining, affinityScore: newAffinityScore, earnedBadge });
-
-    // Advance the living world a little each message (deterministic, no LLM, off the response path).
-    void runLightTick(req.user!.id, { excludeId: characterId }).catch((e) => console.warn('[tick] light tick failed:', e));
 
     res.end();
   } catch (err) {

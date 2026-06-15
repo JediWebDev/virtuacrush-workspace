@@ -20,21 +20,6 @@ export async function setWorldClock(userId: string, simMinutes: number): Promise
   );
 }
 
-export interface ActivityEvent { at: number; kind: string; actors: string[]; text: string }
-
-export async function insertWorldEvents(userId: string, events: ActivityEvent[]): Promise<void> {
-  if (events.length === 0) return;
-  const values: string[] = [];
-  const params: unknown[] = [userId];
-  let i = 2;
-  for (const e of events) {
-    values.push(`($1, $${i}, $${i + 1}, $${i + 2}::jsonb, $${i + 3})`);
-    params.push(Math.round(e.at), e.kind, JSON.stringify(e.actors), e.text);
-    i += 4;
-  }
-  await pool.query(`INSERT INTO world_events (user_id, at_min, kind, actors, text) VALUES ${values.join(', ')}`, params);
-}
-
 export interface WorldEventRow { id: string; atMin: number; kind: string; actors: string[]; text: string; createdAt: string }
 
 export async function listWorldEvents(userId: string, limit = 40): Promise<WorldEventRow[]> {
