@@ -35,7 +35,7 @@ export default function Footer() {
           <div>
             <div className="mb-4 flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-white">
-                <VirtuaCrushLogo className="h-5 w-5" />
+                <VirtuaCrushLogo className="h-6 w-6" />
               </div>
               <span className="font-serif text-lg font-bold">Virtua Crush</span>
             </div>

@@ -59,7 +59,7 @@ export default function Nav() {
           className="flex items-center gap-3 transition-all duration-200 hover:scale-[1.02] hover:opacity-90 active:scale-[0.98]"
         >
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-white shadow-lg shadow-accent/25">
-            <VirtuaCrushLogo className="h-6 w-6" />
+            <VirtuaCrushLogo className="h-7 w-7" />
           </div>
           <span className="font-serif text-2xl font-bold tracking-tight text-stone-900 dark:text-white">
             Virtua Crush
