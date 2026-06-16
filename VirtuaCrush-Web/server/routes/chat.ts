@@ -70,7 +70,7 @@ import { budgetHistory } from '../llm/budget';
 // RAG memory (db/memory.ts), not from replaying a long transcript.
 // Bigger window = the model can see (and is told to avoid) its own recent
 // phrasing, which is the main lever against verbatim self-repetition.
-const RECENT_TURNS_FOR_PROMPT = 12;
+const RECENT_TURNS_FOR_PROMPT = 20;
 
 
 /** Formats a SceneAnchor as the authoritative "current setting" block, replacing
@@ -440,6 +440,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       history: turns,
       userMessage: message,
       playerName: world?.user.profile.displayName ?? '',
+      priorSceneState: (companionEntity?.knowledge.sceneState as string | undefined) ?? '',
       arcContext,
     });
   }
@@ -481,6 +482,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       let dturns = dirOut.turns.some((t) => looksDegenerate(t.text)) ? [] : dirOut.turns;
       const arcResult = arcContext ? dirOut.arc : null;
       replyChoices = dirOut.choices ?? [];
+      // A genuinely durable beat — embed it for cross-session recall.
+      if (dirOut.memorable) void storeSignificantEvent(req.user!.id, characterId, dirOut.memorable);
 
       const plan = effectPlan!;
       const intent = effIntent!;
@@ -543,6 +546,9 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           emotionsUpdatedAt: new Date().toISOString(),
           pendingDriveEvent: newPendingEvent ?? companionEntity.knowledge.pendingDriveEvent ?? null,
           pendingDriveReaction: null,
+          // Rolling scene state for continuity beyond the recent-history window.
+          // Keep the prior snapshot if the model didn't emit a new one this turn.
+          sceneState: dirOut.sceneState || (companionEntity.knowledge.sceneState ?? ''),
         };
         if (revealSecretNow) {
           knowledgePatch.secretDiscovered = true;

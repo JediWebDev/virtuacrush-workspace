@@ -34,6 +34,10 @@ export interface DirectorStage {
   /** The player's real name (from their avatar profile), used to fill suggested
    *  choices verbatim instead of a "[Name]" placeholder. Empty if unset. */
   playerName?: string;
+  /** Rolling "scene so far" from the previous turn — authoritative live state
+   *  (who's present, location, the player's physical condition, key facts) that
+   *  survives beyond the recent-history window. Empty at the start of a scene. */
+  priorSceneState?: string;
   /** Present only when a story arc is active this turn. */
   arcContext?: ArcContext;
 }
@@ -60,6 +64,10 @@ export interface DirectorOutput {
   arc: ArcResult | null;
   /** LLM-generated suggested next moves for the player (may be empty). */
   choices: ReplyChoice[];
+  /** Updated rolling "scene so far" snapshot to persist for the next turn. '' if absent. */
+  sceneState: string;
+  /** A durable beat worth remembering across sessions, or null for most turns. */
+  memorable: string | null;
 }
 
 const MAX_HISTORY_TURNS = 30;
@@ -162,19 +170,25 @@ Examples of completion: ${stage.arcContext.completionExamples.map((e, i) => `(${
 USER FREEDOM — ABSURDITY IS NOT ABANDONMENT: If the player responds with something chaotic, unhinged, or unorthodox, they are still engaging — keep arcStatus "ongoing" or "climax". Only emit "abandoned" if the player has persistently changed the subject over multiple turns or explicitly exited the conversation.
 PACING: Hold "ongoing" across multiple turns. Use "climax" to mark the emotional breaking point immediately before resolution. Only emit "completed" after a genuine climax beat.` : '';
 
+  const sceneSoFar = stage.priorSceneState
+    ? `\n\n=== SCENE SO FAR (authoritative continuity — honor this; it persists beyond the recent messages) ===\n${stage.priorSceneState}`
+    : '';
+
   const outputSchema = stage.arcContext
     ? `Reply as a JSON object:
 {
   "lines": [ { "speaker": "<name>", "text": "<their words or *action*>" } ],
   "choices": [ { "label": "<short button: a move the PLAYER could make next>", "userMessage": "<what the player says/does if they tap it>" } ],
+  "sceneState": "<short snapshot: who is present (and what they already know), the location, the player's physical state, and key facts so far>",
+  "memorable": "<a durable one-line beat worth remembering in future sessions, or null>",
   "arcStatus": "ongoing" | "climax" | "completed" | "abandoned",
   "earnedBadge": { "title": "<2-4 word title>", "description": "<1-sentence recap>" } or null
 }
 Set earnedBadge only when arcStatus is "completed"; otherwise null.`
-    : `Reply as a JSON object: { "lines": [ { "speaker": "<name>", "text": "<their words or *action*>" } ], "choices": [ { "label": "<short player move>", "userMessage": "<what the player says/does if tapped>" } ] }`;
+    : `Reply as a JSON object: { "lines": [ { "speaker": "<name>", "text": "<their words or *action*>" } ], "choices": [ { "label": "<short player move>", "userMessage": "<what the player says/does if tapped>" } ], "sceneState": "<who's present (and what they know), the location, the player's physical state, key facts so far>", "memorable": "<a durable beat to remember, or null>" }`;
 
   return (
-`${stage.companionSystem}${stage.directives}${arcBlock}
+`${stage.companionSystem}${stage.directives}${arcBlock}${sceneSoFar}
 
 === HOW TO REPLY ===
 This is a live scene that may include more than just you. ${outputSchema}
@@ -183,6 +197,7 @@ ${speakerLines}
 
 Guidance: ALWAYS include at least one "${stage.companionName}" line with their spoken reply so the player gets an answer. Put ANY physical action, reaction, expression, or scene beat in a "narrator" line — characters NEVER narrate themselves, so most turns also include a "narrator" line. (Only a pure, wordless reaction may be a "narrator" line alone.) Keep it short. Never write a line for the player. ADDRESS THE PLAYER AS "you" (second person) — never call them "the user" or "the player".
 SUGGESTED MOVES: In "choices", offer 2-3 short, DISTINCT next moves the PLAYER could make right now — written as the literal, ready-to-send words or *action* in the player's own voice (e.g. a question, a flirt, a playful action), true to where the conversation is. ${stage.playerName ? `The player's name is "${stage.playerName}" — if a move has them give their name, write "${stage.playerName}" verbatim.` : `If a move would have them give their name, phrase it without one (e.g. "introduce yourself").`} NEVER use placeholders, brackets, or template tokens of any kind (no "[Name]", "[your name]", "{name}", etc.) — every choice must be real text the player could send as-is. Do NOT suggest moves that repeat something already done or established earlier in the conversation — e.g. re-introducing themselves, re-stating their name, or re-asking something already answered; if names have already been exchanged, never offer an introduction again. Every choice must move the conversation FORWARD. CRUCIAL — fit the player's CURRENT situation and POV: choices may only be things THIS player could actually attempt right now from where they are. If the player is NOT with ${stage.companionName} (separated, captive, elsewhere) or is restrained/gagged/hurt, the choices are the player's OWN physical actions in their predicament (e.g. try to wriggle your wrists loose, look around the room, try to make noise so someone hears, search for a way out) — NOT lines spoken to ${stage.companionName} and NOT instructions for ${stage.companionName} to follow. Never offer a choice that requires an ability the player doesn't currently have (e.g. calmly chatting with ${stage.companionName} while gagged and held across town). These are optional suggestions the player may tap or ignore; never put your own dialogue in them, and never assume the player has chosen one.
+SCENE CONTINUITY: Always return "sceneState" — a short, rewritten snapshot of the CURRENT scene that carries forward everything STILL TRUE: who is physically present and what they already know, the location, the player's physical condition (e.g. gagged, bound, free, injured), and the key developments so far. Update it with what changed this turn; never drop a character who is still in the room, never re-introduce someone already present, and never forget the player's condition. (This snapshot — not the recent messages — is your source of truth for continuity.) Set "memorable" only when something genuinely durable happened that's worth recalling in a FUTURE conversation (a confession, a milestone, a vivid shared event); otherwise null.
 Output ONLY the JSON object — no preamble, no code fences, no commentary.
 
 ${turns ? turns + '\n' : ''}User: ${stage.userMessage}
@@ -244,11 +259,18 @@ function mapReplyChoices(arr: unknown): ReplyChoice[] {
     .slice(0, 3);
 }
 
+function cleanField(v: unknown): string {
+  const s = asStr(v);
+  return s && s.toLowerCase() !== 'null' ? s : '';
+}
+
 export function parseDirectorOutput(raw: string, companionName: string): DirectorOutput {
   const text = (raw ?? '').trim();
   let turns: DirectorTurn[] = [];
   let arc: ArcResult | null = null;
   let choices: ReplyChoice[] = [];
+  let sceneState = '';
+  let memorable: string | null = null;
 
   const start = text.indexOf('{');
   if (start >= 0) {
@@ -262,6 +284,8 @@ export function parseDirectorOutput(raw: string, companionName: string): Directo
           if (t.length) turns = t;
         }
         if (Array.isArray(obj.choices)) choices = mapReplyChoices(obj.choices);
+        if ('sceneState' in obj) sceneState = cleanField(obj.sceneState).slice(0, 1200);
+        if ('memorable' in obj) { const m = cleanField(obj.memorable); memorable = m ? m.slice(0, 300) : null; }
         const status = typeof obj.arcStatus === 'string' ? obj.arcStatus : null;
         if (status && VALID_ARC_STATUSES.has(status)) {
           const badge = obj.earnedBadge && typeof obj.earnedBadge === 'object'
@@ -280,7 +304,7 @@ export function parseDirectorOutput(raw: string, companionName: string): Directo
   }
 
   if (turns.length === 0) turns = parseDirectorTurns(text, companionName);
-  return { turns, arc, choices };
+  return { turns, arc, choices, sceneState, memorable };
 }
 
 /** Renders ordered turns into the canonical tagged transcript the UI reads. */
