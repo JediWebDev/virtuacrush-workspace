@@ -1,15 +1,20 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { Wand2, Play, Trash2, Loader2, BookPlus } from "lucide-react";
+import { Wand2, Play, Trash2, Loader2, BookPlus, UserPlus, MessageCircle } from "lucide-react";
 import { CHARACTERS } from "../types/character";
 import {
   createStudioStory,
   listStudioStories,
   deleteStudioStory,
   playStudioStory,
+  createStudioCharacter,
+  listStudioCharacters,
+  deleteStudioCharacter,
+  customCharacterRef,
   type StudioStory,
   type StudioArcInput,
+  type StudioCharacter,
 } from "../lib/api";
 
 type Tone = NonNullable<StudioArcInput["tone"]>;
@@ -32,14 +37,25 @@ const labelClass = "mb-1 block text-xs font-semibold uppercase tracking-wide tex
 const inputClass =
   "w-full rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.04] px-3 py-2.5 text-sm text-stone-800 dark:text-stone-100 outline-none transition-colors placeholder:text-stone-400 focus:border-accent/40 focus:ring-2 focus:ring-accent/10";
 
+const emptyCharForm = () => ({ displayName: "", core: "", greeting: "", secret: "", tone: "" });
+
 export default function StudioPage() {
   const navigate = useNavigate();
+  const [tab, setTab] = useState<"stories" | "characters">("stories");
   const [form, setForm] = useState(emptyForm(CHARACTERS[0]?.id ?? ""));
   const [stories, setStories] = useState<StudioStory[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  // Custom characters (Phase 2)
+  const [charForm, setCharForm] = useState(emptyCharForm());
+  const [characters, setCharacters] = useState<StudioCharacter[]>([]);
+  const [charLoading, setCharLoading] = useState(true);
+  const [charSaving, setCharSaving] = useState(false);
+  const [charError, setCharError] = useState<string | null>(null);
+  const [charBusyId, setCharBusyId] = useState<string | null>(null);
 
   const charName = (id: string) => CHARACTERS.find((c) => c.id === id)?.name ?? id;
 
@@ -51,6 +67,60 @@ export default function StudioPage() {
       .finally(() => setLoading(false));
   };
   useEffect(refresh, []);
+
+  const refreshChars = () => {
+    setCharLoading(true);
+    listStudioCharacters()
+      .then(setCharacters)
+      .catch(() => setCharacters([]))
+      .finally(() => setCharLoading(false));
+  };
+  useEffect(refreshChars, []);
+
+  const setChar = <K extends keyof ReturnType<typeof emptyCharForm>>(k: K, v: string) =>
+    setCharForm((f) => ({ ...f, [k]: v }));
+
+  const handleCreateChar = async () => {
+    setCharError(null);
+    if (!charForm.displayName.trim()) {
+      setCharError("Give your character a name.");
+      return;
+    }
+    if (charForm.core.trim().length < 20) {
+      setCharError("Describe their personality a little more (at least a sentence or two).");
+      return;
+    }
+    setCharSaving(true);
+    try {
+      await createStudioCharacter({
+        displayName: charForm.displayName.trim(),
+        core: charForm.core.trim(),
+        greeting: charForm.greeting.trim() || undefined,
+        secret: charForm.secret.trim() || undefined,
+        tone: charForm.tone.trim() || undefined,
+      });
+      setCharForm(emptyCharForm());
+      refreshChars();
+    } catch {
+      setCharError("Couldn't save the character. Please try again.");
+    } finally {
+      setCharSaving(false);
+    }
+  };
+
+  const handleDeleteChar = async (c: StudioCharacter) => {
+    setCharBusyId(c.id);
+    try {
+      await deleteStudioCharacter(c.id);
+      setCharacters((prev) => prev.filter((x) => x.id !== c.id));
+    } catch {
+      /* non-fatal */
+    } finally {
+      setCharBusyId(null);
+    }
+  };
+
+  const handleChatChar = (c: StudioCharacter) => navigate(`/chat/${customCharacterRef(c.id)}`);
 
   const set = <K extends keyof ReturnType<typeof emptyForm>>(k: K, v: ReturnType<typeof emptyForm>[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -116,10 +186,32 @@ export default function StudioPage() {
         </div>
         <div>
           <h1 className="font-serif text-3xl font-bold text-stone-900 dark:text-stone-50">Story Studio</h1>
-          <p className="text-sm text-stone-500">Write your own adventure with an existing companion. Private to you.</p>
+          <p className="text-sm text-stone-500">Create your own companions and adventures. Private to you.</p>
         </div>
       </div>
 
+      {/* Tab switcher */}
+      <div className="mb-6 inline-flex rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.04] p-1">
+        {([
+          ["stories", "Stories"],
+          ["characters", "Characters"],
+        ] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            className={`rounded-xl px-4 py-1.5 text-sm font-semibold transition-colors ${
+              tab === key
+                ? "bg-accent text-white shadow-sm shadow-accent/25"
+                : "text-stone-500 hover:text-stone-800 dark:hover:text-stone-100"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "stories" && (
       <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
         {/* Builder form */}
         <div className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
@@ -246,6 +338,100 @@ export default function StudioPage() {
           )}
         </div>
       </div>
+      )}
+
+      {tab === "characters" && (
+      <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
+        {/* Character builder */}
+        <div className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
+          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
+            <UserPlus size={16} className="text-accent" /> New companion
+          </h2>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className={labelClass}>Name</label>
+              <input className={inputClass} value={charForm.displayName} onChange={(e) => setChar("displayName", e.target.value)} placeholder="Captain Pancake" />
+            </div>
+            <div>
+              <label className={labelClass}>Tone (optional)</label>
+              <input className={inputClass} value={charForm.tone} onChange={(e) => setChar("tone", e.target.value)} placeholder="warm, playful, a little dramatic" />
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <label className={labelClass}>Personality — who are they?</label>
+            <textarea className={inputClass} rows={4} value={charForm.core} onChange={(e) => setChar("core", e.target.value)} placeholder="A retired pirate turned brunch-cafe owner who flirts in nautical puns, takes their syrup very seriously, and secretly writes terrible sea-shanty poetry." />
+          </div>
+
+          <div className="mt-4">
+            <label className={labelClass}>Greeting (optional) — their first message to you</label>
+            <textarea className={inputClass} rows={2} value={charForm.greeting} onChange={(e) => setChar("greeting", e.target.value)} placeholder="Ahoy! Pull up a stool — the pancakes are hot and the coffee's stronger than a kraken's grip." />
+          </div>
+
+          <div className="mt-4">
+            <label className={labelClass}>Secret (optional) — revealed as you grow closer</label>
+            <textarea className={inputClass} rows={2} value={charForm.secret} onChange={(e) => setChar("secret", e.target.value)} placeholder="They never actually sailed the high seas — the whole pirate thing started as a costume-party bit that got gloriously out of hand." />
+          </div>
+
+          {charError && <p className="mt-4 text-sm text-red-500">{charError}</p>}
+
+          <button
+            type="button"
+            onClick={handleCreateChar}
+            disabled={charSaving}
+            className="mt-5 flex items-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-accent/25 transition-all hover:bg-accent-deep active:scale-95 disabled:opacity-50"
+          >
+            {charSaving ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
+            {charSaving ? "Saving…" : "Save companion"}
+          </button>
+        </div>
+
+        {/* My characters */}
+        <div>
+          <h2 className="mb-3 text-sm font-semibold text-stone-800 dark:text-stone-100">My companions</h2>
+          {charLoading ? (
+            <p className="flex items-center gap-2 py-6 text-sm text-stone-500"><Loader2 size={16} className="animate-spin" /> Loading…</p>
+          ) : characters.length === 0 ? (
+            <p className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] p-4 text-sm text-stone-500">
+              No companions yet. Dream one up on the left and hit Save.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {characters.map((c) => (
+                <motion.li
+                  key={c.id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] p-4"
+                >
+                  <p className="text-sm font-semibold text-stone-900 dark:text-stone-50">{c.displayName}</p>
+                  <p className="mt-1 line-clamp-3 text-xs italic text-stone-500">{c.core}</p>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleChatChar(c)}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-accent py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-deep"
+                    >
+                      <MessageCircle size={13} /> Chat
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteChar(c)}
+                      disabled={charBusyId === c.id}
+                      className="rounded-xl border border-black/10 dark:border-white/10 px-3 py-2 text-xs font-medium text-stone-500 transition-colors hover:bg-black/[0.05] hover:text-red-500 disabled:opacity-50"
+                      aria-label="Delete companion"
+                    >
+                      {charBusyId === c.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                    </button>
+                  </div>
+                </motion.li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+      )}
     </section>
   );
 }

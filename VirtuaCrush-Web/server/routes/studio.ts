@@ -10,7 +10,7 @@
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { createUserStory, listUserStories, getUserStory, deleteUserStory } from '../db/user_stories';
-import { createUserCharacter, listUserCharacters, deleteUserCharacter } from '../db/user_characters';
+import { createUserCharacter, listUserCharacters, deleteUserCharacter, getUserCharacter } from '../db/user_characters';
 import { validateArcSpec } from '../inworld/user_arc';
 import { setArcActive, clearArc } from '../db/arc_state';
 import { getSituation } from '../db/state';
@@ -54,6 +54,13 @@ router.get('/characters', requireAuth, async (req: Request, res: Response) => {
     console.error('[studio] character list failed:', err);
     return res.status(500).json({ error: 'list_failed' });
   }
+});
+
+// GET /api/studio/characters/:id — one custom character (owner only)
+router.get('/characters/:id', requireAuth, async (req: Request, res: Response) => {
+  const character = await getUserCharacter(req.params.id);
+  if (!character || character.ownerUserId !== req.user!.id) return res.status(404).json({ error: 'not_found' });
+  return res.json({ character });
 });
 
 // DELETE /api/studio/characters/:id

@@ -349,3 +349,54 @@ export async function playStudioStory(id: string): Promise<{ characterId: string
   );
   return { characterId: res.characterId, introNarrative: res.introNarrative };
 }
+
+// --- Custom characters (Phase 2) -------------------------------------------
+
+export interface StudioCharacter {
+  id: string;            // DB id (string number); chat ref is `user:<id>`
+  displayName: string;
+  core: string;
+  greeting: string;
+  secret: string | null;
+  tone: string | null;
+  visibility: 'private' | 'public';
+  moderationStatus: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+}
+
+export interface StudioCharacterInput {
+  displayName: string;
+  core: string;
+  greeting?: string;
+  secret?: string;
+  tone?: string;
+}
+
+/** The chat/route id for a custom character. */
+export function customCharacterRef(dbId: string): string {
+  return `user:${dbId}`;
+}
+
+export async function createStudioCharacter(input: StudioCharacterInput): Promise<StudioCharacter> {
+  const res = await api<{ character: StudioCharacter }>(`/api/studio/characters`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return res.character;
+}
+
+export async function listStudioCharacters(): Promise<StudioCharacter[]> {
+  const res = await api<{ characters: StudioCharacter[] }>(`/api/studio/characters`);
+  return res.characters;
+}
+
+export async function deleteStudioCharacter(dbId: string): Promise<void> {
+  await api<{ ok: boolean }>(`/api/studio/characters/${dbId}`, { method: 'DELETE' });
+}
+
+/** Fetch one custom character by its chat ref ("user:<id>") or raw DB id. */
+export async function getStudioCharacter(refOrId: string): Promise<StudioCharacter> {
+  const dbId = refOrId.startsWith('user:') ? refOrId.slice('user:'.length) : refOrId;
+  const res = await api<{ character: StudioCharacter }>(`/api/studio/characters/${dbId}`);
+  return res.character;
+}
