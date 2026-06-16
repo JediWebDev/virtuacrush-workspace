@@ -418,6 +418,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       directives,
       history: turns,
       userMessage: message,
+      playerName: world?.user.profile.displayName ?? '',
       arcContext,
     });
   }

@@ -31,6 +31,9 @@ export interface DirectorStage {
   directives: string;
   history: ChatMessage[];
   userMessage: string;
+  /** The player's real name (from their avatar profile), used to fill suggested
+   *  choices verbatim instead of a "[Name]" placeholder. Empty if unset. */
+  playerName?: string;
   /** Present only when a story arc is active this turn. */
   arcContext?: ArcContext;
 }
@@ -179,7 +182,7 @@ Allowed speakers in "lines" (use these names exactly):
 ${speakerLines}
 
 Guidance: ALWAYS include at least one "${stage.companionName}" line with their spoken reply so the player gets an answer. Put ANY physical action, reaction, expression, or scene beat in a "narrator" line — characters NEVER narrate themselves, so most turns also include a "narrator" line. (Only a pure, wordless reaction may be a "narrator" line alone.) Keep it short. Never write a line for the player. ADDRESS THE PLAYER AS "you" (second person) — never call them "the user" or "the player".
-SUGGESTED MOVES: In "choices", offer 2-3 short, DISTINCT next moves the PLAYER could make right now — written in the player's own voice (e.g. a question, a flirt, a playful *action*) and true to where the conversation is. These are optional suggestions the player may tap or ignore; never put your own dialogue in them, and never assume the player has chosen one.
+SUGGESTED MOVES: In "choices", offer 2-3 short, DISTINCT next moves the PLAYER could make right now — written as the literal, ready-to-send words or *action* in the player's own voice (e.g. a question, a flirt, a playful action), true to where the conversation is. ${stage.playerName ? `The player's name is "${stage.playerName}" — if a move has them give their name, write "${stage.playerName}" verbatim.` : `If a move would have them give their name, phrase it without one (e.g. "introduce yourself").`} NEVER use placeholders, brackets, or template tokens of any kind (no "[Name]", "[your name]", "{name}", etc.) — every choice must be real text the player could send as-is. These are optional suggestions the player may tap or ignore; never put your own dialogue in them, and never assume the player has chosen one.
 Output ONLY the JSON object — no preamble, no code fences, no commentary.
 
 ${turns ? turns + '\n' : ''}User: ${stage.userMessage}

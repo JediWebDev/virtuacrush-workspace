@@ -86,16 +86,19 @@ export function sceneActivity(raw: string, hour: number, atHome: boolean, r: () 
   return pickFrom(HOME_FALLBACK_ACTIVITIES[slot], r);
 }
 
+/** Coarse in-world time bucket. We deliberately AVOID exact clock times so the
+ *  characters never cite an implausible hour (e.g. "an art store at 2 AM"). */
+export function timeOfDay(h: number): string {
+  if (h < 5) return 'late night';
+  if (h < 11) return 'morning';
+  if (h < 14) return 'midday';
+  if (h < 17) return 'afternoon';
+  if (h < 21) return 'evening';
+  return 'late night';
+}
+
 function timeLabelFor(now: Date): string {
-  const day = DAY_NAMES[now.getDay()];
-  const h = now.getHours();
-  const daypart =
-    h < 5 ? 'deep in the night' :
-    h < 12 ? 'morning' :
-    h < 17 ? 'afternoon' :
-    h < 21 ? 'evening' : 'late night';
-  const h12 = ((h + 11) % 12) + 1;
-  return `${day} ${daypart}, around ${h12} ${h < 12 ? 'AM' : 'PM'}`;
+  return `${DAY_NAMES[now.getDay()]} ${timeOfDay(now.getHours())}`;
 }
 
 export interface ComposeParams {
