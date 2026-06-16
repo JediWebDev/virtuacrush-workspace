@@ -38,11 +38,14 @@ export function formatSituationBlock(
   const closeness = closenessNote(affinity);
   const activity = state.activity ? state.activity : 'taking it easy';
   return (
-    `\n\n=== CURRENT SETTING ===\n` +
-    `You are at your OWN place, ${activity} (mood: ${state.mood || 'easy'}). ` +
-    `You and the user are NOT in the same room — you're texting from a distance. ` +
-    `If asked, you are at home doing your own thing, chatting with them remotely. ` +
-    `When you agree to meet up, narrate getting ready or heading out — do not teleport to the venue.` +
+    `\n\n=== SETTING (default baseline) ===\n` +
+    `DEFAULT, when nothing else is going on: you are at your OWN place, ${activity} (mood: ${state.mood || 'easy'}), ` +
+    `texting the user from a distance — not in the same room. When you agree to meet up, narrate getting ready or ` +
+    `heading out; do not teleport to the venue.\n` +
+    `IMPORTANT — this is ONLY the baseline. If the conversation has already moved the scene elsewhere (an in-person ` +
+    `meeting, a different location, or an unfolding situation the player has set up), FOLLOW THE CONVERSATION'S current ` +
+    `scene instead and stay there. Do NOT drag in these home details, this activity, the "texting remotely" framing, or ` +
+    `anyone who was only present back home — they are not in the new scene unless the player brought them there.` +
     closeness
   );
 }

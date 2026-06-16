@@ -34,6 +34,7 @@ import diaryRouter from './server/routes/diary';
 import interestRouter from './server/routes/interest';
 import travelRouter from './server/routes/travel';
 import packsRouter from './server/routes/packs';
+import studioRouter from './server/routes/studio';
 import { syncCuratedPosts } from './server/jobs/curated_posts';
 import { summarizePendingDiaries } from './server/db/diary';
 
@@ -94,6 +95,7 @@ app.use('/api/diary', diaryRouter);
 app.use('/api/interest', interestRouter);
 app.use('/api/travel', travelRouter);
 app.use('/api/packs', packsRouter);
+app.use('/api/studio', studioRouter);
 
 // --- Health check -----------------------------------------------------------
 app.get('/api/health', (_req, res) => res.json({ ok: true }));

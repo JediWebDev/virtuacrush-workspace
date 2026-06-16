@@ -10,7 +10,9 @@ import { requireAuth } from '../middleware/auth';
 import { enforceMessageQuota } from '../middleware/rateLimit';
 import { streamChat, completePrompt, type ChatMessage } from '../inworld/chat';
 import { buildDirectorPrompt, parseDirectorOutput, parseDirectorTurns, companionTagFor, turnsToTranscript, type Actor, type ArcContext, type ReplyChoice } from '../inworld/director';
-import { selectArc, getArc, type SceneAnchor } from '../inworld/arcs';
+import { selectArc, getArc, type SceneAnchor, type StoryArc } from '../inworld/arcs';
+import { getUserStory } from '../db/user_stories';
+import { userStoryToArc } from '../inworld/user_arc';
 import { getArcState, setArcActive, clearArc as clearArcState, incrementAbandonmentStrikes, resetAbandonmentStrikes, saveCompletedArc, getCompletedArcIds } from '../db/arc_state';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
@@ -234,9 +236,27 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let earnedBadge: { title: string; description: string } | null = null;
 
   // --- Arc selection / continuation ---
-  // If no arc is running, try to select one. If one is active, load it.
-  let activeArc = arcStateResult.currentArcId ? getArc(arcStateResult.currentArcId) : null;
-  if (!activeArc) {
+  // If one is active, load it (a "user:<id>" ref is a player-authored Studio
+  // arc, loaded from the DB; otherwise it's a built-in arc). If none is running,
+  // auto-select a built-in one. A valid user arc is NEVER auto-overridden.
+  const currentArcId = arcStateResult.currentArcId;
+  let activeArc: StoryArc | null = null;
+  let onUserArc = false;
+  if (currentArcId?.startsWith('user:')) {
+    onUserArc = true;
+    try {
+      const story = await getUserStory(currentArcId.slice('user:'.length));
+      if (story && story.ownerUserId === req.user!.id) activeArc = userStoryToArc(story);
+    } catch (e) { console.warn('[chat] user arc load failed:', e); }
+    if (!activeArc) {
+      // Stale/invalid Studio arc — clear it so auto-selection can resume.
+      await clearArcState(req.user!.id, characterId).catch(() => {});
+      onUserArc = false;
+    }
+  } else if (currentArcId) {
+    activeArc = getArc(currentArcId);
+  }
+  if (!activeArc && !onUserArc) {
     const candidate = selectArc(characterId, completedArcIds, null);
     if (candidate) {
       await setArcActive(req.user!.id, characterId, candidate.id);
