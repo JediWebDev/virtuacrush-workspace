@@ -271,3 +271,13 @@ export async function fetchPackStories(characterId: string): Promise<PackStory[]
   const res = await api<{ stories: PackStory[] }>(`/api/packs/history?characterId=${encodeURIComponent(characterId)}`);
   return res.stories;
 }
+
+/** Full message transcript for a story session (read-only viewing). */
+export async function fetchPackTranscript(
+  sessionId: number,
+): Promise<Array<{ role: 'user' | 'assistant'; content: string }>> {
+  const res = await api<{ messages: Array<{ role: 'user' | 'assistant'; content: string }> }>(
+    `/api/packs/session/${sessionId}/transcript`,
+  );
+  return res.messages;
+}

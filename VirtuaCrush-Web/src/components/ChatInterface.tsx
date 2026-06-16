@@ -16,7 +16,7 @@ import SecretCard from "./SecretCard";
 import DesireEventCard from "./DesireEventCard";
 import PackList from "./PackList";
 import ChoiceButtons from "./ChoiceButtons";
-import { getActivePackSession, greetPackSession, abandonPackSession, fetchPackStories, type PackSession, type PackChoice, type PackStory } from "../lib/api";
+import { getActivePackSession, greetPackSession, abandonPackSession, fetchPackStories, fetchPackTranscript, type PackSession, type PackChoice, type PackStory } from "../lib/api";
 import NoticeToast from "./NoticeToast";
 
 function formatHistoryDate(day: string): string {
@@ -70,11 +70,15 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
 
   // Pack mode
   const [activePackSession, setActivePackSession] = useState<PackSession | null>(null);
-  const [activeThread, setActiveThread] = useState<'freeRoam' | 'pack'>('freeRoam');
+  const [activeThread, setActiveThread] = useState<'freeRoam' | 'pack' | 'reading'>('freeRoam');
   const [packMessages, setPackMessages] = useState<{ id: string; role: 'user' | 'assistant'; content: string }[]>([]);
   const [packChoices, setPackChoices] = useState<PackChoice[] | null>(null);
   const [packLoading, setPackLoading] = useState(false);
   const [packCompleted, setPackCompleted] = useState(false);
+  // Read-only viewer for a COMPLETED story opened from history.
+  const [readingStory, setReadingStory] = useState<{ sessionId: number; title: string } | null>(null);
+  const [readingMessages, setReadingMessages] = useState<{ id: string; role: 'user' | 'assistant'; content: string }[]>([]);
+  const [readingLoading, setReadingLoading] = useState(false);
   // Completion celebration: affinity-earned toast, "saved to history" toast,
   // and a timer that auto-closes the finished story tab.
   const [affinityToast, setAffinityToast] = useState<{ open: boolean; amount: number }>({ open: false, amount: 0 });
@@ -93,6 +97,8 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     setPackChoices(null);
     setPackCompleted(false);
     setActiveThread('freeRoam');
+    setReadingStory(null);
+    setReadingMessages([]);
     setAffinityToast({ open: false, amount: 0 });
     setHistoryToast({ open: false, title: '' });
 
@@ -248,13 +254,18 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   }, [character.id, character.currentAffinity]);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({
-        top: scrollRef.current.scrollHeight,
-        behavior: "smooth"
-      });
+    // A saved story opens at the TOP so it reads from the beginning; live
+    // threads stick to the bottom.
+    if (!scrollRef.current) return;
+    if (activeThread === 'reading') {
+      scrollRef.current.scrollTo({ top: 0 });
+      return;
     }
-  }, [messages, isLoading, packMessages, packLoading]);
+    scrollRef.current.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: "smooth"
+    });
+  }, [messages, isLoading, packMessages, packLoading, activeThread, readingMessages]);
 
   // 2. Refactored handleSend using the hook
   const handleSend = async (overrideText?: string) => {
@@ -306,8 +317,39 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     setPackMessages([]);
     setPackChoices(null);
     setPackCompleted(false);
-    setActiveThread('freeRoam');
+    // Don't yank the player out if they've since opened a saved story to read.
+    setActiveThread((t) => (t === 'reading' ? t : 'freeRoam'));
     setHistoryToast({ open: true, title: storyTitle });
+  };
+
+  // Open a COMPLETED story from history as a read-only thread (no composer, no
+  // choices) the player can scroll through, then close via the tab's X.
+  const handleOpenStory = async (story: { sessionId: number; title: string }) => {
+    setShowHistoryView(false);
+    setReadingStory(story);
+    setReadingMessages([]);
+    setReadingLoading(true);
+    setActiveThread('reading');
+    try {
+      const history = await fetchPackTranscript(story.sessionId);
+      const msgs = history.map((m, i) => ({
+        id: `read-${story.sessionId}-${i}`,
+        role: m.role,
+        content: m.content,
+      }));
+      setReadingMessages(msgs);
+    } catch {
+      setReadingMessages([{ id: `read-err-${story.sessionId}`, role: 'assistant', content: '[NARRATOR] This story could not be loaded.' }]);
+    } finally {
+      setReadingLoading(false);
+    }
+  };
+
+  const handleCloseReading = () => {
+    setReadingStory(null);
+    setReadingMessages([]);
+    setReadingLoading(false);
+    setActiveThread(activePackSession ? 'pack' : 'freeRoam');
   };
 
   // Completion sequence: bump the affinity bar + toast the reward, then after a
@@ -448,6 +490,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
 
   const storyItems = (packStories ?? []).map((s) => ({
     id: `story-${s.sessionId}`,
+    sessionId: s.sessionId,
     title: s.title,
     date: s.completedAt ? formatHistoryDate(s.completedAt.slice(0, 10)) : "Completed",
     preview: s.lastLine ? s.lastLine.replace(/^\[[^\]]+\]\s*/, "").replace(/\*/g, "").slice(0, 140) : (s.blurb ?? ""),
@@ -459,11 +502,17 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     return item.title.toLowerCase().includes(q) || item.preview.toLowerCase().includes(q);
   });
 
-  const displayedMessages = activeThread === 'pack' ? packMessages : messages;
-  const displayedLoading = activeThread === 'pack' ? packLoading : isLoading;
-  // In a finished story the composer is locked; the user must switch threads or
-  // start a new story.
-  const composerLocked = activeThread === 'pack' && packCompleted;
+  const displayedMessages =
+    activeThread === 'reading' ? readingMessages :
+    activeThread === 'pack' ? packMessages :
+    messages;
+  const displayedLoading =
+    activeThread === 'reading' ? readingLoading :
+    activeThread === 'pack' ? packLoading :
+    isLoading;
+  // Reading a saved story is fully read-only; a finished active story also locks
+  // the composer until the player switches threads or starts a new story.
+  const composerLocked = activeThread === 'reading' || (activeThread === 'pack' && packCompleted);
   const inputDisabled = displayedLoading || composerLocked;
 
   return (
@@ -633,15 +682,19 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                       <ul className="space-y-1">
                         {filteredStories.map((item) => (
                           <li key={item.id}>
-                            <div className="flex w-full flex-col gap-1 rounded-xl border border-accent/15 bg-accent/[0.04] px-4 py-3 text-left">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenStory({ sessionId: item.sessionId, title: item.title })}
+                              className="flex w-full flex-col gap-1 rounded-xl border border-accent/15 bg-accent/[0.04] px-4 py-3 text-left transition-colors hover:border-accent/35 hover:bg-accent/[0.09]"
+                            >
                               <span className="text-[11px] font-medium uppercase tracking-wide text-accent/80">
-                                Story · {item.date}
+                                Story · {item.date} · tap to read
                               </span>
                               <span className="text-sm font-semibold text-stone-800 dark:text-stone-100">{item.title}</span>
                               {item.preview ? (
                                 <span className="line-clamp-2 text-sm italic text-stone-600 dark:text-stone-400">{item.preview}</span>
                               ) : null}
-                            </div>
+                            </button>
                           </li>
                         ))}
                       </ul>
@@ -678,8 +731,8 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
         ) : (
           <>
         {/* Thread tab bar */}
-        {activePackSession && (
-          <div className="flex shrink-0 border-b border-black/[0.06] dark:border-white/[0.06]">
+        {(activePackSession || readingStory) && (
+          <div className="flex shrink-0 items-stretch border-b border-black/[0.06] dark:border-white/[0.06]">
             <button type="button" onClick={() => setActiveThread('freeRoam')}
               className={`px-5 py-3 text-xs font-semibold transition-colors ${
                 activeThread === 'freeRoam'
@@ -688,14 +741,34 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               }`}>
               Free Roam
             </button>
-            <button type="button" onClick={() => setActiveThread('pack')}
-              className={`px-5 py-3 text-xs font-semibold transition-colors ${
-                activeThread === 'pack'
-                  ? 'border-b-2 border-accent text-accent'
-                  : 'text-stone-500 hover:text-stone-700 dark:hover:text-stone-300'
+            {activePackSession && (
+              <button type="button" onClick={() => setActiveThread('pack')}
+                className={`px-5 py-3 text-xs font-semibold transition-colors ${
+                  activeThread === 'pack'
+                    ? 'border-b-2 border-accent text-accent'
+                    : 'text-stone-500 hover:text-stone-700 dark:hover:text-stone-300'
+                }`}>
+                {activePackSession.pack?.title ?? 'Story'}
+              </button>
+            )}
+            {readingStory && (
+              <div className={`flex items-center gap-1 border-b-2 pl-5 pr-2 transition-colors ${
+                activeThread === 'reading' ? 'border-accent' : 'border-transparent'
               }`}>
-              {activePackSession.pack?.title ?? 'Story'}
-            </button>
+                <button type="button" onClick={() => setActiveThread('reading')}
+                  className={`flex items-center gap-1.5 py-3 text-xs font-semibold transition-colors ${
+                    activeThread === 'reading' ? 'text-accent' : 'text-stone-500 hover:text-stone-700 dark:hover:text-stone-300'
+                  }`}>
+                  <BookMarked size={12} />
+                  <span className="max-w-[140px] truncate">{readingStory.title}</span>
+                  <span className="rounded-full bg-stone-200 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-stone-500 dark:bg-stone-700 dark:text-stone-300">Saved</span>
+                </button>
+                <button type="button" onClick={handleCloseReading} aria-label="Close story"
+                  className="rounded-md p-1 text-stone-400 transition-colors hover:bg-black/[0.06] hover:text-stone-700 dark:hover:bg-white/[0.06] dark:hover:text-stone-200">
+                  <X size={14} />
+                </button>
+              </div>
+            )}
           </div>
         )}
         {/* Status strip removed: the daily-engine activity rarely matched the
@@ -704,7 +777,17 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             ref={scrollRef}
             className="no-scrollbar flex-1 space-y-4 overflow-y-auto p-4 md:space-y-5 md:p-8"
         >
-          {displayedMessages.filter((m) => m.id !== "scene-header").length === 1 && (
+          {activeThread === 'reading' && readingLoading && (
+            <p className="flex items-center justify-center gap-2 py-10 text-sm text-stone-500">
+              <Loader2 size={16} className="animate-spin" /> Loading story…
+            </p>
+          )}
+          {activeThread === 'reading' && !readingLoading && readingMessages.length > 0 && (
+            <p className="mx-auto w-fit rounded-full border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] px-3 py-1 text-[11px] font-medium text-stone-500">
+              Saved story · read only
+            </p>
+          )}
+          {activeThread === 'freeRoam' && displayedMessages.filter((m) => m.id !== "scene-header").length === 1 && (
             <div className="flex flex-col items-center justify-center space-y-6 py-16 text-center md:py-24">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10">
                     <Sparkles className="text-accent" size={26} />
@@ -842,7 +925,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               );
             });
           })}
-          {displayedLoading && !greetingLoading && (
+          {displayedLoading && !greetingLoading && activeThread !== 'reading' && (
             <motion.div
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -860,7 +943,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           )}
         </div>
 
-        {!isLoading && messages.length > 1 && (
+        {activeThread === 'freeRoam' && !isLoading && messages.length > 1 && (
             <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-1 md:px-8">
                 {suggestions.slice(0, 3).map((s) => (
                     <button
@@ -905,6 +988,22 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             </div>
           </div>
         )}
+        {activeThread === 'reading' ? (
+          <div className="border-t border-purple-200/40 bg-gradient-to-t from-purple-200/90 via-purple-100/40 to-transparent p-4 dark:border-white/[0.05] dark:from-surface dark:via-surface/80 md:px-8 md:py-5">
+            <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] px-4 py-3">
+              <span className="text-xs text-stone-500 dark:text-stone-400">
+                You're reading a saved story. It can't be continued.
+              </span>
+              <button
+                type="button"
+                onClick={handleCloseReading}
+                className="shrink-0 rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent-deep"
+              >
+                Close story
+              </button>
+            </div>
+          </div>
+        ) : (
         <div className="border-t border-purple-200/40 bg-gradient-to-t from-purple-200/90 via-purple-100/40 to-transparent p-4 dark:border-white/[0.05] dark:from-surface dark:via-surface/80 md:p-8 md:pt-6">
           <div className="relative mx-auto max-w-3xl">
             <div className="relative flex items-center gap-2">
@@ -928,6 +1027,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             </div>
           </div>
         </div>
+        )}
           </>
         )}
       </motion.div>

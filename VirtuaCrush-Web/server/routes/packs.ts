@@ -307,6 +307,29 @@ router.get('/session/:sid/greet', requireAuth, async (req: Request, res: Respons
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/packs/session/:sid/transcript
+// Full message transcript for a session (used to READ a completed story).
+// ---------------------------------------------------------------------------
+router.get('/session/:sid/transcript', requireAuth, async (req: Request, res: Response) => {
+  const sessionId = Number(req.params.sid);
+  if (!Number.isFinite(sessionId)) return res.status(400).json({ error: 'invalid_session' });
+
+  const session = await getPackSession(sessionId);
+  if (!session || session.userId !== req.user!.id) {
+    return res.status(404).json({ error: 'session_not_found' });
+  }
+
+  const pack = loadPack(session.packId);
+  const messages = await loadPackMessages(sessionId, 1000);
+  return res.json({
+    messages,
+    title: pack?.title ?? 'Story',
+    packId: session.packId,
+    status: session.status,
+  });
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/packs/session/:sid/turn
 // Body: { message: string, advanceNode?: string }
 // Returns (JSON): { transcript, choices, currentNode, sessionCompleted,
