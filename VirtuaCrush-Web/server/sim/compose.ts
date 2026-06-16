@@ -49,6 +49,9 @@ export function composeWorld(p: ComposePieces): WorldState {
       // Rolling free-roam scene-state snapshot must survive load so it persists
       // across turns (it's written back into npc_state.knowledge each turn).
       sceneState: typeof k.sceneState === 'string' ? (k.sceneState as string) : undefined,
+      // Once the player has uncovered the companion's secret, that stays true —
+      // carry it through load so the discovery isn't forgotten next turn.
+      secretDiscovered: typeof k.secretDiscovered === 'boolean' ? (k.secretDiscovered as boolean) : undefined,
     },
   };
   return {
