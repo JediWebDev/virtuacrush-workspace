@@ -290,3 +290,62 @@ export async function fetchPackTranscript(
   );
   return res.messages;
 }
+
+// ============================================================================
+// Story Studio (user-authored arcs)
+// ============================================================================
+
+export interface StudioStory {
+  id: string;
+  characterId: string;
+  title: string;
+  blurb: string;
+  format: 'arc' | 'pack';
+  spec: Record<string, unknown>;
+  visibility: 'private' | 'public';
+  moderationStatus: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+}
+
+export interface StudioArcInput {
+  characterId: string;
+  title: string;
+  blurb?: string;
+  setting: string;            // where the scene takes place
+  situation: string;          // what's going on (authoritative)
+  coPresent?: boolean;        // is the companion physically with the player?
+  playerSituation?: string;   // the player's role + constraints right now
+  introNarrative?: string;    // opening narration
+  npcInstruction: string;     // how the character should behave
+  completionCriteria: string; // when the arc resolves
+  completionExamples?: string[];
+  tone?: 'light' | 'serious' | 'romantic' | 'dramatic';
+  arcTags?: string[];
+}
+
+export async function createStudioStory(input: StudioArcInput): Promise<StudioStory> {
+  const res = await api<{ story: StudioStory }>(`/api/studio/stories`, {
+    method: 'POST',
+    body: JSON.stringify({ format: 'arc', ...input }),
+  });
+  return res.story;
+}
+
+export async function listStudioStories(characterId?: string): Promise<StudioStory[]> {
+  const q = characterId ? `?characterId=${encodeURIComponent(characterId)}` : '';
+  const res = await api<{ stories: StudioStory[] }>(`/api/studio/stories${q}`);
+  return res.stories;
+}
+
+export async function deleteStudioStory(id: string): Promise<void> {
+  await api<{ ok: boolean }>(`/api/studio/stories/${id}`, { method: 'DELETE' });
+}
+
+/** Activates a user arc for its character's chat; returns the character + intro. */
+export async function playStudioStory(id: string): Promise<{ characterId: string; introNarrative: string }> {
+  const res = await api<{ ok: boolean; characterId: string; introNarrative: string }>(
+    `/api/studio/stories/${id}/play`,
+    { method: 'POST', body: JSON.stringify({}) },
+  );
+  return { characterId: res.characterId, introNarrative: res.introNarrative };
+}
