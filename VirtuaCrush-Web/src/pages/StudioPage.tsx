@@ -138,7 +138,7 @@ export default function StudioPage() {
             </div>
             <div>
               <label className={labelClass}>Title</label>
-              <input className={inputClass} value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="The Ransom" />
+              <input className={inputClass} value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="The Great Taco Hunt" />
             </div>
           </div>
 
