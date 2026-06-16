@@ -9,7 +9,7 @@ import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { enforceMessageQuota } from '../middleware/rateLimit';
 import { streamChat, completePrompt, type ChatMessage } from '../inworld/chat';
-import { buildDirectorPrompt, parseDirectorOutput, parseDirectorTurns, companionTagFor, turnsToTranscript, type Actor, type ArcContext } from '../inworld/director';
+import { buildDirectorPrompt, parseDirectorOutput, parseDirectorTurns, companionTagFor, turnsToTranscript, type Actor, type ArcContext, type ReplyChoice } from '../inworld/director';
 import { selectArc, getArc, type SceneAnchor } from '../inworld/arcs';
 import { getArcState, setArcActive, clearArc as clearArcState, incrementAbandonmentStrikes, resetAbandonmentStrikes, saveCompletedArc, getCompletedArcIds } from '../db/arc_state';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
@@ -435,6 +435,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   };
 
   let assistantFull = '';
+  let replyChoices: ReplyChoice[] = [];
   const abortController = new AbortController();
   req.on('close', () => abortController.abort());
 
@@ -457,6 +458,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       }
       let dturns = dirOut.turns.some((t) => looksDegenerate(t.text)) ? [] : dirOut.turns;
       const arcResult = arcContext ? dirOut.arc : null;
+      replyChoices = dirOut.choices ?? [];
 
       const plan = effectPlan!;
       const intent = effIntent!;
@@ -563,7 +565,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       remaining = Math.max(0, FREE_TIER_DAILY_LIMIT - used);
     }
 
-    send('done', { remaining, affinityScore: newAffinityScore, earnedBadge });
+    send('done', { remaining, affinityScore: newAffinityScore, earnedBadge, choices: replyChoices });
 
     res.end();
   } catch (err) {

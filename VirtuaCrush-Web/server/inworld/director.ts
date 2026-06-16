@@ -43,10 +43,20 @@ export interface ArcResult {
   earnedBadge: { title: string; description: string } | null;
 }
 
+/** An LLM-suggested next move for the PLAYER (free-roam choice buttons). */
+export interface ReplyChoice {
+  /** Short button text, in the player's voice. */
+  label: string;
+  /** The message sent on the player's behalf if they tap it. */
+  userMessage: string;
+}
+
 /** Extended output when an arc is active. */
 export interface DirectorOutput {
   turns: DirectorTurn[];
   arc: ArcResult | null;
+  /** LLM-generated suggested next moves for the player (may be empty). */
+  choices: ReplyChoice[];
 }
 
 const MAX_HISTORY_TURNS = 30;
@@ -153,11 +163,12 @@ PACING: Hold "ongoing" across multiple turns. Use "climax" to mark the emotional
     ? `Reply as a JSON object:
 {
   "lines": [ { "speaker": "<name>", "text": "<their words or *action*>" } ],
+  "choices": [ { "label": "<short button: a move the PLAYER could make next>", "userMessage": "<what the player says/does if they tap it>" } ],
   "arcStatus": "ongoing" | "climax" | "completed" | "abandoned",
   "earnedBadge": { "title": "<2-4 word title>", "description": "<1-sentence recap>" } or null
 }
 Set earnedBadge only when arcStatus is "completed"; otherwise null.`
-    : `Reply as a JSON object: { "lines": [ { "speaker": "<name>", "text": "<their words or *action*>" } ] }`;
+    : `Reply as a JSON object: { "lines": [ { "speaker": "<name>", "text": "<their words or *action*>" } ], "choices": [ { "label": "<short player move>", "userMessage": "<what the player says/does if tapped>" } ] }`;
 
   return (
 `${stage.companionSystem}${stage.directives}${arcBlock}
@@ -168,6 +179,7 @@ Allowed speakers in "lines" (use these names exactly):
 ${speakerLines}
 
 Guidance: ALWAYS include at least one "${stage.companionName}" line with their spoken reply so the player gets an answer. Put ANY physical action, reaction, expression, or scene beat in a "narrator" line — characters NEVER narrate themselves, so most turns also include a "narrator" line. (Only a pure, wordless reaction may be a "narrator" line alone.) Keep it short. Never write a line for the player. ADDRESS THE PLAYER AS "you" (second person) — never call them "the user" or "the player".
+SUGGESTED MOVES: In "choices", offer 2-3 short, DISTINCT next moves the PLAYER could make right now — written in the player's own voice (e.g. a question, a flirt, a playful *action*) and true to where the conversation is. These are optional suggestions the player may tap or ignore; never put your own dialogue in them, and never assume the player has chosen one.
 Output ONLY the JSON object — no preamble, no code fences, no commentary.
 
 ${turns ? turns + '\n' : ''}User: ${stage.userMessage}
@@ -215,10 +227,25 @@ const VALID_ARC_STATUSES = new Set(['ongoing', 'climax', 'completed', 'abandoned
  * Works whether or not arcContext was provided — `arc` is null when the
  * response has no arcStatus field (i.e. when no arc was active).
  */
+/** Maps a raw choices array into clean ReplyChoice objects (fail-soft). */
+function mapReplyChoices(arr: unknown): ReplyChoice[] {
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .map((it) => {
+      const o = (it ?? {}) as Record<string, unknown>;
+      const label = cleanLine(asStr(o.label));
+      const userMessage = asStr(o.userMessage) || label;
+      return { label, userMessage };
+    })
+    .filter((c) => c.label && c.userMessage)
+    .slice(0, 3);
+}
+
 export function parseDirectorOutput(raw: string, companionName: string): DirectorOutput {
   const text = (raw ?? '').trim();
   let turns: DirectorTurn[] = [];
   let arc: ArcResult | null = null;
+  let choices: ReplyChoice[] = [];
 
   const start = text.indexOf('{');
   if (start >= 0) {
@@ -231,6 +258,7 @@ export function parseDirectorOutput(raw: string, companionName: string): Directo
           const t = mapLines(obj.lines as unknown[], companionName);
           if (t.length) turns = t;
         }
+        if (Array.isArray(obj.choices)) choices = mapReplyChoices(obj.choices);
         const status = typeof obj.arcStatus === 'string' ? obj.arcStatus : null;
         if (status && VALID_ARC_STATUSES.has(status)) {
           const badge = obj.earnedBadge && typeof obj.earnedBadge === 'object'
@@ -249,7 +277,7 @@ export function parseDirectorOutput(raw: string, companionName: string): Directo
   }
 
   if (turns.length === 0) turns = parseDirectorTurns(text, companionName);
-  return { turns, arc };
+  return { turns, arc, choices };
 }
 
 /** Renders ordered turns into the canonical tagged transcript the UI reads. */

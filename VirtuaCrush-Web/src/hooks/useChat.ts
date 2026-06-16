@@ -20,6 +20,12 @@ export interface Message {
   content: string;
 }
 
+/** LLM-suggested next move for the player (free-roam choice buttons). */
+export interface ReplyChoice {
+  label: string;
+  userMessage: string;
+}
+
 interface UseChatOptions {
   characterId: string;
   initialMessages?: Message[];
@@ -81,6 +87,7 @@ export function useChat({
   const [error, setError] = useState<string | null>(null);
   const [quotaExceeded, setQuotaExceeded] = useState(false);
   const [affinityScore, setAffinityScore] = useState<number | null>(null);
+  const [replyChoices, setReplyChoices] = useState<ReplyChoice[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
   const stop = useCallback(() => {
@@ -105,6 +112,8 @@ export function useChat({
 
       // Optimistically add both turns. We'll fill assistantStub as chunks arrive.
       setMessages((prev) => [...prev, userMsg, assistantStub]);
+      // Clear last turn's suggestions while the next reply is generated.
+      setReplyChoices([]);
       setStreaming(true);
 
       const controller = new AbortController();
@@ -155,6 +164,7 @@ export function useChat({
               setAffinityScore(evt.data.affinityScore);
               onAffinityUpdate?.(evt.data.affinityScore);
             }
+            if (Array.isArray(evt.data.choices)) setReplyChoices(evt.data.choices as ReplyChoice[]);
           } else if (evt.event === 'error') {
             setError(evt.data.message ?? 'stream_error');
           }
@@ -173,6 +183,7 @@ export function useChat({
   );
 
   const clearQuotaFlag = useCallback(() => setQuotaExceeded(false), []);
+  const clearReplyChoices = useCallback(() => setReplyChoices([]), []);
 
-  return { messages, setMessages, send, stop, streaming, error, quotaExceeded, clearQuotaFlag, affinityScore };
+  return { messages, setMessages, send, stop, streaming, error, quotaExceeded, clearQuotaFlag, affinityScore, replyChoices, clearReplyChoices };
 }

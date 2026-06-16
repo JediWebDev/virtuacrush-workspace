@@ -5,9 +5,11 @@ interface ChoiceButtonsProps {
   choices: PackChoice[];
   onChoice: (choice: PackChoice) => void;
   disabled?: boolean;
+  /** Heading above the buttons. Defaults to the story-pack prompt. */
+  title?: string;
 }
 
-export default function ChoiceButtons({ choices, onChoice, disabled }: ChoiceButtonsProps) {
+export default function ChoiceButtons({ choices, onChoice, disabled, title = "What do you do?" }: ChoiceButtonsProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -15,7 +17,7 @@ export default function ChoiceButtons({ choices, onChoice, disabled }: ChoiceBut
       className="mx-auto mt-3 flex w-full max-w-[520px] flex-col gap-2 px-4"
     >
       <p className="mb-0.5 text-center text-[10px] font-semibold uppercase tracking-widest text-stone-400">
-        What do you do?
+        {title}
       </p>
       {choices.map((choice) => (
         <button

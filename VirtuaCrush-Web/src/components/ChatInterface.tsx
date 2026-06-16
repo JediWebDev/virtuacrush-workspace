@@ -36,7 +36,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [affinity, setAffinity] = useState(character.currentAffinity);
   const [quotaToast, setQuotaToast] = useState(false);
   const [quotaLimit, setQuotaLimit] = useState<number | null>(null);
-  const { messages, setMessages, send: sendMessage, streaming: isLoading } = useChat({
+  const { messages, setMessages, send: sendMessage, streaming: isLoading, replyChoices, clearReplyChoices } = useChat({
     characterId: character.id,
     initialMessages: [],
     onAffinityUpdate: (score) => {
@@ -150,6 +150,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     let cancelled = false;
     setGreetingLoading(true);
     setMessages([]);
+    clearReplyChoices();
 
     async function initGreeting() {
       try {
@@ -199,7 +200,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
 
     initGreeting();
     return () => { cancelled = true; };
-  }, [character.id, setMessages]);
+  }, [character.id, setMessages, clearReplyChoices]);
 
   // Fetch the character's current story-engine state for the status strip.
   useEffect(() => {
@@ -943,19 +944,13 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           )}
         </div>
 
-        {activeThread === 'freeRoam' && !isLoading && messages.length > 1 && (
-            <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-1 md:px-8">
-                {suggestions.slice(0, 3).map((s) => (
-                    <button
-                        type="button"
-                        key={s}
-                        onClick={() => handleSend(s)}
-                        className="whitespace-nowrap rounded-full border border-black/[0.06] dark:border-white/[0.06] bg-black/[0.03] dark:bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-stone-600 dark:text-stone-400 transition-all hover:border-accent/25 hover:text-stone-700 dark:text-stone-200"
-                    >
-                        {s}
-                    </button>
-                ))}
-            </div>
+        {activeThread === 'freeRoam' && !isLoading && replyChoices.length > 0 && (
+          <ChoiceButtons
+            title="Suggested replies"
+            choices={replyChoices.map((c, i) => ({ id: `rc_${i}`, label: c.label, userMessage: c.userMessage, next: '' }))}
+            onChoice={(c) => { void sendMessage(c.userMessage); }}
+            disabled={isLoading}
+          />
         )}
 
         {storyState?.pendingEvent ? (
