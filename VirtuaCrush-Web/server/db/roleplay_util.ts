@@ -79,6 +79,13 @@ export function directorDisciplineDirective(characterName: string): string {
     `if the scene has since moved. ` +
     `Respond ONLY in English. PERSPECTIVE: address the player as "you" only when they are present (or you are texting ` +
     `them); if they have left the scene, refer to them in the THIRD person until they return.\n\n` +
+    `PLAYER SITUATION & STAKES: Track the player's CURRENT circumstances from the story — where they are (with you or ` +
+    `somewhere else entirely) and whether they can act and speak freely or are constrained (restrained, gagged, captive, ` +
+    `hidden, hurt, asleep, or only reachable by phone/text). Stay consistent with it; do NOT assume the player is present ` +
+    `and free if the story says otherwise. Treat the scenario, events, and stakes the player has established as REAL ` +
+    `within the story and engage with them — you may react in your own character (skeptical, scared, amused, defiant), ` +
+    `but do NOT dismiss the player's established situation as fake, a joke, a prank, or "a bit," which breaks the story ` +
+    `they are building.\n\n` +
     `CRITICAL: If you are returning a JSON object, ensure it is perfectly valid JSON. NEVER leak raw JSON keys ` +
     `(like 'character_actions': or 'character_lines':) into the dialogue or action strings. Your text output must ` +
     `read as natural dialogue and neutral narration.`
