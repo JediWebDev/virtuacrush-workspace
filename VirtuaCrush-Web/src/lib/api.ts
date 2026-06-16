@@ -81,6 +81,15 @@ export async function fetchCharacterState(characterId: string): Promise<Characte
   return api<CharacterState>(`/api/state/${encodeURIComponent(characterId)}`);
 }
 
+/** The persisted affinity score (0-100) for this character. Loaded on chat open
+ *  so the bar shows real progress immediately instead of 0 until the first reply. */
+export async function fetchAffinity(characterId: string): Promise<number> {
+  const res = await api<{ characterId: string; score: number }>(
+    `/api/affinity/${encodeURIComponent(characterId)}`,
+  );
+  return typeof res.score === 'number' ? res.score : 0;
+}
+
 // Respond to a surfaced desire event (encourage / redirect / decline).
 export async function respondToDesire(
   characterId: string,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
-import { fetchGreeting, fetchCharacterState, respondToDesire, fetchChatHistory, travel, type CharacterState, type ChatHistoryDay, type TravelResult } from "../lib/api";
+import { fetchGreeting, fetchCharacterState, fetchAffinity, respondToDesire, fetchChatHistory, travel, type CharacterState, type ChatHistoryDay, type TravelResult } from "../lib/api";
 import { splitNarration } from "../lib/narration";
 import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
@@ -217,6 +217,22 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
       .catch((err) => console.error('[state] fetch failed:', err));
     return () => { cancelled = true; };
   }, [character.id]);
+
+  // Load the PERSISTED affinity on open so the bar shows real progress
+  // immediately — not 0 until the first reply comes back. Progress is stored
+  // server-side; this just hydrates the UI on (re)entry / re-login.
+  useEffect(() => {
+    let cancelled = false;
+    fetchAffinity(character.id)
+      .then((score) => {
+        if (!cancelled && typeof score === 'number') {
+          setAffinity(score);
+          onAffinityChange?.(character.id, score);
+        }
+      })
+      .catch((err) => console.error('[affinity] fetch failed:', err));
+    return () => { cancelled = true; };
+  }, [character.id, onAffinityChange]);
 
   // Travel handler — called by CityMap when the player clicks a pin.
   const handleTravel = async (locationSlug: string) => {
