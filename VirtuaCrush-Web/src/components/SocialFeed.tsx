@@ -15,6 +15,35 @@ function randomBetween(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+/** Human relative time from an ISO timestamp, e.g. "Just now", "5m", "3h",
+ *  "Yesterday", "4d". Falls back to a date for anything older than a week. */
+function formatRelativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return "";
+  const secs = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (secs < 45) return "Just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days}d ago`;
+  return new Date(then).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/** Live relative time that re-computes every 60s so "Just now" ages correctly
+ *  while the feed stays open. Returns `fallback` when there's no ISO timestamp. */
+function useRelativeTime(iso: string | undefined, fallback: string): string {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!iso) return;
+    const t = setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => clearInterval(t);
+  }, [iso]);
+  return iso ? formatRelativeTime(iso) : fallback;
+}
+
 function CommentRow({ comment, isRival = false }: { comment: SocialComment; isRival?: boolean }) {
   return (
     <div className={`flex gap-2.5 ${isRival ? "rounded-xl border border-accent/15 bg-accent/5 px-3 py-2.5" : "pl-1"}`}>
@@ -42,6 +71,7 @@ function PostCard({ post, character, isLive }: { post: SocialPost; character: Ch
   const pulseRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const comments = buildCommentsForPost(post, character);
+  const timeLabel = useRelativeTime(post.createdAt, post.timestamp);
 
   useEffect(() => {
     setLikes(post.initialLikes);
@@ -67,7 +97,7 @@ function PostCard({ post, character, isLive }: { post: SocialPost; character: Ch
   return (
     <article className="overflow-hidden rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.03] shadow-sm">
       <div className="px-4 pt-4">
-        <p className="text-[11px] font-medium text-stone-900 dark:text-stone-500">{post.timestamp}</p>
+        <p className="text-[11px] font-medium text-stone-900 dark:text-stone-500">{timeLabel}</p>
         <p className="mt-2 text-sm leading-relaxed text-stone-700 dark:text-stone-200">{post.text}</p>
       </div>
       {post.media && (
@@ -123,6 +153,7 @@ function dynamicToSocialPost(p: DynamicPost): SocialPost {
     id: `dyn-${p.id}`,
     text: p.text,
     timestamp: "Just now",
+    createdAt: p.createdAt,
     initialLikes: likesForPost(p.id),
     isAboutUser: false,
     requiredAffinity: 0,

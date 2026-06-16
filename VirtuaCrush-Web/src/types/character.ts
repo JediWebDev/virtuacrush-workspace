@@ -11,7 +11,10 @@ export type PostMedia =
 export interface SocialPost {
   id: string;
   text: string;
+  /** Static fallback label (used by the hand-authored feed). */
   timestamp: string;
+  /** ISO timestamp for dynamic posts — rendered as a LIVE relative time. */
+  createdAt?: string;
   initialLikes: number;
   isAboutUser: boolean;
   requiredAffinity: number;
