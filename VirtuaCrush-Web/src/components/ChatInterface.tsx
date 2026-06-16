@@ -50,6 +50,10 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
         .then((st) => setStoryState(st))
         .catch(() => { /* non-fatal */ });
     },
+    onCharacterPosted: () => {
+      // The character just posted to their feed — refresh it so it shows live.
+      setFeedRefreshKey((k) => k + 1);
+    },
   });
 
   const [input, setInput] = useState("");

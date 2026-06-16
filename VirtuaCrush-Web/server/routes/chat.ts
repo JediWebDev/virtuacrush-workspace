@@ -23,6 +23,7 @@ import {
   storeSignificantEvent,
 } from '../db/memory';
 import { getCharacter, type CharacterId } from '../inworld/characters';
+import { maybeAutonomousPost, postReasonForTurn } from '../inworld/social_post';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
 import { formatPersonaTraitsBlock, shouldRevealSecret } from '../sim/traits';
 import {
@@ -559,6 +560,28 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     // Affinity is driven by the engine (consequencesFor -> applyEffects).
     const newAffinityScore: number = appliedAffinity ?? affinity;
 
+    // Autonomous social post: if this turn hit a meaningful beat (first-meeting
+    // completed, plans/contact swapped, an affinity milestone, or a real
+    // disclosure), the character may post to their feed in-character. The
+    // generator self-rate-limits with a cooldown; we only do the (cheap) check
+    // when a trigger fired, and surface `posted` so the client refreshes the feed.
+    let posted = false;
+    const postReason = postReasonForTurn({
+      arcBadgeTitle: earnedBadge?.title ?? null,
+      turnText: `${message}\n${assistantFull}`,
+      prevAffinity: affinity,
+      newAffinity: newAffinityScore,
+      emotionalDisclosure: revealSecretNow,
+    });
+    if (postReason) {
+      posted = (await maybeAutonomousPost({
+        userId: req.user!.id,
+        characterId,
+        displayName,
+        reason: postReason,
+      })) != null;
+    }
+
     // Bump usage only for free users so paid users have a clean 0/null state.
     let remaining: number | null = null;
     if (!(await isSubscribed(req.user!.id))) {
@@ -566,7 +589,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       remaining = Math.max(0, FREE_TIER_DAILY_LIMIT - used);
     }
 
-    send('done', { remaining, affinityScore: newAffinityScore, earnedBadge, choices: replyChoices });
+    send('done', { remaining, affinityScore: newAffinityScore, earnedBadge, choices: replyChoices, posted });
 
     res.end();
   } catch (err) {

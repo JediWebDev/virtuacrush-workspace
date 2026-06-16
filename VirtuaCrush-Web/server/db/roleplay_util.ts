@@ -64,7 +64,10 @@ export function directorDisciplineDirective(characterName: string): string {
     `companion or an NPC reacts or moves, narrate it: e.g. [NARRATOR] *She sets the cup down and leans back.*\n` +
     `• NPC lines (e.g. [URIK]) likewise contain ONLY that NPC's spoken words; their actions and reactions are ` +
     `narrated by [NARRATOR] too.\n` +
-    `• Never write the player's words or actions for them.\n` +
+    `• Never write the player's words or actions for them — this includes the [NARRATOR] line. The narrator ` +
+    `narrates ONLY ${characterName}, the NPCs, and the environment, NEVER the player's body, hands, or choices. ` +
+    `Do not describe the player doing something (e.g. "you scribble the number", "you hand her the pen"); you may ` +
+    `acknowledge what the player already SAID they did, but never invent, perform, or pre-empt the player's actions.\n` +
     `• If a turn has both speech and action, emit BOTH: the character's [${TAG}] dialogue line AND a [NARRATOR] ` +
     `line for the action/reaction. If a turn is pure reaction with no words, emit only a [NARRATOR] line.\n\n` +
     `GROUNDING & CONTINUITY: Only reference people, pets, objects, and places actually established in this ` +

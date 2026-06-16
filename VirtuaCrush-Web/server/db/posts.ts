@@ -41,6 +41,19 @@ export async function createCuratedPost(
   return (rowCount ?? 0) > 0;
 }
 
+/** Most recent post timestamp for this user+character (their own posts only),
+ *  or null if none. Used to rate-limit autonomous character posts. */
+export async function lastPostAt(userId: string, characterId: string): Promise<Date | null> {
+  const { rows } = await pool.query<{ created_at: Date }>(
+    `SELECT created_at FROM character_posts
+     WHERE user_id = $1 AND character_id = $2
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [userId, characterId],
+  );
+  return rows[0]?.created_at ?? null;
+}
+
 /** User's own dynamic posts merged with curated global posts, newest first. */
 export async function listPosts(
   userId: string,
