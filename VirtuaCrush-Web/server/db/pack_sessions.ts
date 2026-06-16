@@ -10,6 +10,8 @@ export interface PackSessionRow {
   status: 'active' | 'completed' | 'abandoned';
   startedAt: Date;
   completedAt: Date | null;
+  /** Rolling "scene so far" snapshot for continuity beyond the recent window. */
+  sceneState: string;
 }
 
 export async function createPackSession(
@@ -176,6 +178,7 @@ export async function persistPackTurn(
 function rowToSession(r: {
   id: number; user_id: string; character_id: string; pack_id: string;
   current_node: string; status: string; started_at: Date; completed_at: Date | null;
+  scene_state?: string;
 }): PackSessionRow {
   return {
     id: r.id,
@@ -186,5 +189,13 @@ function rowToSession(r: {
     status: r.status as PackSessionRow['status'],
     startedAt: r.started_at,
     completedAt: r.completed_at,
+    sceneState: r.scene_state ?? '',
   };
+}
+
+export async function updatePackSceneState(sessionId: number, sceneState: string): Promise<void> {
+  await pool.query(
+    `UPDATE pack_sessions SET scene_state = $1 WHERE id = $2`,
+    [sceneState.slice(0, 1200), sessionId],
+  );
 }

@@ -336,6 +336,10 @@ export interface PackSceneResult {
   /** Evolved choices the model wants to override the authored ones with (drift). Empty = keep authored. */
   choices: PackSceneChoice[];
   arcStatus: 'ongoing' | 'climax' | 'completed' | null;
+  /** Updated rolling "scene so far" snapshot to persist for the next turn. '' if absent. */
+  sceneState: string;
+  /** A durable beat worth remembering across sessions, or null. */
+  memorable: string | null;
 }
 
 function mapPackChoices(arr: unknown[]): PackSceneChoice[] {
@@ -363,6 +367,8 @@ export function parsePackScene(raw: string, companionName: string): PackSceneRes
   let turns: DirectorTurn[] = [];
   let choices: PackSceneChoice[] = [];
   let arcStatus: PackSceneResult['arcStatus'] = null;
+  let sceneState = '';
+  let memorable: string | null = null;
 
   const start = text.indexOf('{');
   if (start >= 0) {
@@ -377,6 +383,8 @@ export function parsePackScene(raw: string, companionName: string): PackSceneRes
         }
         if (Array.isArray(obj.choices)) choices = mapPackChoices(obj.choices as unknown[]);
         if (typeof obj.advance === 'string' && obj.advance.trim()) advance = obj.advance.trim();
+        if ('sceneState' in obj) sceneState = cleanField(obj.sceneState).slice(0, 1200);
+        if ('memorable' in obj) { const m = cleanField(obj.memorable); memorable = m ? m.slice(0, 300) : null; }
         const st = typeof obj.arcStatus === 'string' ? obj.arcStatus : null;
         if (st && VALID_ARC_STATUSES.has(st)) arcStatus = st as PackSceneResult['arcStatus'];
         if (turns.length) break;
@@ -384,7 +392,7 @@ export function parsePackScene(raw: string, companionName: string): PackSceneRes
     }
   }
   if (turns.length === 0) turns = parseDirectorTurns(text, companionName);
-  return { advance, turns, choices, arcStatus };
+  return { advance, turns, choices, arcStatus, sceneState, memorable };
 }
 
 // === MERGED single-call scene (referee + director in one round) ==============

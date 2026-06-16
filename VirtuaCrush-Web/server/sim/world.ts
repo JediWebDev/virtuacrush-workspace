@@ -31,6 +31,7 @@ export interface Knowledge {
   emotionsUpdatedAt?: string;            // ISO timestamp of last emotion update
   pendingDriveEvent?: { drive: string; prompt: string; options: { id: string; label: string }[] } | null;
   pendingDriveReaction?: string | null;  // directive injected into the next reply after a choice
+  sceneState?: string;                   // rolling "scene so far" continuity snapshot for free-roam
 }
 
 // --- Permanent identity ------------------------------------------------------

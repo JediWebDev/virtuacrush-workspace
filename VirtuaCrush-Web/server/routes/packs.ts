@@ -30,7 +30,9 @@ import {
   countPackMessages,
   persistPackTurn,
   getCompletedPackSessions,
+  updatePackSceneState,
 } from '../db/pack_sessions';
+import { storeSignificantEvent } from '../db/memory';
 
 /** Affinity awarded for finishing a story when the pack doesn't specify its own. */
 const DEFAULT_AFFINITY_REWARD = 10;
@@ -84,7 +86,7 @@ function packToMeta(p: StoryPack): PackMeta {
 // "[TAG] ..." transcript line by turnsToTranscript (the client already parses
 // those into narrator / companion / NPC bubbles).
 // ---------------------------------------------------------------------------
-function buildPackDirectorPrompt(pack: StoryPack, node: PackNode, characterId: string): string {
+function buildPackDirectorPrompt(pack: StoryPack, node: PackNode, characterId: string, priorSceneState = ''): string {
   let character;
   try { character = getCharacter(characterId as Parameters<typeof getCharacter>[0]); }
   catch { return ''; }
@@ -101,6 +103,12 @@ function buildPackDirectorPrompt(pack: StoryPack, node: PackNode, characterId: s
     .trim();
   const sceneBlock = openingSituation
     ? `\n\n=== WHERE THIS STORY OPENS (the scene may move from here as the player acts) ===\n${openingSituation}`
+    : '';
+
+  // Rolling "scene so far" — authoritative continuity that persists beyond the
+  // recent-history window (who's present, location, the player's physical state).
+  const sceneSoFar = priorSceneState
+    ? `\n\n=== SCENE SO FAR (authoritative continuity — honor this; it persists beyond the recent messages) ===\n${priorSceneState}`
     : '';
 
   const npcs = pack.npcs ?? [];
@@ -126,6 +134,8 @@ function buildPackDirectorPrompt(pack: StoryPack, node: PackNode, characterId: s
     `  "lines": [ { "speaker": "narrator" | "${name}"${npcSpeakerExample}, "text": "spoken words — or an *action* for the narrator" } ],\n` +
     `  "advance": "stay" | "end" | "<a beat id below>",\n` +
     `  "choices": [ { "label": "short button text", "userMessage": "first-person line/action if the player picks it", "next": "<beat id> | dynamic | end" } ],\n` +
+    `  "sceneState": "<short snapshot: who is present (and what they know), the location, the player's physical state, and key facts so far>",\n` +
+    `  "memorable": "<a durable one-line beat worth remembering in future sessions, or null>",\n` +
     `  "arcStatus": "ongoing" | "climax" | "completed"\n` +
     `}\n\n` +
     `READ THE PLAYER — they may TAP a choice or TYPE freely. Interpret what they actually did:\n` +
@@ -136,7 +146,8 @@ function buildPackDirectorPrompt(pack: StoryPack, node: PackNode, characterId: s
     `- Leave "choices" EMPTY ([]) to reuse the story's authored buttons for the resulting beat. This is the DEFAULT — do it almost every turn.\n` +
     `- ONLY when the player clearly pulls the scene away from ALL the authored choices, return 2–3 NEW choices that fit the new direction (each "next":"dynamic", or a beat id if it rejoins the story) and steer back toward an ENDING.\n\n` +
     `NARRATION: characters speak ONLY dialogue; "narrator" owns ALL action and reaction. Include at least one "${name}" line whenever ${name} speaks. Respond ONLY in English. Never write the player's words or actions.\n\n` +
-    `SCENE CONTINUITY (important): The story OPENS at the setting above, but the player can move it elsewhere. Always narrate the location, props, and circumstances established by the MOST RECENT events in the conversation. If the scene has moved (a different room, building, or place), do NOT reintroduce the opening location or its details — keep the characters exactly where they actually are now, and never describe two places at once. Treat CURRENT BEAT as the dramatic INTENT of this moment, not a fixed location: adapt that intent to wherever the scene currently is.\n\n` +
+    `SCENE CONTINUITY (important): The story OPENS at the setting above, but the player can move it elsewhere. Always narrate the location, props, and circumstances established by the MOST RECENT events plus the SCENE SO FAR snapshot. If the scene has moved (a different room, building, or place), do NOT reintroduce the opening location or its details — keep the characters exactly where they actually are now, and never describe two places at once. Treat CURRENT BEAT as the dramatic INTENT of this moment, not a fixed location: adapt that intent to wherever the scene currently is.\n` +
+    `Always return "sceneState": a short rewritten snapshot carrying forward everything STILL TRUE — who is physically present and what they already know, the location, the player's physical condition (gagged, bound, free, hurt), and key developments. Never drop a character still in the room, never re-introduce someone already present, never forget the player's condition. Set "memorable" only for a genuinely durable beat worth recalling in a FUTURE conversation; otherwise null.\n\n` +
     `KEEP IT MOVING toward an ENDING — never loop the same beat. When the scene has resolved, set "advance":"end" and "arcStatus":"completed".\n\n` +
     `SPEAKERS (use the exact name in "speaker"):\n${speakerList}\n\n` +
     `THIS BEAT'S CHOICES (the player's options right now):\n${authoredChoices}\n\n` +
@@ -147,6 +158,7 @@ function buildPackDirectorPrompt(pack: StoryPack, node: PackNode, characterId: s
     `\n\n=== STORY PACK: ${pack.title} ===\n${pack.systemInstruction}` +
     `\n\n=== CURRENT BEAT ===\n${node.npcInstruction}` +
     sceneBlock +
+    sceneSoFar +
     formatCharacterFactsBlock(lore) +
     formatPersonaTraitsBlock(lore, { discovered: false, revealNow: false }) +
     ROLEPLAY_INPUT_DIRECTIVE +
@@ -377,7 +389,7 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
   catch { /* keep id */ }
 
   const history = await loadPackMessages(sessionId, 30);
-  const directorPrompt = buildPackDirectorPrompt(pack, node, session.characterId);
+  const directorPrompt = buildPackDirectorPrompt(pack, node, session.characterId, session.sceneState);
   const turnsStr = history
     .map((m) => (m.role === 'user' ? `Player: ${m.content}` : m.content))
     .join('\n');
@@ -391,6 +403,13 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
     console.error('[packs] turn generation error:', err);
     return res.status(502).json({ error: 'generation_failed' });
   }
+
+  // Persist rolling scene state (kept if the model omitted one) + embed any
+  // durable beat for cross-session recall.
+  if (result.sceneState) {
+    try { await updatePackSceneState(sessionId, result.sceneState); } catch (e) { console.warn('[packs] scene state persist failed:', e); }
+  }
+  if (result.memorable) void storeSignificantEvent(req.user!.id, session.characterId, result.memorable);
 
   // Resolve where the story goes next.
   //  - explicit authored choice → already advanced above.

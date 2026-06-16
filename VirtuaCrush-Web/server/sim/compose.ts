@@ -46,6 +46,9 @@ export function composeWorld(p: ComposePieces): WorldState {
       knownPlayerFacts: Array.isArray(k.knownPlayerFacts) ? (k.knownPlayerFacts as string[]) : [],
       lastSeenOutfit: (k.lastSeenOutfit ?? {}) as Record<string, string[]>,
       rumors: Array.isArray(k.rumors) ? (k.rumors as Rumor[]) : [],
+      // Rolling free-roam scene-state snapshot must survive load so it persists
+      // across turns (it's written back into npc_state.knowledge each turn).
+      sceneState: typeof k.sceneState === 'string' ? (k.sceneState as string) : undefined,
     },
   };
   return {
