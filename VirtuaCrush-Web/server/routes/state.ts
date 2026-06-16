@@ -10,6 +10,7 @@ import { getAffinity } from '../db/affinity';
 import { initEmotions, topEmotions, pendingEventFromEmotions, type EmotionState } from '../sim/emotions';
 import { SECRET_REVEAL_AFFINITY } from '../sim/traits';
 import { getCharacter } from '../inworld/characters';
+import { ensureUserCharacterLoaded } from '../db/user_characters';
 
 const router = Router();
 
@@ -17,6 +18,11 @@ const router = Router();
 router.get('/:characterId', requireAuth, async (req: Request, res: Response) => {
   const { characterId } = req.params;
   try {
+    // Resolve a custom persona so daily-state generation doesn't throw on it.
+    if (characterId.startsWith('user:')) {
+      const ok = await ensureUserCharacterLoaded(characterId, req.user!.id);
+      if (!ok) return res.status(404).json({ error: 'unknown_character' });
+    }
     const [{ state, scene }, affinity] = await Promise.all([
       getSituation(req.user!.id, characterId),
       getAffinity(req.user!.id, characterId),

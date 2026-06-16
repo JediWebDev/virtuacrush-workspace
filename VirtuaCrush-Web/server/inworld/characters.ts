@@ -232,9 +232,41 @@ export const NARRATOR_BRIEF =
   'body-language beat, expression, and the environment — in a flat, grounded voice. Never speaks ' +
   'dialogue, never uses first person, never gives opinions.';
 
-/** Look up a character by id. Throws for unknown ids so callers fail loudly. */
+// ---------------------------------------------------------------------------
+// User-created characters (Story Studio Phase 2).
+//
+// Custom personas live in the DB (user_characters). To keep getCharacter()
+// synchronous — it's called from ~17 hot-path sites — request handlers preload
+// the needed custom persona into this in-process registry (see
+// db/user_characters.ts → ensureUserCharacterLoaded) BEFORE any getCharacter()
+// call. The registry is just a cache; the DB is the source of truth.
+// ---------------------------------------------------------------------------
+const USER_CHARACTERS = new Map<string, Character>();
+
+/** Builds a Character from a custom persona's parts (same shape as built-ins). */
+export function buildUserCharacter(p: {
+  id: string;
+  displayName: string;
+  greeting: string;
+  core: string;
+}): Character {
+  return {
+    id: p.id,
+    displayName: p.displayName,
+    greeting: p.greeting,
+    systemPrompt: `${p.core}\n\n${COMMON_RULES}`,
+  };
+}
+
+/** Registers (or refreshes) a user character in the in-process registry. */
+export function registerUserCharacter(character: Character): void {
+  USER_CHARACTERS.set(character.id, character);
+}
+
+/** Look up a character by id (built-in or a preloaded user character). Throws
+ *  for unknown ids so callers fail loudly. */
 export function getCharacter(id: string): Character {
-  const c = CHARACTERS[id];
+  const c = CHARACTERS[id] ?? USER_CHARACTERS.get(id);
   if (!c) throw new Error(`Unknown character id: ${id}`);
   return c;
 }

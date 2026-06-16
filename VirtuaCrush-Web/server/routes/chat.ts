@@ -13,6 +13,7 @@ import { buildDirectorPrompt, parseDirectorOutput, parseDirectorTurns, companion
 import { selectArc, getArc, type SceneAnchor, type StoryArc } from '../inworld/arcs';
 import { getUserStory } from '../db/user_stories';
 import { userStoryToArc } from '../inworld/user_arc';
+import { ensureUserCharacterLoaded } from '../db/user_characters';
 import { getArcState, setArcActive, clearArc as clearArcState, incrementAbandonmentStrikes, resetAbandonmentStrikes, saveCompletedArc, getCompletedArcIds } from '../db/arc_state';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
@@ -97,6 +98,12 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
 
   if (!characterId) {
     return res.status(400).json({ error: 'invalid_request' });
+  }
+
+  // Preload a custom persona so the synchronous getCharacter() can resolve it.
+  if (characterId.startsWith('user:')) {
+    const ok = await ensureUserCharacterLoaded(characterId, req.user!.id);
+    if (!ok) return res.status(404).json({ error: 'unknown_character' });
   }
 
   try {
@@ -199,6 +206,13 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   }
   if (message.length > 4000) {
     return res.status(400).json({ error: 'message_too_long', max: 4000 });
+  }
+
+  // Preload a custom persona so the synchronous getCharacter() (used throughout
+  // the pipeline) can resolve it for this request.
+  if (characterId.startsWith('user:')) {
+    const ok = await ensureUserCharacterLoaded(characterId, req.user!.id);
+    if (!ok) return res.status(404).json({ error: 'unknown_character' });
   }
 
   // Recent window for local coherence; long-term recall is handled by RAG.

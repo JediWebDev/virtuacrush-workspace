@@ -10,12 +10,58 @@
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { createUserStory, listUserStories, getUserStory, deleteUserStory } from '../db/user_stories';
+import { createUserCharacter, listUserCharacters, deleteUserCharacter } from '../db/user_characters';
 import { validateArcSpec } from '../inworld/user_arc';
 import { setArcActive, clearArc } from '../db/arc_state';
 import { getSituation } from '../db/state';
 import { getCharacter } from '../inworld/characters';
 
 const router = Router();
+
+// ===========================================================================
+// Custom characters (Phase 2) — private to the creator.
+// ===========================================================================
+
+// POST /api/studio/characters { displayName, core, greeting?, secret?, tone? }
+router.post('/characters', requireAuth, async (req: Request, res: Response) => {
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const displayName = String(b.displayName ?? '').trim();
+  const core = String(b.core ?? '').trim();
+  if (!displayName) return res.status(400).json({ error: 'missing_name' });
+  if (core.length < 20) return res.status(400).json({ error: 'persona_too_short' });
+  try {
+    const character = await createUserCharacter({
+      ownerUserId: req.user!.id,
+      displayName,
+      core,
+      greeting: typeof b.greeting === 'string' ? b.greeting : '',
+      secret: typeof b.secret === 'string' && b.secret.trim() ? b.secret.trim() : null,
+      tone: typeof b.tone === 'string' && b.tone.trim() ? b.tone.trim() : null,
+    });
+    return res.json({ character });
+  } catch (err) {
+    console.error('[studio] character create failed:', err);
+    return res.status(500).json({ error: 'create_failed' });
+  }
+});
+
+// GET /api/studio/characters — my custom characters
+router.get('/characters', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const characters = await listUserCharacters(req.user!.id);
+    return res.json({ characters });
+  } catch (err) {
+    console.error('[studio] character list failed:', err);
+    return res.status(500).json({ error: 'list_failed' });
+  }
+});
+
+// DELETE /api/studio/characters/:id
+router.delete('/characters/:id', requireAuth, async (req: Request, res: Response) => {
+  const ok = await deleteUserCharacter(req.user!.id, req.params.id);
+  if (!ok) return res.status(404).json({ error: 'not_found' });
+  return res.json({ ok: true });
+});
 
 // --- Create (arc) ----------------------------------------------------------
 router.post('/stories', requireAuth, async (req: Request, res: Response) => {
