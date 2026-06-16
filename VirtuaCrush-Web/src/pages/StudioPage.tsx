@@ -87,8 +87,8 @@ export default function StudioPage() {
   const handlePlay = async (s: StudioStory) => {
     setBusyId(s.id);
     try {
-      const { characterId } = await playStudioStory(s.id);
-      navigate(`/chat/${characterId}`);
+      const { characterId, introNarrative } = await playStudioStory(s.id);
+      navigate(`/chat/${characterId}`, { state: { studioIntro: introNarrative } });
     } catch {
       setError("Couldn't start that story.");
     } finally {
@@ -144,32 +144,32 @@ export default function StudioPage() {
 
           <div className="mt-4">
             <label className={labelClass}>Setting — where it happens</label>
-            <input className={inputClass} value={form.setting} onChange={(e) => set("setting", e.target.value)} placeholder="an abandoned warehouse at the edge of town" />
+            <input className={inputClass} value={form.setting} onChange={(e) => set("setting", e.target.value)} placeholder="a sunny boardwalk lined with food trucks" />
           </div>
 
           <div className="mt-4">
             <label className={labelClass}>Situation — what's going on (the scene's ground truth)</label>
-            <textarea className={inputClass} rows={3} value={form.situation} onChange={(e) => set("situation", e.target.value)} placeholder="Kidnappers are demanding a mysterious book from Serena as ransom. Her estranged sister Ellen is behind it." />
+            <textarea className={inputClass} rows={3} value={form.situation} onChange={(e) => set("situation", e.target.value)} placeholder="You're on a mission to track down the legendary taco truck everyone's raving about — but it keeps moving, and a smug rival foodie keeps beating you to the best spots." />
           </div>
 
           <div className="mt-4">
             <label className={labelClass}>Your role &amp; constraints (keeps the director honest)</label>
-            <textarea className={inputClass} rows={2} value={form.playerSituation} onChange={(e) => set("playerSituation", e.target.value)} placeholder="You are the hostage — tied to a chair, wrists and ankles taped, gagged. You can't speak or move freely." />
+            <textarea className={inputClass} rows={2} value={form.playerSituation} onChange={(e) => set("playerSituation", e.target.value)} placeholder="You're free and along for the ride — hungry, competitive, and armed with very strong opinions about hot sauce." />
           </div>
 
           <div className="mt-4">
             <label className={labelClass}>How should {charName(form.characterId)} behave?</label>
-            <textarea className={inputClass} rows={3} value={form.npcInstruction} onChange={(e) => set("npcInstruction", e.target.value)} placeholder="Serena takes the threat seriously despite her deadpan. She comes to the warehouse, tries to protect you and outmaneuver Ellen." />
+            <textarea className={inputClass} rows={3} value={form.npcInstruction} onChange={(e) => set("npcInstruction", e.target.value)} placeholder={`${charName(form.characterId)} treats this like a serious culinary expedition — hyping every lead and dramatically rating each taco out of ten.`} />
           </div>
 
           <div className="mt-4">
             <label className={labelClass}>Opening narration (optional)</label>
-            <textarea className={inputClass} rows={2} value={form.introNarrative} onChange={(e) => set("introNarrative", e.target.value)} placeholder="Cold rain hammers the warehouse roof. A single bulb sways overhead..." />
+            <textarea className={inputClass} rows={2} value={form.introNarrative} onChange={(e) => set("introNarrative", e.target.value)} placeholder="The boardwalk smells like grilled onions and possibility. Somewhere out there, the perfect taco is waiting." />
           </div>
 
           <div className="mt-4">
             <label className={labelClass}>How does it resolve? (completion)</label>
-            <textarea className={inputClass} rows={2} value={form.completionCriteria} onChange={(e) => set("completionCriteria", e.target.value)} placeholder="You escape together, or Serena talks/forces Ellen down and frees you." />
+            <textarea className={inputClass} rows={2} value={form.completionCriteria} onChange={(e) => set("completionCriteria", e.target.value)} placeholder="You hunt down the legendary truck together and crown the best taco — or get gloriously full trying." />
           </div>
 
           <div className="mt-4 grid gap-4 md:grid-cols-2">

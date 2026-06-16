@@ -12,6 +12,7 @@ import { requireAuth } from '../middleware/auth';
 import { createUserStory, listUserStories, getUserStory, deleteUserStory } from '../db/user_stories';
 import { validateArcSpec } from '../inworld/user_arc';
 import { setArcActive, clearArc } from '../db/arc_state';
+import { getSituation } from '../db/state';
 import { getCharacter } from '../inworld/characters';
 
 const router = Router();
@@ -80,6 +81,10 @@ router.post('/stories/:id/play', requireAuth, async (req: Request, res: Response
   if (story.format !== 'arc') return res.status(400).json({ error: 'unsupported_format' });
 
   try {
+    // Ensure the character_state row exists first — setArcActive is a pure
+    // UPDATE and would silently no-op for a character the user hasn't chatted
+    // with yet (no row), leaving the arc inactive.
+    await getSituation(req.user!.id, story.characterId);
     await setArcActive(req.user!.id, story.characterId, `user:${story.id}`);
     const intro = (story.spec as Record<string, unknown>).introNarrative;
     return res.json({

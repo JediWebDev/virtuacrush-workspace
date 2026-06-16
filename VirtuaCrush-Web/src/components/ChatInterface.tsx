@@ -4,7 +4,7 @@ import { fetchGreeting, fetchCharacterState, fetchAffinity, respondToDesire, fet
 import { splitNarration } from "../lib/narration";
 import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked } from "lucide-react";
 import { Character } from "../types/character";
@@ -71,6 +71,11 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [playerLocation, setPlayerLocation] = useState<string | null>(null);
   const [isTraveling, setIsTraveling] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  // Opening narration handed off from the Story Studio when a user arc is played.
+  const studioIntroRef = useRef<string | null>(
+    ((location.state as { studioIntro?: string } | null)?.studioIntro) ?? null,
+  );
 
   // Pack mode
   const [activePackSession, setActivePackSession] = useState<PackSession | null>(null);
@@ -205,6 +210,22 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     initGreeting();
     return () => { cancelled = true; };
   }, [character.id, setMessages, clearReplyChoices]);
+
+  // When a Story Studio arc was just launched, show its opening narration once
+  // the greeting/history has loaded, so the custom story visibly "opens."
+  useEffect(() => {
+    if (greetingLoading) return;
+    const intro = studioIntroRef.current;
+    if (!intro) return;
+    studioIntroRef.current = null;
+    setMessages((prev) =>
+      prev.some((m) => m.id === 'studio-intro')
+        ? prev
+        : [...prev, { id: 'studio-intro', role: 'assistant', content: `[NARRATOR] ${intro}` }],
+    );
+    // Drop the nav state so the intro doesn't replay on a later remount.
+    try { window.history.replaceState({ ...window.history.state, usr: {} }, ''); } catch { /* ignore */ }
+  }, [greetingLoading, setMessages]);
 
   // Fetch the character's current story-engine state for the status strip.
   useEffect(() => {
