@@ -70,6 +70,12 @@ test('romance/social consequences', () => {
   assert.ok(consequencesFor({ type: 'social', subtype: 'compliment' }, world()).some((c) => c.type === 'affinity' && c.delta > 0));
 });
 
+test('neutral smalltalk and unknown social subtypes do not change affinity', () => {
+  assert.deepEqual(consequencesFor({ type: 'social', subtype: 'smalltalk' }, world()), []);
+  assert.deepEqual(consequencesFor({ type: 'social', subtype: 'totally_neutral_chat' }, world()), []);
+  assert.deepEqual(consequencesFor({ type: 'observation', subtype: 'wait' }, world()), []);
+});
+
 // --- Layer 3: agency acts on BELIEF, not omniscience -------------------------
 test('rival interrupts only because it BELIEVES they are together', () => {
   assert.equal(advanceNpcs(world(), rng(0)).length, 1);

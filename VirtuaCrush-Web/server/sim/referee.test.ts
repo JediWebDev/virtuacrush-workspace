@@ -20,6 +20,8 @@ test('buildRefereePrompt lists all categories + schema keys + scene + message', 
   assert.ok(p.includes('"npcIntentHints"'));
   assert.ok(p.includes('CLASSIFY'));
   assert.ok(p.toLowerCase().includes('do not decide consequences'));
+  assert.ok(p.includes('Classify hostility accurately'));
+  assert.ok(!p.includes('prefer "social" or "romance"'));
   assert.ok(p.includes('becca (Becca)')); // roster id (name)
   assert.ok(p.includes('PLAYER: *I tie up Becca and empty the register*'));
 });

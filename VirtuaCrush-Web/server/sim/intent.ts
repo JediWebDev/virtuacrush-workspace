@@ -49,7 +49,7 @@ const SYNONYMS: Record<IntentCategory, Record<string, string>> = {
   romance: { kiss: 'kiss_attempt', date: 'date_request', propose: 'proposition', 'break up': 'breakup', dump: 'breakup', confess: 'confession', adore: 'affection' },
   transaction: { purchase: 'buy', spend: 'buy', present: 'gift', give: 'gift' },
   movement: { walk: 'go', travel: 'go', head: 'go', enter: 'arrive', exit: 'leave', depart: 'leave', tail: 'follow', chase: 'follow' },
-  conflict: { mock: 'insult', yell: 'argue', fight_words: 'argue', menace: 'threaten' },
+  conflict: { mock: 'insult', yell: 'argue', fight_words: 'argue', menace: 'threaten', threat: 'threaten', cruel: 'insult', abusive: 'insult' },
   work: { job: 'do_job', shift: 'do_job', working: 'do_job' },
   observation: { spy: 'watch', observe: 'look', listen: 'eavesdrop', stare: 'look' },
 };

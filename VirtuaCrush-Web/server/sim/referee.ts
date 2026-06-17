@@ -19,7 +19,7 @@ const CATEGORY_GUIDE: Record<string, string> = {
   romance: 'flirting/dating/intimacy — flirt, affection, confession, date_request, kiss_attempt, breakup, reject',
   transaction: 'ONLY when the player explicitly buys, pays for, gifts, or tips something specific (buy, gift, tip) — NOT ordinary talk or merely being at a venue. Set "magnitude": modest|big|lavish for a real purchase.',
   movement: 'going places — go, leave, arrive, follow (set "target" to the destination)',
-  conflict: 'non-criminal aggression — insult, provoke, threaten, intimidate, argue',
+  conflict: 'non-criminal aggression — insult, mockery, cruelty, threaten, intimidate, argue, provoke; use this when the player is hostile toward the companion',
   work: 'job actions — do_job, ask_about_work, help_with_work',
   observation: 'looking/waiting/gathering info — look, wait, inspect, watch, eavesdrop',
 };
@@ -43,7 +43,10 @@ export function buildRefereePrompt(input: RefereeInput): string {
 CATEGORIES (choose exactly one "type"):
 ${categories}
 "subtype" is your best short label within that category; the engine normalizes it.
-When in doubt, prefer "social" or "romance". Reserve "crime", "conflict", and "transaction" for clear, deliberate, explicit actions — never for ordinary conversation.
+Classify hostility accurately: insults, mockery, cruelty, demeaning language, threats, or intimidation toward the companion are "conflict" — not social or romance. Casual profanity in an otherwise friendly message can stay social.
+Neutral chitchat with no clear positive or negative intent is "observation" (subtype wait) — not romance.
+Reserve "transaction" for explicit purchases, gifts, or tips only.
+Positive bonding (compliments, comfort, flirting) belongs in "social" or "romance".
 
 INPUT CONVENTION: text wrapped in *asterisks* is a physical ACTION the player performs; other text is them speaking aloud.
 

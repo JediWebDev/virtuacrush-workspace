@@ -4,7 +4,7 @@
 import type { CharacterLore } from '../inworld/lore';
 
 /** Affinity needed before a probing player can unlock a secret. */
-export const SECRET_REVEAL_AFFINITY = 65;
+export const SECRET_REVEAL_AFFINITY = 40;
 
 /** Heuristic: is the player digging at who the character really is / their secret? */
 export function isProbing(message: string): boolean {

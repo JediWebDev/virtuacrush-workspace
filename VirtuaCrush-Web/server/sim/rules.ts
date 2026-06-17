@@ -10,11 +10,10 @@ export type Consequence =
   | { type: 'authority_warn'; reason: string }
   | { type: 'dispatch_responders'; who: string };
 
-// Tuned so a warm 15-20 message session moves affinity a VISIBLE +4-8 points
-// (the old values rounded away to nothing in the UI), while negatives still
-// bite harder than positives reward.
+// Affinity moves only on clearly positive or negative intents — neutral smalltalk
+// earns nothing. Negatives bite harder than positives reward.
 const SOCIAL_AFFINITY: Record<string, number> = {
-  smalltalk: 0.3, compliment: 1, tease: 0.4, joke: 0.5, share: 0.4,
+  smalltalk: 0, compliment: 1, tease: 0.4, joke: 0.5, share: 0.4,
   apologize: 0.7, comfort: 1.2, help: 1.2, boast: 0, lie: -0.8, manipulate: -1.5,
 };
 const ROMANCE_AFFINITY: Record<string, number> = {
@@ -26,6 +25,14 @@ const CONFLICT: Record<string, { delta: number; warn: boolean }> = {
   argue: { delta: -1, warn: false }, threaten: { delta: -2, warn: true }, intimidate: { delta: -2, warn: true },
 };
 
+function affinityDelta(
+  target: string,
+  delta: number,
+  reason: string,
+): Consequence[] {
+  return delta !== 0 ? [{ type: 'affinity', npc: target, delta, reason }] : [];
+}
+
 export function consequencesFor(intent: PlayerIntent, world: WorldState): Consequence[] {
   const companion = world.scene.companionId;
   const target = intent.target ?? companion;
@@ -33,16 +40,16 @@ export function consequencesFor(intent: PlayerIntent, world: WorldState): Conseq
   switch (intent.type) {
     case 'conflict': {
       const c = CONFLICT[intent.subtype] ?? { delta: -1, warn: false };
-      const cs: Consequence[] = [{ type: 'affinity', npc: target, delta: c.delta, reason: intent.subtype }];
+      const cs: Consequence[] = affinityDelta(target, c.delta, intent.subtype);
       if (c.warn) cs.push({ type: 'authority_warn', reason: intent.subtype });
       return cs;
     }
 
     case 'social':
-      return [{ type: 'affinity', npc: target, delta: SOCIAL_AFFINITY[intent.subtype] ?? 0.3, reason: intent.subtype }];
+      return affinityDelta(target, SOCIAL_AFFINITY[intent.subtype] ?? 0, intent.subtype);
 
     case 'romance':
-      return [{ type: 'affinity', npc: target, delta: ROMANCE_AFFINITY[intent.subtype] ?? 0.6, reason: intent.subtype }];
+      return affinityDelta(target, ROMANCE_AFFINITY[intent.subtype] ?? 0, intent.subtype);
 
     case 'transaction': {
       if (intent.subtype === 'gift') {
