@@ -17,6 +17,7 @@ import {
   type CommunityAdventure,
   type CommunityArc,
 } from "../lib/api";
+import { parseCharacterTags } from "../lib/customCharacter";
 
 type Tab = "characters" | "adventures" | "arcs";
 
@@ -117,10 +118,23 @@ export default function CommunityPage() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {chars.map((c) => {
                   const done = doneIds[`c${c.id}`];
+                  const tags = parseCharacterTags(c.tone);
                   return (
                     <motion.div key={c.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className={cardClass}>
                       <p className="text-sm font-semibold text-stone-900 dark:text-stone-50">{c.displayName}</p>
-                      {c.tone && <p className="text-[11px] uppercase tracking-wide text-accent">{c.tone}</p>}
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-accent">Custom companion</p>
+                      {tags.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full border border-black/[0.08] dark:border-white/[0.08] bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-stone-600 dark:text-stone-300"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       <p className="mt-1 line-clamp-4 flex-1 text-xs italic text-stone-500">{c.blurb}</p>
                       <Attribution name={c.creatorName} copies={c.copyCount} />
                       {done ? (

@@ -58,7 +58,7 @@ const labelClass = "mb-1 block text-xs font-semibold uppercase tracking-wide tex
 const inputClass =
   "w-full rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.04] px-3 py-2.5 text-sm text-stone-800 dark:text-stone-100 outline-none transition-colors placeholder:text-stone-400 focus:border-accent/40 focus:ring-2 focus:ring-accent/10";
 
-const emptyCharForm = () => ({ displayName: "", core: "", greeting: "", secret: "", tone: "" });
+const emptyCharForm = () => ({ displayName: "", core: "", greeting: "", secret: "", tags: "" });
 
 export default function StudioPage() {
   const navigate = useNavigate();
@@ -118,7 +118,7 @@ export default function StudioPage() {
         core: charForm.core.trim(),
         greeting: charForm.greeting.trim() || undefined,
         secret: charForm.secret.trim() || undefined,
-        tone: charForm.tone.trim() || undefined,
+        tone: charForm.tags.trim() || undefined,
       });
       setCharForm(emptyCharForm());
       refreshChars();
@@ -442,8 +442,8 @@ export default function StudioPage() {
               <input className={inputClass} value={charForm.displayName} onChange={(e) => setChar("displayName", e.target.value)} placeholder="Captain Pancake" />
             </div>
             <div>
-              <label className={labelClass}>Tone (optional)</label>
-              <input className={inputClass} value={charForm.tone} onChange={(e) => setChar("tone", e.target.value)} placeholder="warm, playful, a little dramatic" />
+              <label className={labelClass}>Tags (optional)</label>
+              <input className={inputClass} value={charForm.tags} onChange={(e) => setChar("tags", e.target.value)} placeholder="Playful, Warm, Creative" />
             </div>
           </div>
 

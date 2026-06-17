@@ -13,14 +13,25 @@ export function customAvatar(name: string): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
+/** Splits the stored tone string (comma-separated traits) into display tags. */
+export function parseCharacterTags(tone: string | null | undefined): string[] {
+  if (!tone?.trim()) return [];
+  return tone
+    .split(/[,;]+/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .map((t) => t.charAt(0).toUpperCase() + t.slice(1));
+}
+
 /** Builds a frontend Character from a stored custom persona. */
 export function studioToCharacter(c: StudioCharacter): Character {
+  const tags = parseCharacterTags(c.tone);
   return {
     id: customCharacterRef(c.id),
     name: c.displayName,
-    role: c.tone ? `Your character · ${c.tone}` : "Your character",
+    role: "Custom companion",
     bio: c.core,
-    tags: ["Custom"],
+    tags,
     image: c.imageKey ? assetUrl(c.imageKey) : customAvatar(c.displayName),
     premiumVideo: "",
     persona: c.core,
