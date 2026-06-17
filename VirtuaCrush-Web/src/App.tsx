@@ -20,39 +20,9 @@ import termsMd from "./content/legal/terms.md?raw";
 import privacyMd from "./content/legal/privacy.md?raw";
 import acceptableUseMd from "./content/legal/acceptable-use.md?raw";
 import aiDisclaimerMd from "./content/legal/ai-disclaimer.md?raw";
-import { fetchUsage, getStudioCharacter, assetUrl, type StudioCharacter } from "./lib/api";
+import { fetchUsage, getStudioCharacter } from "./lib/api";
+import { studioToCharacter, isCustomCharacterId } from "./lib/customCharacter";
 import { useSession } from './lib/auth-client';
-
-// A simple gradient initial avatar for custom characters (no uploaded image).
-function customAvatar(name: string): string {
-  const initial = (name.trim()[0] || "?").toUpperCase();
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240">` +
-    `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
-    `<stop offset="0" stop-color="#c9717d"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs>` +
-    `<rect width="240" height="240" fill="url(#g)"/>` +
-    `<text x="120" y="158" font-family="Georgia, serif" font-size="120" fill="white" text-anchor="middle">${initial}</text></svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
-
-/** Builds a frontend Character from a stored custom persona. */
-function toFrontendCharacter(c: StudioCharacter): Character {
-  return {
-    id: `user:${c.id}`,
-    name: c.displayName,
-    role: c.tone ? `Your character · ${c.tone}` : "Your character",
-    bio: "",
-    tags: [],
-    image: c.imageKey ? assetUrl(c.imageKey) : customAvatar(c.displayName),
-    premiumVideo: "",
-    persona: c.core,
-    currentAffinity: 0,
-    rivalName: "",
-    rivalAvatar: "",
-    rivalSnarkComment: "",
-    feedPosts: [],
-  };
-}
 
 export default function App() {
   const navigate = useNavigate();
@@ -88,17 +58,21 @@ export default function App() {
   useEffect(() => {
     if (!isCustomRef || !chatId) { setCustomChat(null); setCustomChatState("idle"); return; }
     let cancelled = false;
+    setCustomChat(null);
     setCustomChatState("loading");
     getStudioCharacter(chatId)
-      .then((sc) => { if (!cancelled) { setCustomChat(toFrontendCharacter(sc)); setCustomChatState("idle"); } })
+      .then((sc) => { if (!cancelled) { setCustomChat(studioToCharacter(sc)); setCustomChatState("idle"); } })
       .catch(() => { if (!cancelled) setCustomChatState("error"); });
     return () => { cancelled = true; };
   }, [chatId, isCustomRef]);
 
   const activeChat = builtInChat ?? (customChat && customChat.id === chatId ? customChat : null);
+  const needsCustomResolve =
+    isCustomRef && customChatState !== "error" && (!customChat || customChat.id !== chatId);
+
   const handleSelect = (char: Character) => {
-    // Free tier: only the starter roster is chattable; others pitch the upgrade.
-    if (!hasPremiumAccess(userTier) && !isFreeCharacter(char.name)) {
+    // Free tier: only the starter roster is chattable; custom companions you created are always available.
+    if (!isCustomCharacterId(char.id) && !hasPremiumAccess(userTier) && !isFreeCharacter(char.name)) {
       setShowUpgradeModal(true);
       return;
     }
@@ -148,10 +122,20 @@ export default function App() {
   // Unknown character id in the URL: bail back home — but wait while a custom
   // persona is still loading from the DB.
   if (chatMatch && !activeChat) {
-    if (isCustomRef && customChatState === "loading") {
+    if (needsCustomResolve) {
       return (
         <div className="flex min-h-screen items-center justify-center bg-stone-50 text-stone-500 dark:bg-surface dark:text-stone-400">
           Loading…
+        </div>
+      );
+    }
+    if (isCustomRef && customChatState === "error") {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-stone-50 px-6 text-center dark:bg-surface">
+          <p className="text-stone-600 dark:text-stone-400">Couldn&apos;t load that companion.</p>
+          <Link to="/studio" className="rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-white hover:bg-accent-deep">
+            Back to Studio
+          </Link>
         </div>
       );
     }

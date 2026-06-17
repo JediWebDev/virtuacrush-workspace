@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "motion/react";
 import { Lock, MessageSquare } from "lucide-react";
+import { isCustomCharacterId } from "../lib/customCharacter";
 import { Character } from "../types/character";
 import { isFreeCharacter, type UserTier } from "../types/subscription";
 
@@ -13,7 +14,9 @@ interface Props {
 
 export default function CompanionCard({ character, onSelect, userTier }: Props) {
   const isLocked =
-    (userTier === "guest" || userTier === "free") && !isFreeCharacter(character.name);
+    !isCustomCharacterId(character.id) &&
+    (userTier === "guest" || userTier === "free") &&
+    !isFreeCharacter(character.name);
 
   return (
     <motion.div
