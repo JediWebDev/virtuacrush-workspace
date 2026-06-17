@@ -462,6 +462,9 @@ export default function StudioPage() {
             {charSaving ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
             {charSaving ? "Saving…" : "Save companion"}
           </button>
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-stone-500">
+            <ImagePlus size={13} className="text-accent" /> After saving, upload or AI-generate an avatar from the companion's card on the right.
+          </p>
         </div>
 
         {/* My characters */}
@@ -471,7 +474,7 @@ export default function StudioPage() {
             <p className="flex items-center gap-2 py-6 text-sm text-stone-500"><Loader2 size={16} className="animate-spin" /> Loading…</p>
           ) : characters.length === 0 ? (
             <p className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] p-4 text-sm text-stone-500">
-              No companions yet. Dream one up on the left and hit Save.
+              No companions yet. Dream one up on the left and hit Save — then add an avatar (upload or AI-generate) right here on its card.
             </p>
           ) : (
             <ul className="space-y-3">

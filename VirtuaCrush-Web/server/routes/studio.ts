@@ -210,7 +210,10 @@ router.post('/characters/:id/image/generate', requireAuth, async (req: Request, 
   const c = await getUserCharacter(req.params.id);
   if (!c || c.ownerUserId !== req.user!.id) return res.status(404).json({ error: 'not_found' });
 
-  if (!(await isSubscribed(req.user!.id))) return res.status(403).json({ error: 'pro_required' });
+  // Pro-gated by default. IMAGE_GEN_FOR_ALL=1 opens it to everyone (useful for
+  // testing/launch promos) without removing the gate from the codebase.
+  const proOk = process.env.IMAGE_GEN_FOR_ALL === '1' || (await isSubscribed(req.user!.id));
+  if (!proOk) return res.status(403).json({ error: 'pro_required' });
 
   const b = (req.body ?? {}) as { appearance?: string; style?: string };
   try {
