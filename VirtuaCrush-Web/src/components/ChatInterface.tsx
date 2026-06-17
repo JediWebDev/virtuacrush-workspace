@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
-import { fetchGreeting, fetchCharacterState, fetchAffinity, respondToDesire, fetchChatHistory, travel, type CharacterState, type ChatHistoryDay, type TravelResult } from "../lib/api";
+import { fetchGreeting, fetchCharacterState, fetchAffinity, respondToDesire, fetchChatHistory, type CharacterState, type ChatHistoryDay } from "../lib/api";
 import { splitNarration } from "../lib/narration";
 import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
@@ -10,7 +10,6 @@ import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Searc
 import { Character } from "../types/character";
 import type { UserTier } from "../types/subscription";
 import SocialFeed from "./SocialFeed";
-import CityMap from "./CityMap";
 import UpgradeToast from "./UpgradeToast";
 import SecretCard from "./SecretCard";
 import DesireEventCard from "./DesireEventCard";
@@ -67,9 +66,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [profileOpen, setProfileOpen] = useState(false);
   const [storyState, setStoryState] = useState<CharacterState | null>(null);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
-  // Travel / city map
-  const [playerLocation, setPlayerLocation] = useState<string | null>(null);
-  const [isTraveling, setIsTraveling] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   // Opening narration handed off from the Story Studio when a user arc is played.
@@ -233,11 +229,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     setStoryState(null);
     fetchCharacterState(character.id)
       .then((s) => {
-        if (!cancelled) {
-          setStoryState(s);
-          // Seed the map's current location from persisted state.
-          setPlayerLocation(s.sceneLocation ?? null);
-        }
+        if (!cancelled) setStoryState(s);
       })
       .catch((err) => console.error('[state] fetch failed:', err));
     return () => { cancelled = true; };
@@ -258,36 +250,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
       .catch((err) => console.error('[affinity] fetch failed:', err));
     return () => { cancelled = true; };
   }, [character.id, onAffinityChange]);
-
-  // Travel handler — called by CityMap when the player clicks a pin.
-  const handleTravel = async (locationSlug: string) => {
-    if (isTraveling) return;
-    setIsTraveling(true);
-    try {
-      const result: TravelResult = await travel(character.id, locationSlug);
-      const newSlug = locationSlug === "player_home" ? null : locationSlug;
-      setPlayerLocation(newSlug);
-      // Inject a narrator travel message into the chat.
-      const locationName = result.location.name;
-      const travelMsg = result.sceneHeader
-        ? `[NARRATOR] You're now at ${locationName}. ${result.sceneHeader}`
-        : `[NARRATOR] You travel to ${locationName}.`;
-      setMessages((prev) => [
-        ...prev,
-        { id: `travel-${Date.now()}`, role: "assistant" as const, content: travelMsg },
-      ]);
-    } catch (err: any) {
-      const detail = err?.body?.error === "affinity_too_low"
-        ? `You need ${err?.body?.required} affinity to visit here (you have ${err?.body?.current}).`
-        : "Couldn't travel there right now.";
-      setMessages((prev) => [
-        ...prev,
-        { id: `travel-err-${Date.now()}`, role: "assistant" as const, content: `[NARRATOR] ${detail}` },
-      ]);
-    } finally {
-      setIsTraveling(false);
-    }
-  };
 
   const characterWithAffinity: Character = { ...character, currentAffinity: affinity };
 
@@ -1067,17 +1029,8 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           </>
         )}
       </motion.div>
-      {/* Desktop right panel — city map above social feed */}
+      {/* Desktop right panel — social feed */}
       <div className="hidden min-h-0 flex-col border-l border-black/[0.06] dark:border-white/[0.06] lg:flex overflow-y-auto">
-        <div className="shrink-0 border-b border-black/[0.06] dark:border-white/[0.06]">
-          <CityMap
-            characterId={character.id}
-            currentLocation={playerLocation}
-            currentAffinity={affinity}
-            onTravel={handleTravel}
-            isTraveling={isTraveling}
-          />
-        </div>
         <SocialFeed character={characterWithAffinity} className="min-h-0 flex-1" isActive userTier={userTier} refreshKey={feedRefreshKey} />
       </div>
 
@@ -1109,15 +1062,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                 >
                   <X size={20} />
                 </button>
-              </div>
-              <div className="shrink-0 border-b border-black/[0.06] dark:border-white/[0.06]">
-                <CityMap
-                  characterId={character.id}
-                  currentLocation={playerLocation}
-                  currentAffinity={affinity}
-                  onTravel={(slug) => { handleTravel(slug); setFeedOpen(false); }}
-                  isTraveling={isTraveling}
-                />
               </div>
               <SocialFeed character={characterWithAffinity} className="min-h-0 flex-1" isActive={feedOpen} userTier={userTier} refreshKey={feedRefreshKey} />
             </motion.div>

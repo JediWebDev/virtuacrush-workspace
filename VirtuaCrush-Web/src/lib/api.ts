@@ -143,45 +143,6 @@ export interface UsageInfo {
 export function fetchUsage(): Promise<UsageInfo> {
   return api<UsageInfo>('/api/usage');
 }
-// --- Travel ------------------------------------------------------------------
-
-export interface TravelLocation {
-  slug: string;
-  name: string;
-  shortName: string;
-  type: 'player_home' | 'public' | 'character_home';
-  characterId?: string;
-  affinityRequired?: number;
-}
-
-export interface TravelResult {
-  location: TravelLocation;
-  sceneHeader?: string;
-}
-
-/**
- * Moves the player (in the context of their conversation with characterId) to
- * the given location. Throws ApiError on affinity gate or unknown slug.
- */
-export async function travel(
-  characterId: string,
-  locationSlug: string,
-): Promise<TravelResult> {
-  return api<TravelResult>('/api/travel', {
-    method: 'POST',
-    body: JSON.stringify({ characterId, locationSlug }),
-  });
-}
-
-/**
- * Reads the player's current location for this character from the state
- * endpoint (scene_location field). Returns null when at home.
- */
-export async function getPlayerLocation(characterId: string): Promise<string | null> {
-  const state = await fetchCharacterState(characterId);
-  return state.sceneLocation ?? null;
-}
-
 // ============================================================================
 // Story Packs
 // ============================================================================
