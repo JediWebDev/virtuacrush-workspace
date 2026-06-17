@@ -4,7 +4,8 @@
 // one-time startup diagnostic prints the PARSED values (JSON-quoted, with
 // lengths) so any invisible character shows up in the logs instead of as an
 // opaque InvalidBucketName error.
-import { S3Client } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import type { Readable } from 'node:stream';
 
 function clean(v: string | undefined): string {
   return (v ?? '').trim().replace(/^["']+|["']+$/g, '').trim();
@@ -56,3 +57,24 @@ export const r2 = r2Enabled
       credentials: { accessKeyId: KEY_ID, secretAccessKey: SECRET },
     })
   : null;
+
+/** Uploads bytes to the bucket under `key`. Throws if R2 isn't configured. */
+export async function putObject(key: string, body: Buffer, contentType: string): Promise<void> {
+  if (!r2) throw new Error('[r2] not configured — cannot upload');
+  await r2.send(
+    new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, Body: body, ContentType: contentType }),
+  );
+}
+
+/** Reads an object's bytes (+ content type) from the bucket, or null if missing. */
+export async function getObjectBytes(key: string): Promise<{ body: Buffer; contentType: string } | null> {
+  if (!r2) return null;
+  try {
+    const obj = await r2.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+    const chunks: Buffer[] = [];
+    for await (const chunk of obj.Body as Readable) chunks.push(Buffer.from(chunk));
+    return { body: Buffer.concat(chunks), contentType: obj.ContentType || 'application/octet-stream' };
+  } catch {
+    return null;
+  }
+}

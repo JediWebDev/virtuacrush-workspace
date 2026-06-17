@@ -17,6 +17,7 @@ export interface UserCharacter {
   creatorName: string | null;
   sourceId: string | null;    // original id if this is a copy
   copyCount: number;
+  imageKey: string | null;    // R2 object key for the avatar; null = initials fallback
   createdAt: string;
 }
 
@@ -24,7 +25,7 @@ interface Row {
   id: number; owner_user_id: string; display_name: string; core: string; greeting: string;
   secret: string | null; tone: string | null; visibility: string; moderation_status: string;
   moderation_reason: string | null; creator_name: string | null; source_id: string | number | null;
-  copy_count: number | null; created_at: string;
+  copy_count: number | null; image_key: string | null; created_at: string;
 }
 
 function rowTo(r: Row): UserCharacter {
@@ -42,8 +43,20 @@ function rowTo(r: Row): UserCharacter {
     creatorName: r.creator_name ?? null,
     sourceId: r.source_id != null ? String(r.source_id) : null,
     copyCount: r.copy_count ?? 0,
+    imageKey: r.image_key ?? null,
     createdAt: r.created_at,
   };
+}
+
+/** Sets (or clears) the avatar image key for an owned character. */
+export async function setCharacterImage(ownerUserId: string, dbId: string, imageKey: string | null): Promise<boolean> {
+  const n = Number(dbId);
+  if (!Number.isFinite(n)) return false;
+  const { rowCount } = await pool.query(
+    `UPDATE user_characters SET image_key = $3, updated_at = NOW() WHERE id = $1 AND owner_user_id = $2`,
+    [n, ownerUserId, imageKey],
+  );
+  return (rowCount ?? 0) > 0;
 }
 
 /** The chat/character id used everywhere for a custom persona. */
@@ -167,8 +180,8 @@ export async function copyCharacterToUser(sourceId: string, newOwnerUserId: stri
 
   const { rows } = await pool.query<Row>(
     `INSERT INTO user_characters
-       (owner_user_id, display_name, core, greeting, secret, tone, visibility, moderation_status, creator_name, source_id)
-     VALUES ($1, $2, $3, $4, $5, $6, 'private', 'approved', $7, $8)
+       (owner_user_id, display_name, core, greeting, secret, tone, visibility, moderation_status, creator_name, source_id, image_key)
+     VALUES ($1, $2, $3, $4, $5, $6, 'private', 'approved', $7, $8, $9)
      RETURNING *`,
     [
       newOwnerUserId,
@@ -179,6 +192,7 @@ export async function copyCharacterToUser(sourceId: string, newOwnerUserId: stri
       src.tone,
       src.creatorName ?? null,
       Number(sourceId),
+      src.imageKey ?? null,
     ],
   );
   await pool.query(`UPDATE user_characters SET copy_count = copy_count + 1 WHERE id = $1`, [Number(sourceId)]);

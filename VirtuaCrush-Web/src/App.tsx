@@ -20,7 +20,7 @@ import termsMd from "./content/legal/terms.md?raw";
 import privacyMd from "./content/legal/privacy.md?raw";
 import acceptableUseMd from "./content/legal/acceptable-use.md?raw";
 import aiDisclaimerMd from "./content/legal/ai-disclaimer.md?raw";
-import { joinInterestList, fetchUsage, getStudioCharacter, type StudioCharacter } from "./lib/api";
+import { joinInterestList, fetchUsage, getStudioCharacter, assetUrl, type StudioCharacter } from "./lib/api";
 import { useSession } from './lib/auth-client';
 
 // A simple gradient initial avatar for custom characters (no uploaded image).
@@ -43,7 +43,7 @@ function toFrontendCharacter(c: StudioCharacter): Character {
     role: c.tone ? `Your character · ${c.tone}` : "Your character",
     bio: "",
     tags: [],
-    image: customAvatar(c.displayName),
+    image: c.imageKey ? assetUrl(c.imageKey) : customAvatar(c.displayName),
     premiumVideo: "",
     persona: c.core,
     currentAffinity: 0,

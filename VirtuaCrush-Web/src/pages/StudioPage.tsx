@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { Wand2, Play, Trash2, Loader2, BookPlus, UserPlus, MessageCircle } from "lucide-react";
+import { Wand2, Play, Trash2, Loader2, BookPlus, UserPlus, MessageCircle, ImagePlus, Sparkles, Upload } from "lucide-react";
 import { CHARACTERS } from "../types/character";
 import AdventureBuilder from "../components/AdventureBuilder";
 import PublishControl from "../components/PublishControl";
@@ -18,10 +18,25 @@ import {
   unpublishStudioStory,
   publishStudioCharacter,
   unpublishStudioCharacter,
+  uploadStudioCharacterImage,
+  generateStudioCharacterImage,
+  deleteStudioCharacterImage,
+  assetUrl,
+  ApiError,
   type StudioStory,
   type StudioArcInput,
   type StudioCharacter,
 } from "../lib/api";
+
+/** Reads a File into a base64 data URL. */
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
 
 type Tone = NonNullable<StudioArcInput["tone"]>;
 const TONES: Tone[] = ["light", "serious", "romantic", "dramatic"];
@@ -145,6 +160,34 @@ export default function StudioPage() {
   const handleUnpublishChar = async (c: StudioCharacter) => {
     setPubBusyId(c.id);
     try { await unpublishStudioCharacter(c.id); } catch { /* noop */ } finally { refreshChars(); setPubBusyId(null); }
+  };
+
+  // Avatar images (upload / generate / remove)
+  const [imgBusyId, setImgBusyId] = useState<string | null>(null);
+  const [imgError, setImgError] = useState<string | null>(null);
+  const handleUploadImage = async (c: StudioCharacter, file: File) => {
+    setImgError(null); setImgBusyId(c.id);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      await uploadStudioCharacterImage(c.id, dataUrl);
+      refreshChars();
+    } catch {
+      setImgError("Couldn't upload that image. Use a PNG/JPG/WEBP under 6MB.");
+    } finally { setImgBusyId(null); }
+  };
+  const handleGenerateImage = async (c: StudioCharacter) => {
+    setImgError(null); setImgBusyId(c.id);
+    try {
+      await generateStudioCharacterImage(c.id);
+      refreshChars();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 403) setImgError("AI avatar generation is a Pro feature.");
+      else setImgError("Couldn't generate an image. Please try again.");
+    } finally { setImgBusyId(null); }
+  };
+  const handleRemoveImage = async (c: StudioCharacter) => {
+    setImgBusyId(c.id);
+    try { await deleteStudioCharacterImage(c.id); refreshChars(); } catch { /* noop */ } finally { setImgBusyId(null); }
   };
 
   const set = <K extends keyof ReturnType<typeof emptyForm>>(k: K, v: ReturnType<typeof emptyForm>[K]) =>
@@ -439,8 +482,53 @@ export default function StudioPage() {
                   animate={{ opacity: 1, y: 0 }}
                   className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] p-4"
                 >
-                  <p className="text-sm font-semibold text-stone-900 dark:text-stone-50">{c.displayName}</p>
-                  <p className="mt-1 line-clamp-3 text-xs italic text-stone-500">{c.core}</p>
+                  <div className="flex items-start gap-3">
+                    {c.imageKey ? (
+                      <img src={assetUrl(c.imageKey)} alt={c.displayName} className="h-14 w-14 shrink-0 rounded-xl object-cover" />
+                    ) : (
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-violet-warm text-xl font-bold text-white">
+                        {(c.displayName.trim()[0] || "?").toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-stone-900 dark:text-stone-50">{c.displayName}</p>
+                      <p className="mt-1 line-clamp-2 text-xs italic text-stone-500">{c.core}</p>
+                    </div>
+                  </div>
+
+                  {/* Avatar controls */}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-black/10 dark:border-white/10 px-2 py-1 text-[11px] font-medium text-stone-600 transition-colors hover:bg-black/[0.05] dark:text-stone-300">
+                      {imgBusyId === c.id ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />} Upload
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        disabled={imgBusyId === c.id}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadImage(c, f); e.target.value = ""; }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateImage(c)}
+                      disabled={imgBusyId === c.id}
+                      className="inline-flex items-center gap-1 rounded-lg border border-black/10 dark:border-white/10 px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"
+                    >
+                      {imgBusyId === c.id ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />} Generate
+                    </button>
+                    {c.imageKey && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(c)}
+                        disabled={imgBusyId === c.id}
+                        className="inline-flex items-center gap-1 rounded-lg border border-black/10 dark:border-white/10 px-2 py-1 text-[11px] font-medium text-stone-400 transition-colors hover:text-red-500 disabled:opacity-50"
+                      >
+                        <ImagePlus size={11} /> Remove
+                      </button>
+                    )}
+                  </div>
+                  {imgError && imgBusyId === null && <p className="mt-1 text-[11px] text-red-500">{imgError}</p>}
+
                   <div className="mt-3 flex gap-2">
                     <button
                       type="button"
