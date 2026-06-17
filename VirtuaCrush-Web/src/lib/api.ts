@@ -143,12 +143,6 @@ export interface UsageInfo {
 export function fetchUsage(): Promise<UsageInfo> {
   return api<UsageInfo>('/api/usage');
 }
-
-/** Joins the VIP interest list ("notify me when it launches"). */
-export async function joinInterestList(email: string): Promise<void> {
-  await api('/api/interest', { method: 'POST', body: JSON.stringify({ email, source: 'vip_waitlist' }) });
-}
-
 // --- Travel ------------------------------------------------------------------
 
 export interface TravelLocation {

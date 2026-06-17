@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo, type FormEvent } from "react";
+﻿import { useState, useEffect, useMemo } from "react";
 import { Routes, Route, Navigate, Link, useMatch, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Lock } from "lucide-react";
@@ -20,7 +20,7 @@ import termsMd from "./content/legal/terms.md?raw";
 import privacyMd from "./content/legal/privacy.md?raw";
 import acceptableUseMd from "./content/legal/acceptable-use.md?raw";
 import aiDisclaimerMd from "./content/legal/ai-disclaimer.md?raw";
-import { joinInterestList, fetchUsage, getStudioCharacter, assetUrl, type StudioCharacter } from "./lib/api";
+import { fetchUsage, getStudioCharacter, assetUrl, type StudioCharacter } from "./lib/api";
 import { useSession } from './lib/auth-client';
 
 // A simple gradient initial avatar for custom characters (no uploaded image).
@@ -134,12 +134,7 @@ export default function App() {
             <Route path="/ai-disclaimer" element={<LegalPage markdown={aiDisclaimerMd} />} />
             <Route path="*" element={<AuthPage />} />
           </Routes>
-          {isPublicPage ? (
-            <>
-              <CTASection />
-              <Footer />
-            </>
-          ) : null}
+          {isPublicPage ? <Footer /> : null}
         </div>
         <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
           <div className="absolute -left-1/4 top-0 h-[800px] w-[800px] rounded-full bg-accent/10 blur-[120px]" />
@@ -256,7 +251,6 @@ export default function App() {
               ) : null}
             </AnimatePresence>
 
-            <CTASection />
             <Footer />
           </>
         )}
@@ -291,64 +285,3 @@ const BillingResult = ({ success = false }: { success?: boolean }) => (
     </div>
   </section>
 );
-
-const CTASection = () => {
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!email.trim()) return;
-    setStatus("sending");
-    try {
-      await joinInterestList(email.trim());
-      setStatus("done");
-    } catch {
-      setStatus("error");
-    }
-  };
-
-  return (
-    <section className="bg-gradient-to-b from-transparent to-accent/5 px-6 py-24 md:px-12">
-      <div className="relative mx-auto max-w-4xl overflow-hidden rounded-[3rem] border border-black/10 dark:border-white/10 glass p-12 text-center">
-        <div className="absolute left-1/2 top-0 h-40 w-40 -translate-x-1/2 -translate-y-1/2 bg-accent/15 blur-3xl" />
-        <span className="mb-4 inline-flex rounded-full bg-accent/15 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-accent">
-          Coming soon
-        </span>
-        <h2 className="mb-6 font-serif text-4xl font-bold md:text-5xl">Join the VIP Interest List</h2>
-        <p className="mx-auto mb-10 max-w-xl text-stone-600 dark:text-stone-400">
-          We&apos;re launching with Free and PRO. VIP — personalized audio &amp; video drops, SMS
-          messages, and custom characters — opens soon. Leave your email and you&apos;ll be the
-          first to know.
-        </p>
-        {status === "done" ? (
-          <p className="mx-auto max-w-md rounded-2xl border border-accent/30 bg-accent/10 px-6 py-4 font-medium text-accent">
-            You&apos;re on the list — we&apos;ll email you when VIP opens. 💌
-          </p>
-        ) : (
-          <form onSubmit={submit} className="mx-auto flex max-w-md flex-col gap-4 sm:flex-row">
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
-              className="flex-1 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.04] dark:bg-white/[0.04] px-6 py-4 text-stone-800 dark:text-stone-100 outline-none transition-colors placeholder:text-stone-500 focus:border-accent/40 focus:ring-2 focus:ring-accent/15"
-            />
-            <button
-              type="submit"
-              disabled={status === "sending"}
-              className="rounded-2xl bg-accent px-8 py-4 font-semibold text-white shadow-lg shadow-accent/25 transition-all hover:bg-accent-deep active:scale-95 disabled:opacity-60"
-            >
-              {status === "sending" ? "Joining…" : "Notify me"}
-            </button>
-          </form>
-        )}
-        {status === "error" ? (
-          <p className="mt-4 text-sm text-red-500">Something went wrong — please try again.</p>
-        ) : null}
-      </div>
-    </section>
-  );
-};
-

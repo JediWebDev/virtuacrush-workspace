@@ -183,7 +183,7 @@ export default function StudioPage() {
       refreshChars();
     } catch (e) {
       if (e instanceof ApiError && e.status === 403) setImgError("AI avatar generation is a Pro feature.");
-      else if (e instanceof ApiError && e.body?.error === "storage_not_configured") setImgError("Image storage (R2) isn't configured on the server.");
+      else if (e instanceof ApiError && e.body?.error === "storage_failed") setImgError("Image storage rejected the upload — the R2 API token likely needs Object Read & Write permission.");
       else if (e instanceof ApiError && e.body?.detail) setImgError(String(e.body.detail).slice(0, 220));
       else setImgError("Couldn't generate an image. Please try again.");
     } finally { setImgBusyId(null); }

@@ -284,8 +284,7 @@ export default function HowItWorksPage() {
                   </ul>
                   {(tier as { comingSoon?: boolean }).comingSoon ? (
                     <p className="mt-5 rounded-xl border border-amber-500/25 bg-amber-500/[0.08] px-3 py-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
-                      Not available at launch — join the interest list at the bottom of any page
-                      and we&apos;ll email you when VIP opens.
+                      Not available at launch — VIP opens soon.
                     </p>
                   ) : null}
                   {tier.highlight ? <UpgradeProButton /> : null}
