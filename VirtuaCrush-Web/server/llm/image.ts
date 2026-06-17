@@ -9,7 +9,7 @@
 // publish-time image moderation check.
 import { openAiConfig } from './openai';
 
-const IMAGE_MODEL = (process.env.IMAGE_MODEL || 'black-forest-labs/flux.2-max').trim();
+const IMAGE_MODEL = (process.env.IMAGE_MODEL || 'google/gemini-3.1-flash-image-preview').trim();
 const VISION_MODEL = (process.env.VISION_MODEL || 'openai/gpt-4o-mini').trim();
 
 function authHeaders(apiKey: string): Record<string, string> {
