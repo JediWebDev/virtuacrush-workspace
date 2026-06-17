@@ -475,7 +475,18 @@ export async function createStudioPack(input: StudioPackInput): Promise<StudioPa
 
 export async function listStudioPacks(characterId?: string): Promise<StudioPack[]> {
   const q = characterId ? `?characterId=${encodeURIComponent(characterId)}` : '';
-  const res = await api<{ packs: StudioPack[] }>(`/a
+  const res = await api<{ packs: StudioPack[] }>(`/api/studio/packs${q}`);
+  return res.packs;
+}
+
+export async function getStudioPack(id: string): Promise<StudioPack> {
+  const res = await api<{ pack: StudioPack }>(`/api/studio/packs/${id}`);
+  return res.pack;
+}
+
+export async function deleteStudioPack(id: string): Promise<void> {
+  await api<{ ok: boolean }>(`/api/studio/packs/${id}`, { method: 'DELETE' });
+}
 
 // --- Publishing (Phase 4) --------------------------------------------------
 
