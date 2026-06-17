@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { Wand2, Play, Trash2, Loader2, BookPlus, UserPlus, MessageCircle } from "lucide-react";
 import { CHARACTERS } from "../types/character";
+import AdventureBuilder from "../components/AdventureBuilder";
 import {
   createStudioStory,
   listStudioStories,
@@ -41,7 +42,7 @@ const emptyCharForm = () => ({ displayName: "", core: "", greeting: "", secret: 
 
 export default function StudioPage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"stories" | "characters">("stories");
+  const [tab, setTab] = useState<"stories" | "characters" | "adventures">("stories");
   const [form, setForm] = useState(emptyForm(CHARACTERS[0]?.id ?? ""));
   const [stories, setStories] = useState<StudioStory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -195,6 +196,7 @@ export default function StudioPage() {
         {([
           ["stories", "Stories"],
           ["characters", "Characters"],
+          ["adventures", "Adventures"],
         ] as const).map(([key, label]) => (
           <button
             key={key}
@@ -432,6 +434,8 @@ export default function StudioPage() {
         </div>
       </div>
       )}
+
+      {tab === "adventures" && <AdventureBuilder />}
     </section>
   );
 }

@@ -33,6 +33,9 @@ import {
   updatePackSceneState,
 } from '../db/pack_sessions';
 import { storeSignificantEvent } from '../db/memory';
+import { getUserStory, listUserStories } from '../db/user_stories';
+import { userStoryToPack } from '../inworld/user_pack';
+import { ensureUserCharacterLoaded } from '../db/user_characters';
 
 /** Affinity awarded for finishing a story when the pack doesn't specify its own. */
 const DEFAULT_AFFINITY_REWARD = 10;
@@ -44,7 +47,8 @@ const router = Router();
 // ---------------------------------------------------------------------------
 const PACKS_DIR = path.join(process.cwd(), 'server', 'packs');
 
-function loadAllPacks(): StoryPack[] {
+/** Built-in packs shipped as JSON in server/packs/. */
+function loadBuiltinPacks(): StoryPack[] {
   try {
     const files = readdirSync(PACKS_DIR).filter((f) => f.endsWith('.json'));
     return files.map((f) => JSON.parse(readFileSync(path.join(PACKS_DIR, f), 'utf8')) as StoryPack);
@@ -53,9 +57,45 @@ function loadAllPacks(): StoryPack[] {
   }
 }
 
-function loadPack(id: string): StoryPack | null {
-  const all = loadAllPacks();
-  return all.find((p) => p.id === id) ?? null;
+/** A user's own CYOA adventures (format='pack'), as runtime StoryPacks. */
+async function loadUserPacks(userId: string): Promise<StoryPack[]> {
+  try {
+    const stories = await listUserStories(userId);
+    return stories
+      .filter((s) => s.format === 'pack')
+      .map(userStoryToPack)
+      .filter((p): p is StoryPack => p != null);
+  } catch {
+    return [];
+  }
+}
+
+/** All packs visible to a user: built-ins + their own custom adventures. */
+async function loadAllPacks(userId?: string): Promise<StoryPack[]> {
+  const builtin = loadBuiltinPacks();
+  if (!userId) return builtin;
+  const user = await loadUserPacks(userId);
+  return [...builtin, ...user];
+}
+
+/** Resolve a pack by id. `user:<storyId>` packs are loaded from the DB and are
+ *  only returned to their owner; built-in ids load from the filesystem. */
+async function loadPack(id: string, userId?: string): Promise<StoryPack | null> {
+  if (id.startsWith('user:')) {
+    const story = await getUserStory(id.slice('user:'.length));
+    if (!story || story.format !== 'pack') return null;
+    if (userId && story.ownerUserId !== userId) return null;
+    return userStoryToPack(story);
+  }
+  return loadBuiltinPacks().find((p) => p.id === id) ?? null;
+}
+
+/** Custom companions must be loaded into the registry before getCharacter()
+ *  (used by the director) can resolve them. No-op for built-in characters. */
+async function ensurePackCharacter(characterId: string, userId: string): Promise<void> {
+  if (characterId.startsWith('user:')) {
+    try { await ensureUserCharacterLoaded(characterId, userId); } catch { /* tolerated */ }
+  }
 }
 
 function packToMeta(p: StoryPack): PackMeta {
@@ -196,9 +236,9 @@ function sanitizePackTranscript(raw: string): string {
 // ---------------------------------------------------------------------------
 // GET /api/packs?characterId=lexi
 // ---------------------------------------------------------------------------
-router.get('/', requireAuth, (req: Request, res: Response) => {
+router.get('/', requireAuth, async (req: Request, res: Response) => {
   const { characterId } = req.query as { characterId?: string };
-  const packs = loadAllPacks();
+  const packs = await loadAllPacks(req.user!.id);
   const meta = packs
     .filter((p) => !characterId || p.characterId === characterId)
     .map(packToMeta);
@@ -210,7 +250,7 @@ router.get('/', requireAuth, (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.post('/:id/start', requireAuth, async (req: Request, res: Response) => {
   const { id } = req.params;
-  const pack = loadPack(id);
+  const pack = await loadPack(id, req.user!.id);
   if (!pack) return res.status(404).json({ error: 'pack_not_found' });
 
   try {
@@ -219,7 +259,7 @@ router.post('/:id/start', requireAuth, async (req: Request, res: Response) => {
     // can offer to resume or abandon it.
     const existing = await getActivePackSession(req.user!.id, pack.characterId);
     if (existing) {
-      const existingPack = loadPack(existing.packId);
+      const existingPack = await loadPack(existing.packId, req.user!.id);
       const existingNode = existingPack?.nodes[existing.currentNode];
       return res.status(409).json({
         error: 'story_in_progress',
@@ -262,7 +302,7 @@ router.get('/session/:sid', requireAuth, async (req: Request, res: Response) => 
     return res.status(404).json({ error: 'session_not_found' });
   }
 
-  const pack = loadPack(session.packId);
+  const pack = await loadPack(session.packId, req.user!.id);
   const node = pack?.nodes[session.currentNode] ?? null;
   const choices: PackChoice[] | null = node?.choices ?? null;
 
@@ -290,7 +330,7 @@ router.get('/session/:sid/greet', requireAuth, async (req: Request, res: Respons
     return res.status(404).json({ error: 'session_not_found' });
   }
 
-  const pack = loadPack(session.packId);
+  const pack = await loadPack(session.packId, req.user!.id);
   if (!pack) return res.status(404).json({ error: 'pack_not_found' });
 
   const history = await loadPackMessages(sessionId, 30);
@@ -331,7 +371,7 @@ router.get('/session/:sid/transcript', requireAuth, async (req: Request, res: Re
     return res.status(404).json({ error: 'session_not_found' });
   }
 
-  const pack = loadPack(session.packId);
+  const pack = await loadPack(session.packId, req.user!.id);
   const messages = await loadPackMessages(sessionId, 1000);
   return res.json({
     messages,
@@ -368,8 +408,10 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
     return res.status(400).json({ error: 'session_not_active' });
   }
 
-  const pack = loadPack(session.packId);
+  const pack = await loadPack(session.packId, req.user!.id);
   if (!pack) return res.status(404).json({ error: 'pack_not_found' });
+  // Custom companions must be registered before the director resolves them.
+  await ensurePackCharacter(session.characterId, req.user!.id);
 
   // A tapped AUTHORED choice (advanceNode is a real beat id) advances
   // deterministically. Free text — or a "dynamic" choice whose next isn't an
@@ -511,7 +553,7 @@ router.get('/active', requireAuth, async (req: Request, res: Response) => {
   const session = await getActivePackSession(req.user!.id, characterId);
   if (!session) return res.json({ session: null });
 
-  const pack = loadPack(session.packId);
+  const pack = await loadPack(session.packId, req.user!.id);
   const node = pack?.nodes[session.currentNode];
   return res.json({
     session: {
@@ -532,8 +574,8 @@ router.get('/history', requireAuth, async (req: Request, res: Response) => {
   if (!characterId) return res.status(400).json({ error: 'missing_character_id' });
 
   const sessions = await getCompletedPackSessions(req.user!.id, characterId);
-  const stories = sessions.map((s) => {
-    const pack = loadPack(s.packId);
+  const stories = await Promise.all(sessions.map(async (s) => {
+    const pack = await loadPack(s.packId, req.user!.id);
     return {
       sessionId: s.sessionId,
       packId: s.packId,
@@ -542,7 +584,7 @@ router.get('/history', requireAuth, async (req: Request, res: Response) => {
       completedAt: s.completedAt,
       lastLine: s.lastLine,
     };
-  });
+  }));
   return res.json({ stories });
 });
 

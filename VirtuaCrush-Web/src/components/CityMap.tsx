@@ -233,73 +233,20 @@ export default function CityMap({
           style={{ height: "auto", aspectRatio: `${W}/${H}` }}
           aria-label="City map"
         >
-          <defs>
-            <radialGradient id="mapBgGlow" cx="50%" cy="40%" r="70%">
-              <stop offset="0%" stopColor={theme.bgGradientInner} />
-              <stop offset="100%" stopColor={theme.bgGradientOuter} />
-            </radialGradient>
-            <pattern id="mapFineGrid" width="20" height="20" patternUnits="userSpaceOnUse">
-              <path
-                d="M 20 0 L 0 0 0 20"
-                fill="none"
-                stroke={theme.gridMinor}
-                strokeWidth={0.35}
-                opacity={isDark ? 0.6 : 0.85}
-              />
-            </pattern>
-          </defs>
+          <image
+            href="/api/assets/City_Map.png"
+            x="0"
+            y="0"
+            width={W}
+            height={H}
+            preserveAspectRatio="xMidYMid slice"
+          />
 
           {/* Base + radial depth */}
           <rect width={W} height={H} fill={theme.bg} />
           <rect width={W} height={H} fill="url(#mapBgGlow)" />
           <rect width={W} height={H} fill="url(#mapFineGrid)" />
 
-          {/* Major street grid */}
-          {[40, 80, 120, 160, 200].map((y) => (
-            <line key={`hy${y}`} x1={0} y1={y} x2={W} y2={y} stroke={theme.gridMajor} strokeWidth={isDark ? 0.5 : 0.75} />
-          ))}
-          {[60, 120, 180, 240, 300, 360].map((x) => (
-            <line key={`vx${x}`} x1={x} y1={0} x2={x} y2={H} stroke={theme.gridMajor} strokeWidth={isDark ? 0.5 : 0.75} />
-          ))}
-
-          {/* Topographic contour lines */}
-          {CONTOURS.map((d, i) => (
-            <path
-              key={`contour-${i}`}
-              d={d}
-              fill="none"
-              stroke={theme.contour}
-              strokeWidth={isDark ? 0.6 : 0.9}
-            />
-          ))}
-
-          {/* Zone fills */}
-          {ZONES.map(([x, y, w, h, zoneKey, darkFill], i) => (
-            <rect
-              key={i}
-              x={x}
-              y={y}
-              width={w}
-              height={h}
-              fill={isDark ? darkFill : theme.zones[zoneKey]}
-              rx={4}
-            />
-          ))}
-
-          {/* City blocks */}
-          {BLOCKS.map(([x, y, w, h], i) => (
-            <rect
-              key={i}
-              x={x}
-              y={y}
-              width={w}
-              height={h}
-              fill={theme.blockFill}
-              stroke={theme.blockStroke}
-              strokeWidth={isDark ? 0 : 0.5}
-              rx={3}
-            />
-          ))}
 
           {/* Zone labels */}
           {ZONE_LABELS.map(([x, y, text], i) => (

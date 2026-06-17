@@ -400,3 +400,79 @@ export async function getStudioCharacter(refOrId: string): Promise<StudioCharact
   const res = await api<{ character: StudioCharacter }>(`/api/studio/characters/${dbId}`);
   return res.character;
 }
+
+// --- Custom CYOA adventures (Phase 3) --------------------------------------
+
+export type StudioMood =
+  | 'romantic' | 'dramatic' | 'comedic' | 'thriller' | 'mystery'
+  | 'playful' | 'cozy' | 'gothic' | 'tense';
+
+export interface StudioPackChoice {
+  id?: string;
+  label: string;        // short button text
+  userMessage: string;  // first-person line/action if the player picks it
+  next: string;         // target node id, or 'end'
+}
+
+export interface StudioPackNode {
+  npcInstruction: string;            // the dramatic intent of this beat
+  introNarrative?: string;           // optional opening narration for the node
+  choices: StudioPackChoice[] | null; // null = terminal/ending beat
+}
+
+export interface StudioPackSpec {
+  title: string;
+  blurb: string;
+  mood: StudioMood;
+  setting: string;
+  situation: string;
+  coPresent: boolean;
+  systemInstruction: string;
+  nodes: Record<string, StudioPackNode>;
+}
+
+/** A stored adventure (user_stories row with format='pack'). */
+export interface StudioPack {
+  id: string;
+  characterId: string;
+  title: string;
+  blurb: string;
+  format: 'arc' | 'pack';
+  spec: StudioPackSpec;
+  createdAt: string;
+}
+
+export interface StudioPackInput {
+  characterId: string;
+  title: string;
+  blurb?: string;
+  mood?: StudioMood;
+  setting?: string;
+  situation: string;
+  coPresent?: boolean;
+  systemInstruction: string;
+  nodes: Record<string, StudioPackNode>;
+}
+
+export async function createStudioPack(input: StudioPackInput): Promise<StudioPack> {
+  const res = await api<{ pack: StudioPack }>(`/api/studio/packs`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return res.pack;
+}
+
+export async function listStudioPacks(characterId?: string): Promise<StudioPack[]> {
+  const q = characterId ? `?characterId=${encodeURIComponent(characterId)}` : '';
+  const res = await api<{ packs: StudioPack[] }>(`/api/studio/packs${q}`);
+  return res.packs;
+}
+
+export async function getStudioPack(id: string): Promise<StudioPack> {
+  const res = await api<{ pack: StudioPack }>(`/api/studio/packs/${id}`);
+  return res.pack;
+}
+
+export async function deleteStudioPack(id: string): Promise<void> {
+  await api<{ ok: boolean }>(`/api/studio/packs/${id}`, { method: 'DELETE' });
+}
