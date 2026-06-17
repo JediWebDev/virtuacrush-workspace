@@ -224,8 +224,11 @@ router.post('/characters/:id/image/generate', requireAuth, async (req: Request, 
     await setCharacterImage(req.user!.id, c.id, key);
     return res.json({ imageKey: key });
   } catch (err) {
-    console.error('[studio] image generation failed:', err);
-    return res.status(502).json({ error: 'generation_failed' });
+    const detail = (err as Error)?.message ?? String(err);
+    console.error('[studio] image generation failed:', detail);
+    // Distinguish "storage not set up" from "model call failed" so it's obvious.
+    const storage = /not configured|R2|bucket|credentials/i.test(detail);
+    return res.status(502).json({ error: storage ? 'storage_not_configured' : 'generation_failed', detail });
   }
 });
 

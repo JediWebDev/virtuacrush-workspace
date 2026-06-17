@@ -26,12 +26,18 @@ export interface GeneratedImage {
   contentType: string;
 }
 
-/** Pull the first generated image (base64 data URL) out of a chat response. */
-function firstImageDataUrl(json: unknown): string | null {
-  const msg = (json as { choices?: { message?: { images?: { image_url?: { url?: string } }[] } }[] })
-    ?.choices?.[0]?.message;
-  const url = msg?.images?.[0]?.image_url?.url;
-  return typeof url === 'string' ? url : null;
+/** Pull the first generated image URL (base64 data URL OR hosted http URL) out
+ *  of a chat response. Tolerates a couple of response shapes providers use. */
+function firstImageUrl(json: unknown): string | null {
+  const msg = (json as {
+    choices?: { message?: {
+      images?: ({ image_url?: { url?: string } } | { url?: string })[];
+      content?: unknown;
+    } }[];
+  })?.choices?.[0]?.message;
+  const img = msg?.images?.[0] as { image_url?: { url?: string }; url?: string } | undefined;
+  const url = img?.image_url?.url ?? img?.url;
+  return typeof url === 'string' && url ? url : null;
 }
 
 /** Decodes a `data:<mime>;base64,<data>` URL into bytes + content type. */
@@ -63,14 +69,28 @@ export async function generateImage(prompt: string): Promise<GeneratedImage> {
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`[image] ${IMAGE_MODEL} HTTP ${res.status}: ${body.slice(0, 300)}`);
+    throw new Error(`[image] ${IMAGE_MODEL} HTTP ${res.status}: ${body.slice(0, 400)}`);
   }
   const json = await res.json();
-  const dataUrl = firstImageDataUrl(json);
-  if (!dataUrl) throw new Error('[image] no image in response');
-  const decoded = decodeDataUrl(dataUrl);
-  if (!decoded) throw new Error('[image] could not decode image data URL');
-  return decoded;
+  const url = firstImageUrl(json);
+  if (!url) {
+    // Surface what actually came back so the cause is visible in logs.
+    throw new Error(`[image] ${IMAGE_MODEL} returned no image. Response: ${JSON.stringify(json).slice(0, 500)}`);
+  }
+
+  // Base64 data URL → decode directly.
+  if (url.startsWith('data:')) {
+    const decoded = decodeDataUrl(url);
+    if (!decoded) throw new Error('[image] could not decode image data URL');
+    return decoded;
+  }
+
+  // Hosted URL → fetch the bytes.
+  const imgRes = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+  if (!imgRes.ok) throw new Error(`[image] fetching generated image failed: HTTP ${imgRes.status}`);
+  const contentType = imgRes.headers.get('content-type') || 'image/png';
+  const body = Buffer.from(await imgRes.arrayBuffer());
+  return { body, contentType };
 }
 
 /**

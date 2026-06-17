@@ -165,6 +165,7 @@ export default function StudioPage() {
   // Avatar images (upload / generate / remove)
   const [imgBusyId, setImgBusyId] = useState<string | null>(null);
   const [imgError, setImgError] = useState<string | null>(null);
+  const [imgPrompt, setImgPrompt] = useState<Record<string, string>>({});
   const handleUploadImage = async (c: StudioCharacter, file: File) => {
     setImgError(null); setImgBusyId(c.id);
     try {
@@ -178,10 +179,12 @@ export default function StudioPage() {
   const handleGenerateImage = async (c: StudioCharacter) => {
     setImgError(null); setImgBusyId(c.id);
     try {
-      await generateStudioCharacterImage(c.id);
+      await generateStudioCharacterImage(c.id, { appearance: (imgPrompt[c.id] || "").trim() || undefined });
       refreshChars();
     } catch (e) {
       if (e instanceof ApiError && e.status === 403) setImgError("AI avatar generation is a Pro feature.");
+      else if (e instanceof ApiError && e.body?.error === "storage_not_configured") setImgError("Image storage (R2) isn't configured on the server.");
+      else if (e instanceof ApiError && e.body?.detail) setImgError(String(e.body.detail).slice(0, 220));
       else setImgError("Couldn't generate an image. Please try again.");
     } finally { setImgBusyId(null); }
   };
@@ -418,6 +421,14 @@ export default function StudioPage() {
       )}
 
       {tab === "characters" && (
+      <>
+      <div className="mb-6 rounded-2xl border border-accent/20 bg-accent/[0.06] p-4">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-accent">How character avatars work</p>
+        <ol className="space-y-1 text-sm text-stone-600 dark:text-stone-300">
+          <li><span className="font-semibold text-stone-800 dark:text-stone-100">1.</span> Create and save your companion below.</li>
+          <li><span className="font-semibold text-stone-800 dark:text-stone-100">2.</span> On its card under “My companions,” upload an image or AI-generate an avatar — <span className="text-stone-500">AI generation is a Pro feature.</span></li>
+        </ol>
+      </div>
       <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
         {/* Character builder */}
         <div className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
@@ -500,6 +511,13 @@ export default function StudioPage() {
                   </div>
 
                   {/* Avatar controls */}
+                  <textarea
+                    className="mt-2 w-full rounded-lg border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.04] px-2.5 py-1.5 text-xs text-stone-800 dark:text-stone-100 outline-none placeholder:text-stone-400 focus:border-accent/40"
+                    rows={2}
+                    value={imgPrompt[c.id] ?? ""}
+                    onChange={(e) => setImgPrompt((p) => ({ ...p, [c.id]: e.target.value }))}
+                    placeholder="Describe the avatar for AI generation — e.g. weathered sea captain, silver beard, navy coat, warm grin, soft harbor light, painterly"
+                  />
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-black/10 dark:border-white/10 px-2 py-1 text-[11px] font-medium text-stone-600 transition-colors hover:bg-black/[0.05] dark:text-stone-300">
                       {imgBusyId === c.id ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />} Upload
@@ -564,6 +582,7 @@ export default function StudioPage() {
           )}
         </div>
       </div>
+      </>
       )}
 
       {tab === "adventures" && <AdventureBuilder />}
