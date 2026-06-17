@@ -1,6 +1,7 @@
-// DB layer for user-created Story Studio content. Phase 1: stories (arcs) for
-// existing characters, private to their creator.
+// DB layer for user-created Story Studio content: stories (arcs) and CYOA packs
+// for built-in or custom characters. Private to their creator unless published.
 import { pool } from './pool';
+import { getPublicCharacter, copyCharacterToUser } from './user_characters';
 
 export interface UserStory {
   id: string;
@@ -12,12 +13,18 @@ export interface UserStory {
   spec: Record<string, unknown>;
   visibility: 'private' | 'public';
   moderationStatus: 'pending' | 'approved' | 'rejected';
+  moderationReason: string | null;
+  creatorName: string | null;
+  sourceId: string | null;
+  copyCount: number;
   createdAt: string;
 }
 
 interface Row {
   id: number; owner_user_id: string; character_id: string; title: string; blurb: string;
-  format: string; spec: Record<string, unknown>; visibility: string; moderation_status: string; created_at: string;
+  format: string; spec: Record<string, unknown>; visibility: string; moderation_status: string;
+  moderation_reason: string | null; creator_name: string | null; source_id: string | number | null;
+  copy_count: number | null; created_at: string;
 }
 
 function rowToStory(r: Row): UserStory {
@@ -31,6 +38,10 @@ function rowToStory(r: Row): UserStory {
     spec: r.spec,
     visibility: (r.visibility as 'private' | 'public'),
     moderationStatus: (r.moderation_status as 'pending' | 'approved' | 'rejected'),
+    moderationReason: r.moderation_reason ?? null,
+    creatorName: r.creator_name ?? null,
+    sourceId: r.source_id != null ? String(r.source_id) : null,
+    copyCount: r.copy_count ?? 0,
     createdAt: r.created_at,
   };
 }
@@ -78,4 +89,100 @@ export async function deleteUserStory(ownerUserId: string, id: string): Promise<
     [n, ownerUserId],
   );
   return (rowCount ?? 0) > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Community sharing (Phase 4)
+// ---------------------------------------------------------------------------
+
+/** Sets visibility + moderation outcome for an owned story. */
+export async function setStoryVisibility(
+  ownerUserId: string,
+  id: string,
+  p: { visibility: 'private' | 'public'; moderationStatus: 'pending' | 'approved' | 'rejected'; reason?: string | null; creatorName?: string | null },
+): Promise<UserStory | null> {
+  const n = Number(id);
+  if (!Number.isFinite(n)) return null;
+  const goingPublic = p.visibility === 'public' && p.moderationStatus === 'approved';
+  const { rows } = await pool.query<Row>(
+    `UPDATE user_stories
+        SET visibility = $3,
+            moderation_status = $4,
+            moderation_reason = $5,
+            creator_name = COALESCE(creator_name, $6),
+            published_at = CASE WHEN $7 THEN NOW() ELSE published_at END
+      WHERE id = $1 AND owner_user_id = $2
+      RETURNING *`,
+    [n, ownerUserId, p.visibility, p.moderationStatus, p.reason ?? null, p.creatorName ?? null, goingPublic],
+  );
+  return rows[0] ? rowToStory(rows[0]) : null;
+}
+
+/** Public, approved stories of a given format for community browse. */
+export async function listPublicStories(format: 'arc' | 'pack', limit = 60): Promise<UserStory[]> {
+  const { rows } = await pool.query<Row>(
+    `SELECT * FROM user_stories
+      WHERE visibility = 'public' AND moderation_status = 'approved' AND format = $1
+      ORDER BY published_at DESC NULLS LAST, created_at DESC
+      LIMIT $2`,
+    [format, limit],
+  );
+  return rows.map(rowToStory);
+}
+
+export async function getPublicStory(id: string): Promise<UserStory | null> {
+  const s = await getUserStory(id);
+  if (!s || s.visibility !== 'public' || s.moderationStatus !== 'approved') return null;
+  return s;
+}
+
+/**
+ * Copies a public story (arc or pack) into the requesting user's library
+ * (private, approved, attributed). If the story stars a CUSTOM character
+ * ("user:<id>"), that character is also copied into the user's library (when
+ * it's public) and the copy is repointed at it, so the adventure actually works.
+ * Returns the new story, or null if the source isn't public.
+ */
+export async function copyStoryToUser(sourceId: string, newOwnerUserId: string): Promise<UserStory | null> {
+  const src = await getPublicStory(sourceId);
+  if (!src) return null;
+
+  const existing = await pool.query<Row>(
+    `SELECT * FROM user_stories WHERE owner_user_id = $1 AND source_id = $2 LIMIT 1`,
+    [newOwnerUserId, Number(sourceId)],
+  );
+  if (existing.rows[0]) return rowToStory(existing.rows[0]);
+
+  // Resolve the character: a custom companion must be copied too so the new
+  // owner actually owns the persona the story references.
+  let characterId = src.characterId;
+  if (characterId.startsWith('user:')) {
+    const refId = characterId.slice('user:'.length);
+    const pub = await getPublicCharacter(refId);
+    if (pub) {
+      const copied = await copyCharacterToUser(refId, newOwnerUserId);
+      if (copied) characterId = `user:${copied.id}`;
+    }
+    // If the referenced character isn't public, the story is copied as-is; it
+    // simply won't resolve a custom persona (falls back to generic lore).
+  }
+
+  const { rows } = await pool.query<Row>(
+    `INSERT INTO user_stories
+       (owner_user_id, character_id, title, blurb, format, spec, visibility, moderation_status, creator_name, source_id)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'private', 'approved', $7, $8)
+     RETURNING *`,
+    [
+      newOwnerUserId,
+      characterId,
+      src.title,
+      src.blurb,
+      src.format,
+      JSON.stringify(src.spec),
+      src.creatorName ?? null,
+      Number(sourceId),
+    ],
+  );
+  await pool.query(`UPDATE user_stories SET copy_count = copy_count + 1 WHERE id = $1`, [Number(sourceId)]);
+  return rows[0] ? rowToStory(rows[0]) : null;
 }

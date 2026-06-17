@@ -10,11 +10,14 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { Loader2, Plus, Trash2, MessageCircle, Sparkles, GitBranch, Flag } from "lucide-react";
 import { CHARACTERS } from "../types/character";
+import PublishControl from "./PublishControl";
 import {
   createStudioPack,
   listStudioPacks,
   deleteStudioPack,
   listStudioCharacters,
+  publishStudioPack,
+  unpublishStudioPack,
   type StudioPack,
   type StudioCharacter,
   type StudioMood,
@@ -131,11 +134,21 @@ export default function AdventureBuilder() {
   const [packs, setPacks] = useState<StudioPack[]>([]);
   const [loadingPacks, setLoadingPacks] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [pubBusyId, setPubBusyId] = useState<string | null>(null);
   const refreshPacks = () => {
     setLoadingPacks(true);
     listStudioPacks().then(setPacks).catch(() => setPacks([])).finally(() => setLoadingPacks(false));
   };
   useEffect(refreshPacks, []);
+
+  const handlePublish = async (p: StudioPack) => {
+    setPubBusyId(p.id);
+    try { await publishStudioPack(p.id); } catch { /* status surfaced on refresh */ } finally { refreshPacks(); setPubBusyId(null); }
+  };
+  const handleUnpublish = async (p: StudioPack) => {
+    setPubBusyId(p.id);
+    try { await unpublishStudioPack(p.id); } catch { /* noop */ } finally { refreshPacks(); setPubBusyId(null); }
+  };
 
   const issues = useMemo(() => validateGraph(nodes), [nodes]);
   const nodeIds = nodes.map((n) => n.id);
@@ -430,6 +443,14 @@ export default function AdventureBuilder() {
                     </button>
                   </div>
                   <p className="mt-2 text-[11px] text-stone-400">Find it under “Stories” in this companion's chat.</p>
+                  <PublishControl
+                    visibility={p.visibility}
+                    moderationStatus={p.moderationStatus}
+                    moderationReason={p.moderationReason}
+                    busy={pubBusyId === p.id}
+                    onPublish={() => handlePublish(p)}
+                    onUnpublish={() => handleUnpublish(p)}
+                  />
                 </motion.li>
               );
             })}

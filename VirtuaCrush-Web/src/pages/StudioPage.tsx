@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { Wand2, Play, Trash2, Loader2, BookPlus, UserPlus, MessageCircle } from "lucide-react";
 import { CHARACTERS } from "../types/character";
 import AdventureBuilder from "../components/AdventureBuilder";
+import PublishControl from "../components/PublishControl";
 import {
   createStudioStory,
   listStudioStories,
@@ -13,6 +14,10 @@ import {
   listStudioCharacters,
   deleteStudioCharacter,
   customCharacterRef,
+  publishStudioStory,
+  unpublishStudioStory,
+  publishStudioCharacter,
+  unpublishStudioCharacter,
   type StudioStory,
   type StudioArcInput,
   type StudioCharacter,
@@ -122,6 +127,25 @@ export default function StudioPage() {
   };
 
   const handleChatChar = (c: StudioCharacter) => navigate(`/chat/${customCharacterRef(c.id)}`);
+
+  // Publish / unpublish (Phase 4)
+  const [pubBusyId, setPubBusyId] = useState<string | null>(null);
+  const handlePublishStory = async (s: StudioStory) => {
+    setPubBusyId(s.id);
+    try { await publishStudioStory(s.id); } catch { /* surfaced via refreshed status */ } finally { refresh(); setPubBusyId(null); }
+  };
+  const handleUnpublishStory = async (s: StudioStory) => {
+    setPubBusyId(s.id);
+    try { await unpublishStudioStory(s.id); } catch { /* noop */ } finally { refresh(); setPubBusyId(null); }
+  };
+  const handlePublishChar = async (c: StudioCharacter) => {
+    setPubBusyId(c.id);
+    try { await publishStudioCharacter(c.id); } catch { /* surfaced via refreshed status */ } finally { refreshChars(); setPubBusyId(null); }
+  };
+  const handleUnpublishChar = async (c: StudioCharacter) => {
+    setPubBusyId(c.id);
+    try { await unpublishStudioCharacter(c.id); } catch { /* noop */ } finally { refreshChars(); setPubBusyId(null); }
+  };
 
   const set = <K extends keyof ReturnType<typeof emptyForm>>(k: K, v: ReturnType<typeof emptyForm>[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -334,6 +358,14 @@ export default function StudioPage() {
                       <Trash2 size={14} />
                     </button>
                   </div>
+                  <PublishControl
+                    visibility={s.visibility}
+                    moderationStatus={s.moderationStatus}
+                    moderationReason={s.moderationReason}
+                    busy={pubBusyId === s.id}
+                    onPublish={() => handlePublishStory(s)}
+                    onUnpublish={() => handleUnpublishStory(s)}
+                  />
                 </motion.li>
               ))}
             </ul>
@@ -427,6 +459,14 @@ export default function StudioPage() {
                       {charBusyId === c.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                     </button>
                   </div>
+                  <PublishControl
+                    visibility={c.visibility}
+                    moderationStatus={c.moderationStatus}
+                    moderationReason={c.moderationReason}
+                    busy={pubBusyId === c.id}
+                    onPublish={() => handlePublishChar(c)}
+                    onUnpublish={() => handleUnpublishChar(c)}
+                  />
                 </motion.li>
               ))}
             </ul>

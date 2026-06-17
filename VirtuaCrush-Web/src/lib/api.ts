@@ -304,6 +304,9 @@ export interface StudioStory {
   spec: Record<string, unknown>;
   visibility: 'private' | 'public';
   moderationStatus: 'pending' | 'approved' | 'rejected';
+  moderationReason?: string | null;
+  creatorName?: string | null;
+  copyCount?: number;
   createdAt: string;
 }
 
@@ -361,6 +364,9 @@ export interface StudioCharacter {
   tone: string | null;
   visibility: 'private' | 'public';
   moderationStatus: 'pending' | 'approved' | 'rejected';
+  moderationReason?: string | null;
+  creatorName?: string | null;
+  copyCount?: number;
   createdAt: string;
 }
 
@@ -439,6 +445,11 @@ export interface StudioPack {
   blurb: string;
   format: 'arc' | 'pack';
   spec: StudioPackSpec;
+  visibility?: 'private' | 'public';
+  moderationStatus?: 'pending' | 'approved' | 'rejected';
+  moderationReason?: string | null;
+  creatorName?: string | null;
+  copyCount?: number;
   createdAt: string;
 }
 
@@ -464,15 +475,87 @@ export async function createStudioPack(input: StudioPackInput): Promise<StudioPa
 
 export async function listStudioPacks(characterId?: string): Promise<StudioPack[]> {
   const q = characterId ? `?characterId=${encodeURIComponent(characterId)}` : '';
-  const res = await api<{ packs: StudioPack[] }>(`/api/studio/packs${q}`);
-  return res.packs;
+  const res = await api<{ packs: StudioPack[] }>(`/a
+
+// --- Publishing (Phase 4) --------------------------------------------------
+
+export interface PublishResult {
+  allowed: boolean;
+  reason: string;
 }
 
-export async function getStudioPack(id: string): Promise<StudioPack> {
-  const res = await api<{ pack: StudioPack }>(`/api/studio/packs/${id}`);
-  return res.pack;
+export async function publishStudioCharacter(id: string): Promise<PublishResult> {
+  const r = await api<{ allowed: boolean; reason: string }>(`/api/studio/characters/${id}/publish`, { method: 'POST', body: JSON.stringify({}) });
+  return { allowed: r.allowed, reason: r.reason };
+}
+export async function unpublishStudioCharacter(id: string): Promise<void> {
+  await api(`/api/studio/characters/${id}/unpublish`, { method: 'POST', body: JSON.stringify({}) });
+}
+export async function publishStudioStory(id: string): Promise<PublishResult> {
+  const r = await api<{ allowed: boolean; reason: string }>(`/api/studio/stories/${id}/publish`, { method: 'POST', body: JSON.stringify({}) });
+  return { allowed: r.allowed, reason: r.reason };
+}
+export async function unpublishStudioStory(id: string): Promise<void> {
+  await api(`/api/studio/stories/${id}/unpublish`, { method: 'POST', body: JSON.stringify({}) });
+}
+export async function publishStudioPack(id: string): Promise<PublishResult> {
+  const r = await api<{ allowed: boolean; reason: string }>(`/api/studio/packs/${id}/publish`, { method: 'POST', body: JSON.stringify({}) });
+  return { allowed: r.allowed, reason: r.reason };
+}
+export async function unpublishStudioPack(id: string): Promise<void> {
+  await api(`/api/studio/packs/${id}/unpublish`, { method: 'POST', body: JSON.stringify({}) });
 }
 
-export async function deleteStudioPack(id: string): Promise<void> {
-  await api<{ ok: boolean }>(`/api/studio/packs/${id}`, { method: 'DELETE' });
+// --- Community browse + copy (Phase 4) -------------------------------------
+
+export interface CommunityCharacter {
+  id: string;
+  displayName: string;
+  blurb: string;
+  tone: string | null;
+  creatorName: string | null;
+  copyCount: number;
+}
+export interface CommunityAdventure {
+  id: string;
+  title: string;
+  blurb: string;
+  companion: string;
+  mood: string | null;
+  beats: number;
+  creatorName: string | null;
+  copyCount: number;
+}
+export interface CommunityArc {
+  id: string;
+  title: string;
+  blurb: string;
+  companion: string;
+  setting: string | null;
+  creatorName: string | null;
+  copyCount: number;
+}
+
+export async function listCommunityCharacters(): Promise<CommunityCharacter[]> {
+  const r = await api<{ characters: CommunityCharacter[] }>(`/api/community/characters`);
+  return r.characters;
+}
+export async function listCommunityAdventures(): Promise<CommunityAdventure[]> {
+  const r = await api<{ adventures: CommunityAdventure[] }>(`/api/community/adventures`);
+  return r.adventures;
+}
+export async function listCommunityArcs(): Promise<CommunityArc[]> {
+  const r = await api<{ arcs: CommunityArc[] }>(`/api/community/arcs`);
+  return r.arcs;
+}
+
+/** Copies a public character into my library; returns the new chat ref. */
+export async function copyCommunityCharacter(id: string): Promise<{ id: string; ref: string; displayName: string }> {
+  return api<{ id: string; ref: string; displayName: string }>(`/api/community/characters/${id}/copy`, { method: 'POST', body: JSON.stringify({}) });
+}
+export async function copyCommunityAdventure(id: string): Promise<{ id: string; characterId: string; title: string }> {
+  return api<{ id: string; characterId: string; title: string }>(`/api/community/adventures/${id}/copy`, { method: 'POST', body: JSON.stringify({}) });
+}
+export async function copyCommunityArc(id: string): Promise<{ id: string; characterId: string; title: string }> {
+  return api<{ id: string; characterId: string; title: string }>(`/api/community/arcs/${id}/copy`, { method: 'POST', body: JSON.stringify({}) });
 }

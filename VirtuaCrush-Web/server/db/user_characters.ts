@@ -13,12 +13,18 @@ export interface UserCharacter {
   tone: string | null;
   visibility: 'private' | 'public';
   moderationStatus: 'pending' | 'approved' | 'rejected';
+  moderationReason: string | null;
+  creatorName: string | null;
+  sourceId: string | null;    // original id if this is a copy
+  copyCount: number;
   createdAt: string;
 }
 
 interface Row {
   id: number; owner_user_id: string; display_name: string; core: string; greeting: string;
-  secret: string | null; tone: string | null; visibility: string; moderation_status: string; created_at: string;
+  secret: string | null; tone: string | null; visibility: string; moderation_status: string;
+  moderation_reason: string | null; creator_name: string | null; source_id: string | number | null;
+  copy_count: number | null; created_at: string;
 }
 
 function rowTo(r: Row): UserCharacter {
@@ -32,6 +38,10 @@ function rowTo(r: Row): UserCharacter {
     tone: r.tone,
     visibility: r.visibility as 'private' | 'public',
     moderationStatus: r.moderation_status as 'pending' | 'approved' | 'rejected',
+    moderationReason: r.moderation_reason ?? null,
+    creatorName: r.creator_name ?? null,
+    sourceId: r.source_id != null ? String(r.source_id) : null,
+    copyCount: r.copy_count ?? 0,
     createdAt: r.created_at,
   };
 }
@@ -92,6 +102,87 @@ export async function deleteUserCharacter(ownerUserId: string, dbId: string): Pr
     [n, ownerUserId],
   );
   return (rowCount ?? 0) > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Community sharing (Phase 4)
+// ---------------------------------------------------------------------------
+
+/** Sets visibility + moderation outcome for an owned character. Returns the
+ *  updated row, or null if not found / not owned. */
+export async function setCharacterVisibility(
+  ownerUserId: string,
+  dbId: string,
+  p: { visibility: 'private' | 'public'; moderationStatus: 'pending' | 'approved' | 'rejected'; reason?: string | null; creatorName?: string | null },
+): Promise<UserCharacter | null> {
+  const n = Number(dbId);
+  if (!Number.isFinite(n)) return null;
+  const goingPublic = p.visibility === 'public' && p.moderationStatus === 'approved';
+  const { rows } = await pool.query<Row>(
+    `UPDATE user_characters
+        SET visibility = $3,
+            moderation_status = $4,
+            moderation_reason = $5,
+            creator_name = COALESCE(creator_name, $6),
+            published_at = CASE WHEN $7 THEN NOW() ELSE published_at END,
+            updated_at = NOW()
+      WHERE id = $1 AND owner_user_id = $2
+      RETURNING *`,
+    [n, ownerUserId, p.visibility, p.moderationStatus, p.reason ?? null, p.creatorName ?? null, goingPublic],
+  );
+  return rows[0] ? rowTo(rows[0]) : null;
+}
+
+/** Public, approved characters for the community browse (newest first). */
+export async function listPublicCharacters(limit = 60): Promise<UserCharacter[]> {
+  const { rows } = await pool.query<Row>(
+    `SELECT * FROM user_characters
+      WHERE visibility = 'public' AND moderation_status = 'approved'
+      ORDER BY published_at DESC NULLS LAST, created_at DESC
+      LIMIT $1`,
+    [limit],
+  );
+  return rows.map(rowTo);
+}
+
+/** A single public, approved character (for the copy flow). */
+export async function getPublicCharacter(dbId: string): Promise<UserCharacter | null> {
+  const c = await getUserCharacter(dbId);
+  if (!c || c.visibility !== 'public' || c.moderationStatus !== 'approved') return null;
+  return c;
+}
+
+/** Copies a public character into the requesting user's library (private,
+ *  approved, attributed to the original creator). Bumps the source copy_count.
+ *  If the user already copied this exact source, returns their existing copy. */
+export async function copyCharacterToUser(sourceId: string, newOwnerUserId: string): Promise<UserCharacter | null> {
+  const src = await getPublicCharacter(sourceId);
+  if (!src) return null;
+
+  const existing = await pool.query<Row>(
+    `SELECT * FROM user_characters WHERE owner_user_id = $1 AND source_id = $2 LIMIT 1`,
+    [newOwnerUserId, Number(sourceId)],
+  );
+  if (existing.rows[0]) return rowTo(existing.rows[0]);
+
+  const { rows } = await pool.query<Row>(
+    `INSERT INTO user_characters
+       (owner_user_id, display_name, core, greeting, secret, tone, visibility, moderation_status, creator_name, source_id)
+     VALUES ($1, $2, $3, $4, $5, $6, 'private', 'approved', $7, $8)
+     RETURNING *`,
+    [
+      newOwnerUserId,
+      src.displayName,
+      src.core,
+      src.greeting,
+      src.secret,
+      src.tone,
+      src.creatorName ?? null,
+      Number(sourceId),
+    ],
+  );
+  await pool.query(`UPDATE user_characters SET copy_count = copy_count + 1 WHERE id = $1`, [Number(sourceId)]);
+  return rows[0] ? rowTo(rows[0]) : null;
 }
 
 /** Composes the full system-prompt core from the stored persona parts. */

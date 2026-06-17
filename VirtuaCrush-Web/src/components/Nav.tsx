@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Sparkles, User, Menu, X, Sun, Moon, Shirt, Wand2 } from "lucide-react";
+import { Sparkles, User, Menu, X, Sun, Moon, Shirt, Wand2, Users } from "lucide-react";
 import { useSession } from "../lib/auth-client";
 
 const navLinkClass = (active: boolean) =>
@@ -23,6 +23,7 @@ export default function Nav() {
   const howItWorksActive = pathname === "/how-it-works";
   const avatarActive = pathname === "/avatar";
   const studioActive = pathname === "/studio";
+  const communityActive = pathname === "/community";
 
   useEffect(() => {
     const root = document.documentElement;
@@ -76,6 +77,9 @@ export default function Nav() {
             </Link>
             <Link to="/avatar" className={navLinkClass(avatarActive)}>
               Avatar
+            </Link>
+            <Link to="/community" className={navLinkClass(communityActive)}>
+              Community
             </Link>
             {authed ? (
               <Link to="/studio" className={navLinkClass(studioActive)}>
@@ -144,6 +148,13 @@ export default function Nav() {
             className={`flex items-center gap-2 rounded-xl px-4 py-3 transition-all duration-200 hover:scale-[1.01] hover:bg-black/[0.04] dark:bg-white/[0.04] active:scale-[0.99] ${navLinkClass(avatarActive)}`}
           >
             <Shirt size={16} /> Avatar
+          </Link>
+          <Link
+            to="/community"
+            onClick={closeMobileMenu}
+            className={`flex items-center gap-2 rounded-xl px-4 py-3 transition-all duration-200 hover:scale-[1.01] hover:bg-black/[0.04] dark:bg-white/[0.04] active:scale-[0.99] ${navLinkClass(communityActive)}`}
+          >
+            <Users size={16} /> Community
           </Link>
           {authed ? (
             <Link

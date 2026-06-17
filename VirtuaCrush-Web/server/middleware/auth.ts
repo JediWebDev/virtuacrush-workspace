@@ -10,7 +10,7 @@ import { auth } from '../lib/auth';
 declare global {
   namespace Express {
     interface Request {
-      user?: { id: string; email: string };
+      user?: { id: string; email: string; name?: string };
     }
   }
 }
@@ -22,7 +22,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       console.error('[auth] AUTH_BYPASS is set in production — blocking request');
       return res.status(500).json({ error: 'misconfigured' });
     }
-    req.user = { id: 'dev-test-user', email: 'dev@local' };
+    req.user = { id: 'dev-test-user', email: 'dev@local', name: 'Dev Tester' };
     return next();
   }
   // -----------------------------------------------------------------------
@@ -32,7 +32,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     if (!session?.user) {
       return res.status(401).json({ error: 'unauthorized' });
     }
-    req.user = { id: session.user.id, email: session.user.email };
+    req.user = {
+      id: session.user.id,
+      email: session.user.email,
+      name: (session.user as { name?: string }).name,
+    };
     next();
   } catch (err) {
     console.error('[auth] session check failed:', err);

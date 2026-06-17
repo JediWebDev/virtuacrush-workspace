@@ -13,13 +13,20 @@
 // POST   /api/studio/stories/:id/stop   — clear the active arc
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/auth';
-import { createUserStory, listUserStories, getUserStory, deleteUserStory } from '../db/user_stories';
-import { createUserCharacter, listUserCharacters, deleteUserCharacter, getUserCharacter, ensureUserCharacterLoaded } from '../db/user_characters';
+import {
+  createUserStory, listUserStories, getUserStory, deleteUserStory,
+  setStoryVisibility, type UserStory,
+} from '../db/user_stories';
+import {
+  createUserCharacter, listUserCharacters, deleteUserCharacter, getUserCharacter,
+  ensureUserCharacterLoaded, setCharacterVisibility, type UserCharacter,
+} from '../db/user_characters';
 import { validateArcSpec } from '../inworld/user_arc';
 import { validatePackSpec } from '../inworld/user_pack';
 import { setArcActive, clearArc } from '../db/arc_state';
 import { getSituation } from '../db/state';
 import { getCharacter } from '../inworld/characters';
+import { moderateText } from '../inworld/moderation';
 
 const router = Router();
 
@@ -32,6 +39,34 @@ async function resolveStudioCharacter(characterId: string, userId: string): Prom
   }
   try { getCharacter(characterId as Parameters<typeof getCharacter>[0]); return true; }
   catch { return false; }
+}
+
+/** A friendly creator name for attribution. */
+function creatorName(req: Request): string {
+  return req.user!.name?.trim() || req.user!.email.split('@')[0] || 'A creator';
+}
+
+/** Flattens a character's author text for the moderation check. */
+function characterText(c: UserCharacter): string {
+  return [c.displayName, c.tone, c.core, c.greeting, c.secret].filter(Boolean).join('\n');
+}
+
+/** Flattens a story (arc or pack) spec into author text for moderation. */
+function storyText(s: UserStory): string {
+  const parts: string[] = [s.title, s.blurb];
+  const spec = s.spec as Record<string, unknown>;
+  for (const k of ['setting', 'situation', 'playerSituation', 'npcInstruction', 'introNarrative', 'completionCriteria', 'systemInstruction']) {
+    if (typeof spec[k] === 'string') parts.push(spec[k] as string);
+  }
+  const nodes = spec.nodes as Record<string, { npcInstruction?: string; introNarrative?: string; choices?: { label?: string; userMessage?: string }[] | null }> | undefined;
+  if (nodes) {
+    for (const n of Object.values(nodes)) {
+      if (n.npcInstruction) parts.push(n.npcInstruction);
+      if (n.introNarrative) parts.push(n.introNarrative);
+      for (const c of n.choices ?? []) parts.push(`${c.label ?? ''} ${c.userMessage ?? ''}`);
+    }
+  }
+  return parts.filter(Boolean).join('\n');
 }
 
 // ===========================================================================
@@ -85,6 +120,48 @@ router.delete('/characters/:id', requireAuth, async (req: Request, res: Response
   if (!ok) return res.status(404).json({ error: 'not_found' });
   return res.json({ ok: true });
 });
+
+// POST /api/studio/characters/:id/publish — run moderation, go public if it passes
+router.post('/characters/:id/publish', requireAuth, async (req: Request, res: Response) => {
+  const c = await getUserCharacter(req.params.id);
+  if (!c || c.ownerUserId !== req.user!.id) return res.status(404).json({ error: 'not_found' });
+
+  const verdict = await moderateText(characterText(c));
+  const updated = verdict.allow
+    ? await setCharacterVisibility(req.user!.id, c.id, { visibility: 'public', moderationStatus: 'approved', reason: null, creatorName: creatorName(req) })
+    : await setCharacterVisibility(req.user!.id, c.id, { visibility: 'private', moderationStatus: 'rejected', reason: verdict.reason });
+  return res.json({ character: updated, allowed: verdict.allow, reason: verdict.reason });
+});
+
+// POST /api/studio/characters/:id/unpublish — make private again
+router.post('/characters/:id/unpublish', requireAuth, async (req: Request, res: Response) => {
+  const c = await getUserCharacter(req.params.id);
+  if (!c || c.ownerUserId !== req.user!.id) return res.status(404).json({ error: 'not_found' });
+  const updated = await setCharacterVisibility(req.user!.id, c.id, { visibility: 'private', moderationStatus: 'approved', reason: null });
+  return res.json({ character: updated });
+});
+
+// --- Shared publish/unpublish for stories (arcs) AND packs (adventures) -----
+async function handleStoryPublish(req: Request, res: Response) {
+  const s = await getUserStory(req.params.id);
+  if (!s || s.ownerUserId !== req.user!.id) return res.status(404).json({ error: 'not_found' });
+
+  const verdict = await moderateText(storyText(s));
+  const updated = verdict.allow
+    ? await setStoryVisibility(req.user!.id, s.id, { visibility: 'public', moderationStatus: 'approved', reason: null, creatorName: creatorName(req) })
+    : await setStoryVisibility(req.user!.id, s.id, { visibility: 'private', moderationStatus: 'rejected', reason: verdict.reason });
+  return res.json({ story: updated, pack: updated, allowed: verdict.allow, reason: verdict.reason });
+}
+async function handleStoryUnpublish(req: Request, res: Response) {
+  const s = await getUserStory(req.params.id);
+  if (!s || s.ownerUserId !== req.user!.id) return res.status(404).json({ error: 'not_found' });
+  const updated = await setStoryVisibility(req.user!.id, s.id, { visibility: 'private', moderationStatus: 'approved', reason: null });
+  return res.json({ story: updated, pack: updated });
+}
+router.post('/stories/:id/publish', requireAuth, handleStoryPublish);
+router.post('/stories/:id/unpublish', requireAuth, handleStoryUnpublish);
+router.post('/packs/:id/publish', requireAuth, handleStoryPublish);
+router.post('/packs/:id/unpublish', requireAuth, handleStoryUnpublish);
 
 // ===========================================================================
 // Custom CYOA adventures (Phase 3) — branching story packs, private to creator.

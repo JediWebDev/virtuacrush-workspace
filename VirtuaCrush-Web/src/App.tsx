@@ -13,6 +13,7 @@ import AccountPage from "./pages/AccountPage";
 import HowItWorksPage from "./pages/HowItWorksPage";
 import AvatarPage from "./components/AvatarPage";
 import StudioPage from "./pages/StudioPage";
+import CommunityPage from "./pages/CommunityPage";
 import AuthPage from "./pages/AuthPage";
 import LegalPage from "./pages/LegalPage";
 import termsMd from "./content/legal/terms.md?raw";
@@ -184,6 +185,7 @@ export default function App() {
               <Route path="/account" element={<AccountPage />} />
               <Route path="/avatar" element={<AvatarPage />} />
               <Route path="/studio" element={<StudioPage />} />
+              <Route path="/community" element={<CommunityPage />} />
               <Route path="/how-it-works" element={<HowItWorksPage />} />
               <Route path="/terms" element={<LegalPage markdown={termsMd} />} />
               <Route path="/privacy" element={<LegalPage markdown={privacyMd} />} />
