@@ -5,6 +5,8 @@ import {
   resolvePackNodeAct,
   buildInitialSceneState,
   formatPersistentSceneDirective,
+  validateSceneStateUpdate,
+  nameInSceneState,
 } from './story_structure';
 import type { StoryPack } from './pack_types';
 
@@ -80,4 +82,30 @@ test('buildInitialSceneState seeds location and cast', () => {
   });
   assert.match(s, /bookstore/);
   assert.match(s, /Mina/);
+});
+
+test('validateSceneStateUpdate flags dropped cast', () => {
+  const prior = 'Location: garage. Present: you (player); Lexi (companion).';
+  const bad = 'Location: garage. Present: you (player).';
+  const v = validateSceneStateUpdate({
+    priorSceneState: prior,
+    nextSceneState: bad,
+    requiredNames: ['you', 'Lexi'],
+  });
+  assert.equal(v.ok, false);
+  assert.deepEqual(v.droppedCharacters, ['Lexi']);
+});
+
+test('validateSceneStateUpdate allows explicit departure', () => {
+  const v = validateSceneStateUpdate({
+    priorSceneState: 'Location: garage. Present: you; Lexi; Urik.',
+    nextSceneState: 'Location: garage. Present: you; Lexi. Urik left the scene.',
+    requiredNames: ['you', 'Lexi', 'Urik'],
+    narratorTexts: ['*Urik turns and walks away.*'],
+  });
+  assert.equal(v.ok, true);
+});
+
+test('nameInSceneState matches player aliases', () => {
+  assert.equal(nameInSceneState('Present: you (player)', 'you'), true);
 });

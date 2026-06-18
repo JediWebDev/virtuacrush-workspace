@@ -403,9 +403,13 @@ export interface StudioPackChoice {
   next: string;         // target node id, or 'end'
 }
 
+export type StudioStoryAct = 'beginning' | 'middle' | 'end';
+
 export interface StudioPackNode {
   npcInstruction: string;            // the dramatic intent of this beat
   introNarrative?: string;           // optional opening narration for the node
+  /** Three-act phase: setup, confrontation, or resolution. */
+  act?: StudioStoryAct;
   choices: StudioPackChoice[] | null; // null = terminal/ending beat
 }
 

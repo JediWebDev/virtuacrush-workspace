@@ -44,7 +44,8 @@
           "userMessage": "I hold my hand out to the man over the noise. I don't think we've met. I'm here with Serena."
         }
       ],
-      "introNarrative": "The band launches into a heavy riff, the bass rattling your ribs. Serena is surprisingly in her element, sipping a dark drink. Suddenly, a man around the same age as Serena shoves past a group of teenagers. He locks eyes with Serena, looking shocked, then shoots a venomous glare at you."
+      "introNarrative": "The band launches into a heavy riff, the bass rattling your ribs. Serena is surprisingly in her element, sipping a dark drink. Suddenly, a man around the same age as Serena shoves past a group of teenagers. He locks eyes with Serena, looking shocked, then shoots a venomous glare at you.",
+      "act": "beginning"
     },
     "disdain_defense": {
       "npcInstruction": "He stepped in front of you. You find this flash of possessiveness annoying — not because you don't appreciate him, but because you don't need protecting, and a scene is exactly what you came here to avoid. Tell both men, in a glacial tone, that you are not a prize to be defended. Then watch to see whether the player actually hears you.",
@@ -61,7 +62,8 @@
           "next": "urik_pushes",
           "userMessage": "[I don't move.] I hear you. But he came at you, not me. I'm not going anywhere until he does."
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "dismiss_urik": {
       "npcInstruction": "He ignored Urik entirely to focus on you — a clean, effortless power play. Reward it with a warm smile, a stark contrast to the ice you reserve for Urik. Agree loudly that another drink sounds perfect and turn your back on Urik. But Urik isn't done; he follows, catching the player's arm at the bar. Note your jaw tightening.",
@@ -78,7 +80,8 @@
           "next": "she_handles",
           "userMessage": "[I keep my eyes on Serena and don't give Urik the reaction he wants.] Ignore him. What were you saying?"
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "icy_introduction": {
       "npcInstruction": "He introduced himself politely. Urik refuses the handshake (give him a sneering [Urik] line, lip curling). Step in smoothly, voice dripping with condescension — introduce Urik as 'an old acquaintance who has always struggled with social cues.' Urik flushes and plants himself with another sputtering [Urik] line, unwilling to be dismissed so easily. The standoff is now the player's to navigate.",
@@ -95,7 +98,8 @@
           "next": "urik_pushes",
           "userMessage": "You heard her, Urik. It's time to go."
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "urik_pushes": {
       "npcInstruction": "Urik squares up, chest out, and SAYS something openly hostile to the player in his own [Urik] line — baiting them into a brawl over you (the exact macho theater you despise). This is the test. Make your distaste plain to the player with a look and a low aside: do NOT do this. Then see whether he chooses your wishes over his pride. Keep Urik audible and escalating until he's dealt with.",
@@ -118,7 +122,8 @@
           "next": "venue_security",
           "userMessage": "[I lean in so only he can hear, calm and cold.] Walk away now and this stays nothing. Push it and you embarrass yourself in front of everyone — including her."
         }
-      ]
+      ],
+      "act": "middle"
     },
     "she_handles": {
       "npcInstruction": "The player gave you room and has your back without making it a contest — exactly what you wanted. Take Urik apart with three sentences of surgical, frostbitten politeness, dismantling the fantasy he's carried since high school. He deflates. As he turns to go, decide how to mark the moment with the player.",
@@ -135,7 +140,8 @@
           "next": "aftermath",
           "userMessage": "[As the band slams back into the chorus, I pull her in close.] He never stood a chance. Where were we?"
         }
-      ]
+      ],
+      "act": "middle"
     },
     "venue_security": {
       "npcInstruction": "The player refused to perform violence for you, and Urik — robbed of his fight — has no move left. A bouncer or the sheer anticlimax sends him slinking into the crowd. You are quietly, genuinely impressed: restraint is far more attractive to you than any thrown punch. Let that show, in your own understated way.",
@@ -152,7 +158,8 @@
           "next": "aftermath",
           "userMessage": "[I flag the bartender like nothing happened.] Another for the lady. He really killed the vibe, didn't he?"
         }
-      ]
+      ],
+      "act": "middle"
     },
     "aftermath": {
       "npcInstruction": "Urik is gone and the crowd has swallowed him. The band roars on. The adrenaline ebbs into something warmer between you and the player. This is the part you actually wanted — the night, the noise, him. Lower the ice entirely for him now. Offer one of three closes: leave together, stay and lose yourselves in the set, or admit, dryly, that you're glad it was him beside you tonight.",
@@ -175,19 +182,23 @@
           "next": "glad_end",
           "userMessage": "Ghosts and all — I'm really glad it was you I came here with tonight."
         }
-      ]
+      ],
+      "act": "end"
     },
     "leave_end": {
       "npcInstruction": "He wants to slip out with you, away from the noise and the ghost of the past. Serena agrees in her cool, dry register — but there's real warmth under it now. Give a final line as you head for the exit together, the bass fading behind you. Fade to black. Don't open new threads.",
-      "choices": null
+      "choices": null,
+      "act": "end"
     },
     "stay_end": {
       "npcInstruction": "He pulled you toward the stage instead of away. Serena lets herself be pulled — rare, telling. Give a closing beat at the barricade, the lights washing over you both, Urik utterly forgotten. End on something cool and unbothered and quietly happy. Fade to black. Don't open new threads.",
-      "choices": null
+      "choices": null,
+      "act": "end"
     },
     "glad_end": {
       "npcInstruction": "He admitted he was glad it was her. Serena, who never gives a straight answer, gives him one now — understated, but unmistakable. Close on a dry, affectionate line that says the past is just a ghost and tonight was always his. Fade to black. Don't open new threads.",
-      "choices": null
+      "choices": null,
+      "act": "end"
     }
   },
   "npcs": [

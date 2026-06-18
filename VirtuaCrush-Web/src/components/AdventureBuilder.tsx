@@ -21,6 +21,7 @@ import {
   type StudioPack,
   type StudioCharacter,
   type StudioMood,
+  type StudioStoryAct,
 } from "../lib/api";
 
 const labelClass = "mb-1 block text-xs font-semibold uppercase tracking-wide text-stone-500";
@@ -30,6 +31,19 @@ const inputClass =
 const MOODS: StudioMood[] = [
   "romantic", "dramatic", "comedic", "thriller", "mystery", "playful", "cozy", "gothic", "tense",
 ];
+
+const ACTS: { value: StudioStoryAct | "auto"; label: string }[] = [
+  { value: "auto", label: "Auto (infer from graph)" },
+  { value: "beginning", label: "Beginning — setup" },
+  { value: "middle", label: "Middle — confrontation" },
+  { value: "end", label: "End — resolution" },
+];
+
+const ACT_BADGE: Record<StudioStoryAct, string> = {
+  beginning: "Act I",
+  middle: "Act II",
+  end: "Act III",
+};
 
 const END = "end";
 
@@ -43,30 +57,40 @@ interface EditNode {
   npcInstruction: string;
   introNarrative: string;
   terminal: boolean; // true => ending beat (choices: null)
+  /** Explicit three-act tag, or "auto" to infer at runtime. */
+  act: StudioStoryAct | "auto";
   choices: EditChoice[];
 }
 
 function freshNode(id: string): EditNode {
-  return { id, npcInstruction: "", introNarrative: "", terminal: false, choices: [] };
+  return {
+    id,
+    npcInstruction: "",
+    introNarrative: "",
+    terminal: false,
+    act: id === "start" ? "beginning" : "auto",
+    choices: [],
+  };
 }
 
 function freshGraph(): EditNode[] {
   return [{ ...freshNode("start"), choices: [{ label: "", userMessage: "", next: END }] }];
 }
 
-/** Validate the working graph the same way the server does. Returns issues. */
-function validateGraph(nodes: EditNode[]): string[] {
-  const issues: string[] = [];
+/** Validate the working graph the same way the server does. Returns errors + soft warnings. */
+function validateGraph(nodes: EditNode[]): { errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
   const ids = new Set(nodes.map((n) => n.id));
-  if (!ids.has("start")) issues.push('A "start" node is required.');
+  if (!ids.has("start")) errors.push('A "start" node is required.');
 
   for (const n of nodes) {
-    if (!n.npcInstruction.trim()) issues.push(`Node "${n.id}" needs a character instruction.`);
+    if (!n.npcInstruction.trim()) errors.push(`Node "${n.id}" needs a character instruction.`);
     if (!n.terminal) {
       const real = n.choices.filter((c) => c.label.trim());
-      if (real.length === 0) issues.push(`Node "${n.id}" has no choices (add one, or mark it an ending).`);
+      if (real.length === 0) errors.push(`Node "${n.id}" has no choices (add one, or mark it an ending).`);
       for (const c of real) {
-        if (c.next !== END && !ids.has(c.next)) issues.push(`A choice in "${n.id}" points to a missing node.`);
+        if (c.next !== END && !ids.has(c.next)) errors.push(`A choice in "${n.id}" points to a missing node.`);
       }
     }
   }
@@ -89,11 +113,24 @@ function validateGraph(nodes: EditNode[]): string[] {
       if (byId.has(c.next) && !reachable.has(c.next)) stack.push(c.next);
     }
   }
-  if (!canEnd) issues.push('The story has no reachable ending (add an ending node or a choice that goes to "End the story").');
+  if (!canEnd) errors.push('The story has no reachable ending (add an ending node or a choice that goes to "End the story").');
   for (const n of nodes) {
-    if (n.id !== "start" && !reachable.has(n.id)) issues.push(`Node "${n.id}" can't be reached from the start.`);
+    if (n.id !== "start" && !reachable.has(n.id)) errors.push(`Node "${n.id}" can't be reached from the start.`);
   }
-  return issues;
+
+  const explicitActs = new Set(
+    nodes.map((n) => {
+      if (n.act !== "auto") return n.act;
+      if (n.terminal) return "end" as const;
+      if (n.id === "start") return "beginning" as const;
+      return null;
+    }).filter(Boolean),
+  );
+  if (nodes.filter((n) => !n.terminal).length > 2 && !explicitActs.has("middle")) {
+    warnings.push('Consider tagging at least one beat as "Middle" for a classic three-act structure.');
+  }
+
+  return { errors, warnings };
 }
 
 export default function AdventureBuilder() {
@@ -150,7 +187,7 @@ export default function AdventureBuilder() {
     try { await unpublishStudioPack(p.id); } catch { /* noop */ } finally { refreshPacks(); setPubBusyId(null); }
   };
 
-  const issues = useMemo(() => validateGraph(nodes), [nodes]);
+  const { errors: graphErrors, warnings: graphWarnings } = useMemo(() => validateGraph(nodes), [nodes]);
   const nodeIds = nodes.map((n) => n.id);
 
   // --- Node mutations -------------------------------------------------------
@@ -196,14 +233,15 @@ export default function AdventureBuilder() {
     if (!title.trim()) return setError("Give your adventure a title.");
     if (!situation.trim()) return setError("Describe the opening situation.");
     if (!systemInstruction.trim()) return setError("Add the overall story framing.");
-    if (issues.length) return setError("Fix the story-flow issues listed below before saving.");
+    if (graphErrors.length) return setError("Fix the story-flow issues listed below before saving.");
 
     // Build the spec node map.
-    const nodeMap: Record<string, { npcInstruction: string; introNarrative?: string; choices: EditChoice[] | null }> = {};
+    const nodeMap: Record<string, { npcInstruction: string; introNarrative?: string; act?: StudioStoryAct; choices: EditChoice[] | null }> = {};
     for (const n of nodes) {
       nodeMap[n.id] = {
         npcInstruction: n.npcInstruction.trim(),
         ...(n.introNarrative.trim() ? { introNarrative: n.introNarrative.trim() } : {}),
+        ...(n.act !== "auto" ? { act: n.act } : {}),
         choices: n.terminal
           ? null
           : n.choices
@@ -311,16 +349,42 @@ export default function AdventureBuilder() {
           <div className="space-y-4">
             {nodes.map((n) => (
               <div key={n.id} className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.03] p-4">
-                <div className="mb-3 flex items-center justify-between">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <span className="inline-flex items-center gap-1.5 rounded-md bg-accent/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-accent">
                     {n.id === "start" ? "Start" : n.id}
                     {n.terminal && <Flag size={11} />}
+                    {n.act !== "auto" && (
+                      <span className="ml-1 rounded bg-black/10 px-1 py-px text-[10px] font-semibold text-stone-600 dark:text-stone-300">
+                        {ACT_BADGE[n.act]}
+                      </span>
+                    )}
                   </span>
                   {n.id !== "start" && (
                     <button type="button" onClick={() => removeNode(n.id)} className="text-stone-400 transition-colors hover:text-red-500" aria-label="Remove beat">
                       <Trash2 size={14} />
                     </button>
                   )}
+                </div>
+
+                <div className="mb-3 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className={labelClass}>Story act</label>
+                    <select
+                      className={inputClass}
+                      value={n.act}
+                      onChange={(e) => {
+                        const act = e.target.value as StudioStoryAct | "auto";
+                        patchNode(n.id, {
+                          act,
+                          ...(act === "end" ? { terminal: true } : {}),
+                        });
+                      }}
+                    >
+                      {ACTS.map((a) => (
+                        <option key={a.value} value={a.value}>{a.label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <label className={labelClass}>What happens here — instruction to the character</label>
@@ -332,7 +396,17 @@ export default function AdventureBuilder() {
                 </div>
 
                 <label className="mt-3 flex items-center gap-2 text-xs font-medium text-stone-600 dark:text-stone-300">
-                  <input type="checkbox" checked={n.terminal} onChange={(e) => patchNode(n.id, { terminal: e.target.checked })} className="h-4 w-4 rounded accent-[var(--accent,#c9717d)]" />
+                  <input
+                    type="checkbox"
+                    checked={n.terminal}
+                    onChange={(e) =>
+                      patchNode(n.id, {
+                        terminal: e.target.checked,
+                        act: e.target.checked ? "end" : n.act === "end" ? "auto" : n.act,
+                      })
+                    }
+                    className="h-4 w-4 rounded accent-[var(--accent,#c9717d)]"
+                  />
                   This beat ends the story
                 </label>
 
@@ -370,15 +444,23 @@ export default function AdventureBuilder() {
 
         {/* Validation + save */}
         <div className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
-          {issues.length > 0 ? (
+          {graphErrors.length > 0 ? (
             <div className="mb-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">Story flow needs a fix</p>
               <ul className="list-disc space-y-0.5 pl-5 text-xs text-stone-600 dark:text-stone-300">
-                {issues.slice(0, 8).map((m, i) => (<li key={i}>{m}</li>))}
+                {graphErrors.slice(0, 8).map((m, i) => (<li key={i}>{m}</li>))}
               </ul>
             </div>
           ) : (
             <p className="mb-4 text-xs font-medium text-emerald-600 dark:text-emerald-400">✓ Story flow looks good — every path can reach an ending.</p>
+          )}
+          {graphWarnings.length > 0 && (
+            <div className="mb-4 rounded-2xl border border-sky-400/30 bg-sky-400/10 p-3">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-400">Structure tip</p>
+              <ul className="list-disc space-y-0.5 pl-5 text-xs text-stone-600 dark:text-stone-300">
+                {graphWarnings.map((m, i) => (<li key={i}>{m}</li>))}
+              </ul>
+            </div>
           )}
 
           {error && <p className="mb-3 text-sm text-red-500">{error}</p>}

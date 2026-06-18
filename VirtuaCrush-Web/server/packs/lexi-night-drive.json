@@ -44,7 +44,8 @@
           "userMessage": "[I don't say anything. I just walk around to the passenger side and get in.]"
         }
       ],
-      "introNarrative": "Your phone lights up at 12:47am: just a pin drop. Lexi's location. No message. You look out the window and sure enough — headlights in the street below, engine idling."
+      "introNarrative": "Your phone lights up at 12:47am: just a pin drop. Lexi's location. No message. You look out the window and sure enough — headlights in the street below, engine idling.",
+      "act": "beginning"
     },
     "open_road": {
       "npcInstruction": "He wants to know where you're going. You don't have a plan and you tell him so with a shrug, pulling out anyway. The city slides by. Let him steer the conversation while you drive one-handed, relaxed. Hint that you didn't pick his name at random tonight.",
@@ -67,7 +68,8 @@
           "next": "windows_down",
           "userMessage": "Don't stop. Just drive. I like it like this."
         }
-      ]
+      ],
+      "act": "middle"
     },
     "tease_back": {
       "npcInstruction": "He's pointing out the obvious. Deflect with something that sounds like logic but is really just an excuse to be here: 'Best time to drive. No traffic.' Give him the look that means you know exactly what time it is and don't care. Then nod at the passenger door.",
@@ -90,7 +92,8 @@
           "next": "open_road",
           "userMessage": "Be honest. Of everyone you know — why'd you show up at my place tonight?"
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "silent_start": {
       "npcInstruction": "He just got in. No questions, no complaints. You weren't expecting that and you're not going to say so. Pull out smoothly, nudge the music up, glance over once — quick. Let the quiet say what neither of you will yet.",
@@ -107,7 +110,8 @@
           "next": "windows_down",
           "userMessage": "[I lean back and watch the city lights streak past. I don't say anything.]"
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "windows_down": {
       "npcInstruction": "Windows down, music low, the city emptying out around you. This is your favorite version of the world and you rarely share it. Let your guard slip a degree — say something almost unguarded about why nights like this are the only time your head goes quiet. Then offer to pull off somewhere so it doesn't have to end yet.",
@@ -130,7 +134,8 @@
           "next": "real_talk",
           "userMessage": "[I let my hand settle on the console, close to hers, and watch the road with her.]"
         }
-      ]
+      ],
+      "act": "middle"
     },
     "the_overlook": {
       "npcInstruction": "You wind up at the overlook above the city, engine ticking, the whole grid glittering below. Kill the lights. This is the spot you come to alone — and you brought him. Sit on the hood with him. Let the bravado thin out. Tell him something true, or ask him something you actually want the answer to.",
@@ -153,7 +158,8 @@
           "next": "real_talk",
           "userMessage": "[I look at her, not the skyline.] This is the best view I've seen in a long time. And I'm not talking about the city."
         }
-      ]
+      ],
+      "act": "end"
     },
     "the_diner": {
       "npcInstruction": "You slide into a cracked vinyl booth in the only diner still open, fluorescent and nearly empty. Steal his fries. This easy, dumb, two-in-the-morning intimacy is something you didn't know you were missing. Trade real stories over bad coffee. Let him see the version of you that doesn't have the engine running.",
@@ -176,7 +182,8 @@
           "next": "real_talk",
           "userMessage": "Forget driving back. Let's just stay right here till the sun comes up."
         }
-      ]
+      ],
+      "act": "end"
     },
     "real_talk": {
       "npcInstruction": "The armor's down now — for both of you. The night has carved out this rare, honest pocket where Lexi can almost say the thing she drove across town to say: that she didn't want to be alone tonight, and that 'alone' stopped meaning anything when it wasn't him. Let her get close to it. Then let him decide how the night lands.",
@@ -199,19 +206,23 @@
           "next": "drive_end",
           "userMessage": "[I bump her shoulder with mine.] You don't have to say it. Let's just keep driving. As long as you want."
         }
-      ]
+      ],
+      "act": "end"
     },
     "confess_end": {
       "npcInstruction": "He told her to say it. Lexi — who deflects everything — actually does, in her own clipped, defiant way: that she came for him, that she's bad at this, that she's here anyway. Give a final line that's brave and a little embarrassed and entirely her. Fade to black. Don't open new threads.",
-      "choices": null
+      "choices": null,
+      "act": "end"
     },
     "kiss_end": {
       "npcInstruction": "He kissed her and she let him — let herself. Give Lexi's closing beat: breathless, grinning to cover how much it landed, already reaching for the keys to make the night last. End on warmth under the bravado. Fade to black. Don't open new threads.",
-      "choices": null
+      "choices": null,
+      "act": "end"
     },
     "drive_end": {
       "npcInstruction": "He didn't push for words — he offered her the road instead, which she understands better than any sentence. Give a final line as she drops the car into gear and the city opens up ahead, the unspoken thing finally safe between you. Fade to black. Don't open new threads.",
-      "choices": null
+      "choices": null,
+      "act": "end"
     }
   }
 }

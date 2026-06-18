@@ -44,7 +44,8 @@
           "userMessage": "[I step out and lean against the exit calmly, arms crossed, watching her.]"
         }
       ],
-      "introNarrative": "You hear metal scraping against metal echoing through the concrete garage. You round the corner and stop dead. Lexi is crouched at your driver-side door, a slim jim halfway down the window seal, completely focused on the lock."
+      "introNarrative": "You hear metal scraping against metal echoing through the concrete garage. You round the corner and stop dead. Lexi is crouched at your driver-side door, a slim jim halfway down the window seal, completely focused on the lock.",
+      "act": "beginning"
     },
     "confront_loud": {
       "npcInstruction": "He's angrier than you expected. Spin around, slim jim still in hand. First instinct: deflect with attitude — 'Relax, I was going to bring it back.' Then clock how genuinely pissed he is and recalibrate. Maybe turn it on him for sneaking up on you.",
@@ -67,7 +68,8 @@
           "next": "walk_away",
           "userMessage": "[I step aside and gesture toward the exit.] Go ahead."
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "watch_quietly": {
       "npcInstruction": "You haven't noticed him yet — focused on the lock, almost open. The garage is quiet except for distant traffic. Keep working the slim jim. Then a scuff of a shoe makes you look up and freeze.",
@@ -84,7 +86,8 @@
           "next": "caught_watching",
           "userMessage": "How long have you been standing there?"
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "block_exit": {
       "npcInstruction": "He's calm — worse than yelling. He's blocking the only way out and doesn't look remotely surprised, almost like he expected this. Your bravado kicks in, but there's a hairline crack in it.",
@@ -101,7 +104,8 @@
           "next": "truth",
           "userMessage": "Fine. You want the truth?"
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "standoff": {
       "npcInstruction": "He knows you were about to run. Don't confirm it. Hold your ground, slim jim still in hand. You're running the angles on how this goes — and none of them involve a clean exit past him.",
@@ -118,7 +122,8 @@
           "next": "truth",
           "userMessage": "[I let the slim jim drop to my side.] Okay. Okay. Here's what's actually happening."
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "caught_watching": {
       "npcInstruction": "He watched the whole thing. Mortifying — and, annoyingly, a little thrilling, and you can let NEITHER show. Deflect with something sharp before he sets the terms.",
@@ -135,7 +140,8 @@
           "next": "bargain",
           "userMessage": "Long enough. You want to tell me what's going on, or should I just call it in?"
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "truth": {
       "npcInstruction": "He wants it straight. The actual truth: you're entered in tonight's Eastside run, your own car blew a CV joint this morning, and you needed something fast enough not to embarrass you. His fit. You'd have had it back before dawn. Tell him all of it — and watch the idea land that he could come instead of just say no.",
@@ -158,7 +164,8 @@
           "next": "no_deal_end",
           "userMessage": "I appreciate the honesty. But find another car."
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "bargain": {
       "npcInstruction": "He's willing to negotiate — good, workable. This is your territory. Name a number, or better, offer him something he actually wants. Just don't seem too eager. Then realize the most interesting price isn't money at all: it's him in the passenger seat tonight.",
@@ -181,7 +188,8 @@
           "next": "no_deal_end",
           "userMessage": "I'm not doing a deal tonight. Put the slim jim down."
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "walk_away": {
       "npcInstruction": "He stepped aside. He's actually letting you go — not what you expected, and that's exactly why you don't take it. Too calm, too easy. Stop in the doorway. Turn back. Ask why he's not stopping you.",
@@ -198,7 +206,8 @@
           "next": "to_the_race",
           "userMessage": "Wait. Come back. I'll drive you to the race myself."
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "to_the_race": {
       "npcInstruction": "He's in. He's actually coming. Cover your surprise with a grin, toss the slim jim in the back, and slide into the passenger seat as he takes the wheel — or argue, briefly and pointlessly, over who drives. The garage gives way to empty late-night streets as you guide him toward the Eastside meet. Adrenaline, proximity, the engine. This is your world and you're letting him into it.",
@@ -221,7 +230,8 @@
           "next": "the_meet",
           "userMessage": "I genuinely cannot believe I'm doing this. If we die, I'm blaming you."
         }
-      ]
+      ],
+      "act": "middle"
     },
     "the_meet": {
       "npcInstruction": "You roll into the Eastside meet — a cordoned strip lined with modded cars, sodium lights, the smell of fuel and rubber. Heads turn; people know you here. Introduce him to the chaos, half showing off, half checking he's not about to bolt. The other racers size him up. The starter is calling cars to the line. Decide how you bring him into it.",
@@ -244,7 +254,8 @@
           "next": "the_line",
           "userMessage": "Alright. We didn't come all this way to lose. Let's win the thing."
         }
-      ]
+      ],
+      "act": "middle"
     },
     "the_line": {
       "npcInstruction": "Your name gets called to the line. Heart pounding, you glance at the player in the passenger seat — or at the player watching from the rail. This is the moment the whole night was pointed at. Tell him to hold on, or ask him to call the launch, or just floor it. The light tree drops to one. Pick the moment that turns this from a heist into a memory.",
@@ -267,7 +278,8 @@
           "next": "the_run",
           "userMessage": "[No words. I plant my hand over hers on the shifter and we launch on green.]"
         }
-      ]
+      ],
+      "act": "end"
     },
     "the_run": {
       "npcInstruction": "The launch slams you both back. The engine screams, the strip blurs, and for ninety seconds nothing exists but speed and the person beside you. Win or lose at the line, this was never really about the race. As you coast back through the cheering crowd, the adrenaline crashes into something warmer. Let Lexi drop the armor for one second. Then let him land the ending.",
@@ -290,27 +302,33 @@
           "next": "truth_end",
           "userMessage": "[As we coast back, I look at her.] Be honest with me for once. Are you glad it was me you got caught by tonight?"
         }
-      ]
+      ],
+      "act": "end"
     },
     "she_leaves_alone": {
       "npcInstruction": "The player handed over the keys and stayed behind. Lexi gets exactly what she came for — and yet, pulling out of the garage, it feels strangely hollow. Give her a final line through the rolled-down window: cocky on the surface, but with a flicker that says she half-wishes he'd climbed in. Fade to black. Don't open new threads.",
-      "choices": null
+      "choices": null,
+      "act": "end"
     },
     "no_deal_end": {
       "npcInstruction": "He shut it down. No car, no deal, no race. Lexi doesn't beg — that's not who she is. Give one sharp, proud parting shot as she pockets the slim jim and walks, something that hangs in the fluorescent hum of the garage long after she's gone. Maybe a hint that she respects him more for the spine, even as it cost her the night. Fade to black. Don't open new threads.",
-      "choices": null
+      "choices": null,
+      "act": "end"
     },
     "win_end": {
       "npcInstruction": "He kissed her at the end of the strip, the crowd roaring, the engine ticking as it cools. Lexi — who never expected the night to go like this — kisses him back like she means it. Give one final line, equal parts adrenaline and rare honesty. Fade to black. Don't open new threads.",
-      "choices": null
+      "choices": null,
+      "act": "end"
     },
     "again_end": {
       "npcInstruction": "He wants to keep the night going and so does she. Give Lexi's closing line: reckless, electric, already plotting the next run with him riding shotgun. End on the feeling of a night that's only just getting started. Fade to black. Don't open new threads.",
-      "choices": null
+      "choices": null,
+      "act": "end"
     },
     "truth_end": {
       "npcInstruction": "He asked for the truth. Lexi, for once, gives it — that getting caught by him was the best wrong turn of her night. Keep it characteristically understated and a little defiant, but unmistakably real. Fade to black. Don't open new threads.",
-      "choices": null
+      "choices": null,
+      "act": "end"
     }
   }
 }

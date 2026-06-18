@@ -186,13 +186,13 @@ PACING: Hold "ongoing" across multiple turns. Use "climax" to mark the emotional
 {
   "lines": [ { "speaker": "<name>", "text": "<their words or *action*>" } ],
   "choices": [ { "label": "<short button: a move the PLAYER could make next>", "userMessage": "<what the player says/does if they tap it>" } ],
-  "sceneState": "<short snapshot: who is present (and what they already know), the location, the player's physical state, and key facts so far>",
+  "sceneState": "<Location: … Present: … (who is here), player's physical state, key facts>",
   "memorable": "<a durable one-line beat worth remembering in future sessions, or null>",
   "arcStatus": "ongoing" | "climax" | "completed" | "abandoned",
   "earnedBadge": { "title": "<2-4 word title>", "description": "<1-sentence recap>" } or null
 }
 Set earnedBadge only when arcStatus is "completed"; otherwise null.`
-    : `Reply as a JSON object: { "lines": [ { "speaker": "<name>", "text": "<their words or *action*>" } ], "choices": [ { "label": "<short player move>", "userMessage": "<what the player says/does if tapped>" } ], "sceneState": "<who's present (and what they know), the location, the player's physical state, key facts so far>", "memorable": "<a durable beat to remember, or null>" }`;
+    : `Reply as a JSON object: { "lines": [ { "speaker": "<name>", "text": "<their words or *action*>" } ], "choices": [ { "label": "<short player move>", "userMessage": "<what the player says/does if tapped>" } ], "sceneState": "<Location: … Present: …>", "memorable": "<a durable beat to remember, or null>" }`;
 
   return (
 `${stage.companionSystem}${stage.directives}${arcBlock}${sceneSoFar}

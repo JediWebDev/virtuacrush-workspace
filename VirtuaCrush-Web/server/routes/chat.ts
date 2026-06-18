@@ -71,6 +71,11 @@ import {
   resolveArcAct,
   sceneDirectiveFromAnchor,
   buildInitialSceneState,
+  validateSceneStateUpdate,
+  formatSceneValidationRetryHint,
+  repairSceneStateCast,
+  requiredCastNames,
+  type SceneDirectiveInput,
 } from '../inworld/story_structure';
 
 // Recent turns fed to the LLM for local coherence. Long-term recall comes from
@@ -302,6 +307,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   const scene = situation.scene;
 
   let directorPrompt: string | undefined;
+  let priorSceneStateForValidation = '';
+  let sceneValidationInput: SceneDirectiveInput | null = null;
   let world: WorldState | undefined;
   let companionEntity: NpcEntity | undefined;
   let revealSecretNow = false;
@@ -468,6 +475,21 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       engineFacts +
       formatMemoryBlock(memories);
 
+    if (activeArc?.sceneAnchor) {
+      sceneValidationInput = sceneDirectiveFromAnchor(
+        activeArc.sceneAnchor,
+        displayName,
+        sceneCast.map((m) => ({ name: m.name, description: `${m.role} — ${m.vibe}` })),
+      );
+    }
+    priorSceneStateForValidation = (() => {
+      let prior = (companionEntity?.knowledge.sceneState as string | undefined) ?? '';
+      if (arcJustStarted && activeArc?.sceneAnchor && !prior.trim()) {
+        prior = buildInitialSceneState(sceneValidationInput!);
+      }
+      return prior;
+    })();
+
     directorPrompt = buildDirectorPrompt({
       companionSystem: getCharacter(characterId).systemPrompt,
       companionTag: companionTagFor(displayName),
@@ -477,19 +499,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       history: turns,
       userMessage: message,
       playerName: world?.user.profile.displayName ?? '',
-      priorSceneState: (() => {
-        let prior = (companionEntity?.knowledge.sceneState as string | undefined) ?? '';
-        if (arcJustStarted && activeArc?.sceneAnchor && !prior.trim()) {
-          prior = buildInitialSceneState(
-            sceneDirectiveFromAnchor(
-              activeArc.sceneAnchor,
-              displayName,
-              sceneCast.map((m) => ({ name: m.name, description: `${m.role} — ${m.vibe}` })),
-            ),
-          );
-        }
-        return prior;
-      })(),
+      priorSceneState: priorSceneStateForValidation,
       arcContext,
     });
   }
@@ -528,6 +538,42 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           );
         }
       }
+
+      // Scene-state validation for structured stories (active arc with scene anchor).
+      if (sceneValidationInput && dirOut.sceneState) {
+        const narratorTexts = dirOut.turns
+          .filter((t) => t.speaker.toLowerCase() === 'narrator')
+          .map((t) => t.text);
+        let check = validateSceneStateUpdate({
+          priorSceneState: priorSceneStateForValidation,
+          nextSceneState: dirOut.sceneState,
+          requiredNames: requiredCastNames(sceneValidationInput),
+          narratorTexts,
+        });
+        if (!check.ok) {
+          const rawFix = await completePrompt(
+            directorPrompt! + formatSceneValidationRetryHint(check),
+            { json: true },
+          );
+          dirOut = parseDirectorOutput(rawFix, displayName);
+          check = validateSceneStateUpdate({
+            priorSceneState: priorSceneStateForValidation,
+            nextSceneState: dirOut.sceneState,
+            requiredNames: requiredCastNames(sceneValidationInput),
+            narratorTexts: dirOut.turns
+              .filter((t) => t.speaker.toLowerCase() === 'narrator')
+              .map((t) => t.text),
+          });
+          if (!check.ok && check.droppedCharacters?.length) {
+            dirOut.sceneState = repairSceneStateCast(
+              dirOut.sceneState,
+              check.droppedCharacters,
+              priorSceneStateForValidation,
+            );
+          }
+        }
+      }
+
       let dturns = dirOut.turns.some((t) => looksDegenerate(t.text)) ? [] : dirOut.turns;
       const arcResult = arcContext ? dirOut.arc : null;
       replyChoices = dirOut.choices ?? [];

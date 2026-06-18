@@ -42,6 +42,10 @@ import {
   formatStoryActDirective,
   resolvePackNodeAct,
   sceneDirectiveFromAnchor,
+  validateSceneStateUpdate,
+  formatSceneValidationRetryHint,
+  repairSceneStateCast,
+  requiredCastNames,
 } from '../inworld/story_structure';
 
 /** Affinity awarded for finishing a story when the pack doesn't specify its own. */
@@ -188,7 +192,7 @@ function buildPackDirectorPrompt(
     `  "lines": [ { "speaker": "narrator" | "${name}"${npcSpeakerExample}, "text": "spoken words — or an *action* for the narrator" } ],\n` +
     `  "advance": "stay" | "end" | "<a beat id below>",\n` +
     `  "choices": [ { "label": "short button text", "userMessage": "first-person line/action if the player picks it", "next": "<beat id> | dynamic | end" } ],\n` +
-    `  "sceneState": "<short snapshot: who is present (and what they know), the location, the player's physical state, and key facts so far>",\n` +
+    `  "sceneState": "<short snapshot: Location: … Present: … (who is here), player's physical state, key facts>",\n` +
     `  "memorable": "<a durable one-line beat worth remembering in future sessions, or null>",\n` +
     `  "arcStatus": "ongoing" | "climax" | "completed"\n` +
     `}\n\n` +
@@ -463,7 +467,15 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
   catch { /* keep id */ }
 
   const history = await loadPackMessages(sessionId, 30);
-  const directorPrompt = buildPackDirectorPrompt(pack, node, currentNode, session.characterId, session.sceneState);
+  const priorSceneState = session.sceneState;
+  const directorPrompt = buildPackDirectorPrompt(pack, node, currentNode, session.characterId, priorSceneState);
+  const sceneValidationInput = pack.sceneAnchor
+    ? sceneDirectiveFromAnchor(
+        pack.sceneAnchor,
+        companionName,
+        (pack.npcs ?? []).map((n) => ({ name: n.name, description: n.description })),
+      )
+    : null;
   const turnsStr = history
     .map((m) => (m.role === 'user' ? `Player: ${m.content}` : m.content))
     .join('\n');
@@ -473,6 +485,37 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
   try {
     const raw = await completePrompt(fullPrompt, { json: true });
     result = parsePackScene(raw, companionName);
+
+    if (sceneValidationInput && result.sceneState) {
+      const narratorTexts = result.turns
+        .filter((t) => t.speaker.toLowerCase() === 'narrator')
+        .map((t) => t.text);
+      let check = validateSceneStateUpdate({
+        priorSceneState,
+        nextSceneState: result.sceneState,
+        requiredNames: requiredCastNames(sceneValidationInput),
+        narratorTexts,
+      });
+      if (!check.ok) {
+        const rawFix = await completePrompt(fullPrompt + formatSceneValidationRetryHint(check), { json: true });
+        result = parsePackScene(rawFix, companionName);
+        check = validateSceneStateUpdate({
+          priorSceneState,
+          nextSceneState: result.sceneState,
+          requiredNames: requiredCastNames(sceneValidationInput),
+          narratorTexts: result.turns
+            .filter((t) => t.speaker.toLowerCase() === 'narrator')
+            .map((t) => t.text),
+        });
+        if (!check.ok && check.droppedCharacters?.length) {
+          result.sceneState = repairSceneStateCast(
+            result.sceneState,
+            check.droppedCharacters,
+            priorSceneState,
+          );
+        }
+      }
+    }
   } catch (err) {
     console.error('[packs] turn generation error:', err);
     return res.status(502).json({ error: 'generation_failed' });

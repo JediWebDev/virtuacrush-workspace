@@ -173,3 +173,136 @@ export function resolvePackNodeAct(pack: StoryPack, nodeId: string): StoryAct {
   if (ratio >= 0.67) return 'end';
   return 'middle';
 }
+
+// ---------------------------------------------------------------------------
+// Structured scene-state validation
+// ---------------------------------------------------------------------------
+
+export interface SceneValidationResult {
+  ok: boolean;
+  /** Human-readable reason when ok is false. */
+  issue?: string;
+  droppedCharacters?: string[];
+}
+
+const TRANSITION_RE =
+  /\b(walk|drive|head|arrive|enter|leave|exit|step|pull|move|travel|cut to|later|outside|inside|upstairs|downstairs|across|into|out of|through)\b/i;
+const DEPARTURE_RE =
+  /\b(left|leave|leaves|depart|gone|exit|walked away|drove off|disappeared|out of sight)\b/i;
+
+function normToken(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/** Names the engine expects to remain in sceneState unless explicitly departed. */
+export function requiredCastNames(input: SceneDirectiveInput): string[] {
+  return input.presentCharacters.map((c) => c.name);
+}
+
+function extractLocation(text: string): string | null {
+  const m = text.match(/location:\s*([^.\n]+)/i);
+  return m?.[1]?.trim().toLowerCase() ?? null;
+}
+
+/** True if `name` (or common aliases) appears in the scene snapshot text. */
+export function nameInSceneState(text: string, name: string): boolean {
+  const lower = text.toLowerCase();
+  const token = normToken(name);
+  if (!token) return false;
+  if (token === 'you' || token === 'player') {
+    return /\b(you|player|your)\b/.test(lower);
+  }
+  if (lower.includes(name.toLowerCase())) return true;
+  // First-name match for multi-word names (e.g. "Lexi" in sceneState)
+  const first = name.split(/\s+/)[0];
+  if (first && first.length >= 3 && lower.includes(first.toLowerCase())) return true;
+  return lower.includes(token);
+}
+
+function characterExplicitlyDeparted(text: string, name: string): boolean {
+  const lower = text.toLowerCase();
+  const n = name.toLowerCase();
+  const first = (name.split(/\s+/)[0] ?? name).toLowerCase();
+  if (DEPARTURE_RE.test(lower) && (lower.includes(n) || (first.length >= 3 && lower.includes(first)))) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Validates an LLM sceneState update against the engine cast roster.
+ * Returns ok:false when a required character vanishes without an explicit departure.
+ */
+export function validateSceneStateUpdate(opts: {
+  priorSceneState: string;
+  nextSceneState: string;
+  requiredNames: string[];
+  narratorTexts?: string[];
+}): SceneValidationResult {
+  const next = opts.nextSceneState.trim();
+  if (!next) return { ok: true };
+
+  const narratorBlob = (opts.narratorTexts ?? []).join(' ');
+  const dropped: string[] = [];
+
+  for (const name of opts.requiredNames) {
+    if (!nameInSceneState(next, name)) {
+      const departed =
+        characterExplicitlyDeparted(next, name) ||
+        characterExplicitlyDeparted(narratorBlob, name) ||
+        (opts.priorSceneState && characterExplicitlyDeparted(opts.priorSceneState, name));
+      if (!departed) dropped.push(name);
+    }
+  }
+
+  if (dropped.length) {
+    return {
+      ok: false,
+      droppedCharacters: dropped,
+      issue: `sceneState dropped still-present character(s): ${dropped.join(', ')}`,
+    };
+  }
+
+  const priorLoc = extractLocation(opts.priorSceneState);
+  const nextLoc = extractLocation(next);
+  if (priorLoc && nextLoc && priorLoc !== nextLoc && !TRANSITION_RE.test(narratorBlob)) {
+    return {
+      ok: false,
+      issue: `location changed (${priorLoc} → ${nextLoc}) without a narrator transition beat`,
+    };
+  }
+
+  return { ok: true };
+}
+
+/** Appended to a director prompt when sceneState validation fails and we retry once. */
+export function formatSceneValidationRetryHint(result: SceneValidationResult): string {
+  if (result.ok) return '';
+  const parts = [
+    '\n\n=== SCENE STATE CORRECTION (required) ===',
+    `Your previous reply violated continuity: ${result.issue ?? 'invalid sceneState'}.`,
+  ];
+  if (result.droppedCharacters?.length) {
+    parts.push(
+      `You MUST include these characters in "sceneState" (still physically present): ${result.droppedCharacters.join(', ')}.`,
+    );
+  }
+  parts.push('Regenerate the FULL JSON object with a corrected "sceneState" and consistent narration.');
+  return parts.join('\n');
+}
+
+/** Merges dropped cast back into sceneState when retry also fails (fail-soft persist). */
+export function repairSceneStateCast(
+  sceneState: string,
+  dropped: string[],
+  priorSceneState: string,
+): string {
+  if (!dropped.length) return sceneState;
+  const presentLine = dropped
+    .filter((n) => !nameInSceneState(sceneState, n))
+    .map((n) => `${n} (still present)`)
+    .join('; ');
+  if (!presentLine) return sceneState;
+  const base = sceneState.trim() || priorSceneState.trim();
+  return `${base} Present (corrected): ${presentLine}`.slice(0, 1200);
+}

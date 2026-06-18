@@ -44,7 +44,8 @@
           "userMessage": "[I step up close behind her, leaning in slightly to read the cover over her shoulder.]"
         }
       ],
-      "introNarrative": "The bell above the door jingles as you both stumble inside, shaking off the sudden downpour. The shop smells like vanilla and old paper. Mina immediately drifts toward the back aisles, brushing her damp hair out of her eyes as she pulls a heavy, fabric-bound book from a shelf."
+      "introNarrative": "The bell above the door jingles as you both stumble inside, shaking off the sudden downpour. The shop smells like vanilla and old paper. Mina immediately drifts toward the back aisles, brushing her damp hair out of her eyes as she pulls a heavy, fabric-bound book from a shelf.",
+      "act": "beginning"
     },
     "ask_about_book": {
       "npcInstruction": "He asked about the book. Open it carefully to an intricate, hand-drawn illustration on the inside cover. Your eyes light up as you explain why it caught your eye — let the passion break through your usual quiet. Then notice a previous owner's handwriting in the margin and go still with curiosity.",
@@ -67,7 +68,8 @@
           "next": "deeper_aisles",
           "userMessage": "Rain's not letting up. Show me more. Let's get lost in the back."
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "dry_off": {
       "npcInstruction": "He mentions the rain. You realize you're both still dripping. Give a soft, genuine laugh at the absurdity of the storm — offer him a tissue, or point out that his shirt is soaked through. The mood is warm, a little teasing, the awareness of how close you're standing creeping in.",
@@ -90,7 +92,8 @@
           "next": "deeper_aisles",
           "userMessage": "You clearly know your way around a place like this. Lead the way."
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "browse_together": {
       "npcInstruction": "He stepped into your space and you can feel the warmth coming off him. Don't step away — lean into the proximity a fraction. Keep your eyes on the page, but let your voice betray a small tremor as you ask, barely above a whisper, whether he likes art. The aisle feels very narrow all of a sudden.",
@@ -107,7 +110,8 @@
           "next": "deeper_aisles",
           "userMessage": "[I don't answer. I just stay close, reading alongside her, letting the quiet say it.]"
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "the_note": {
       "npcInstruction": "Together you read the faded inscription in the margin — a stranger's note to someone they loved, decades old, tender and a little sad. It lands harder than either of you expected in the hush of the shop. Let it crack you open a little; admit, softly, that you collect books like this for exactly these accidental ghosts of other people's feelings. Glance at him, then suggest going deeper into the stacks.",
@@ -124,7 +128,8 @@
           "next": "deeper_aisles",
           "userMessage": "We can't leave this one here. We're rescuing it. Now show me the rest of your secret kingdom back here."
         }
-      ]
+      ],
+      "act": "middle"
     },
     "deeper_aisles": {
       "npcInstruction": "You lead him into the labyrinth of back shelves where the light goes amber and the rain is just a hush on the high windows. The narrow aisles keep pressing you close — reaching past each other, brushing shoulders, both pretending not to notice. Pull a few books and trade them, learning each other through what you each reach for. Then you round a corner and find it.",
@@ -147,7 +152,8 @@
           "next": "reading_nook",
           "userMessage": "[I follow her around the shelf.] What's back here? It feels like the heart of the place."
         }
-      ]
+      ],
+      "act": "middle"
     },
     "reading_nook": {
       "npcInstruction": "Tucked behind the stacks is a forgotten reading nook — a sagging loveseat, a lamp, a window streaming with rain. It feels like a secret the shop kept just for you two. Sink into it together, closer than the bench strictly requires. The guard you usually keep up is almost gone now. Read a passage aloud, or just let the rain and the small warm circle of lamplight hold the silence. Then look at him like you're deciding whether to say something true.",
@@ -170,7 +176,8 @@
           "next": "the_moment",
           "userMessage": "You're different in this place. Softer. Open. Why don't I get to see this version more often?"
         }
-      ]
+      ],
+      "act": "middle"
     },
     "the_moment": {
       "npcInstruction": "In the lamplit nook, rain on the glass, the noise of the world shut out — Mina is fully unguarded now, and it scares her a little how easy it is with him. Let her almost say it: that she usually hides in places like this BECAUSE they're empty, and that having someone here, having HIM here, is new and good and terrifying. Bring her to the edge of the admission. Then let him land the ending.",
@@ -193,19 +200,23 @@
           "next": "umbrella_end",
           "userMessage": "[I glance at the window.] Rain's easing up. Let me walk you home. We'll have to share the one umbrella, though."
         }
-      ]
+      ],
+      "act": "end"
     },
     "confess_end": {
       "npcInstruction": "He gave her permission to say it. Mina, who hides in quiet corners precisely so no one finds her, admits — haltingly, honestly — that she doesn't want to hide from him. Keep it soft, understated, brave for someone so guarded. Close with the rain and the book still open between you. Fade to black. Don't open new threads.",
-      "choices": null
+      "choices": null,
+      "act": "end"
     },
     "kiss_end": {
       "npcInstruction": "He kissed her in the hidden nook and she let herself be kissed — let herself want it. Give a final, quiet line, a little stunned and entirely sincere, the rain still ticking on the glass. End on warmth and hush. Fade to black. Don't open new threads.",
-      "choices": null
+      "choices": null,
+      "act": "end"
     },
     "umbrella_end": {
       "npcInstruction": "He offered to walk her home under one shared umbrella as the storm softens to a drizzle. Mina agrees — buying the rescued book on the way out, tucking it under her arm. Give a closing beat on the wet, glistening street, shoulders pressed together beneath the umbrella, the easy new closeness between you. Fade to black. Don't open new threads.",
-      "choices": null
+      "choices": null,
+      "act": "end"
     }
   }
 }

@@ -44,7 +44,8 @@
           "userMessage": "[I bump my shoulder playfully against hers, drop my tokens in, and immediately pick the fastest car.]"
         }
       ],
-      "introNarrative": "The arcade is a sensory overload of neon lights and 8-bit soundtracks. Mina drops a handful of tokens into the coin slot of the red racing cabinet and slaps her hand on the steering wheel."
+      "introNarrative": "The arcade is a sensory overload of neon lights and 8-bit soundtracks. Mina drops a handful of tokens into the coin slot of the red racing cabinet and slaps her hand on the steering wheel.",
+      "act": "beginning"
     },
     "trash_talk": {
       "npcInstruction": "He's firing back — you love it. Laugh loud and bright and tell him you admire his false confidence. As the countdown starts, lean over and playfully block his view of his own monitor for half a second. Then the race is on.",
@@ -61,7 +62,8 @@
           "next": "first_race",
           "userMessage": "You know, you're incredibly cute when you're like this."
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "accept_bet": {
       "npcInstruction": "He wants stakes — infinitely more interesting. Smirk, pretend to think, then propose something cheeky: loser buys late-night tacos, or loser does whatever the winner says for the next ten minutes. Lock it in with a spit-shake or a pinky, then drop into your seat.",
@@ -78,7 +80,8 @@
           "next": "first_race",
           "userMessage": "Whatever the winner says for ten minutes. I accept. Insert coin."
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "play_distraction": {
       "npcInstruction": "He bumped you and went straight to business. Feign outrage at the assault — while grinning the whole time — and warn him that if he wants to play dirty, you wrote the book on arcade sabotage. Then hit the gas.",
@@ -95,7 +98,8 @@
           "next": "first_race",
           "userMessage": "[I 'accidentally' lean into her space as the timer counts down.] Oops. My bad."
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "first_race": {
       "npcInstruction": "Narrate the first race in a blur of elbows, trash talk, and last-second cuts — and engineer a maddeningly close finish (a photo-finish, or you edging it by a hair while accusing him of cheating). React at full volume. The arcade isn't done with you two. Decide what happens next: rematch, raise the stakes, or take the rivalry mobile to another game.",
@@ -118,7 +122,8 @@
           "next": "co_op_game",
           "userMessage": "[I grab her hand and pull her off the cabinet.] Cars are your turf. Let's see how you do on the zombie shooter — co-op."
         }
-      ]
+      ],
+      "act": "beginning"
     },
     "rematch": {
       "npcInstruction": "The rematch is war. Bring out the dirty tricks now — bumping his wheel, fake-out trash talk, a hand 'accidentally' landing on his arm at the worst possible corner. The physical contact keeps getting less accidental. Whether you win or he steals it, make the contact and the flirting the real event. Then the question of the bet, and the prize counter, looms.",
@@ -141,7 +146,8 @@
           "next": "prize_counter",
           "userMessage": "[I scoop up the spool of tickets.] Truce. Come on, let's go blow these on something stupid at the counter."
         }
-      ]
+      ],
+      "act": "middle"
     },
     "co_op_game": {
       "npcInstruction": "You ditch the wheels for the two-player zombie shooter — suddenly you're on the same team, backs to the wall, plastic guns blazing. The rivalry flips into ridiculous, shouting co-op chaos. Cover him, get covered, narrate a heroic last stand. When the GAME OVER screen finally wins, you're both breathless and laughing in the neon. Let a beat of something softer sneak in.",
@@ -158,7 +164,8 @@
           "next": "prize_counter",
           "userMessage": "[I hold up our pooled tickets.] Co-op champions get a victory prize. Counter. Now."
         }
-      ]
+      ],
+      "act": "middle"
     },
     "the_bet_paid": {
       "npcInstruction": "The bet gets settled — tacos promised, or the 'winner's orders' invoked with maximum cheek. Whichever way it landed, milk it with theatrical gloating or gracious-but-pointed defeat. Then, mid-banter, suggest cashing in your tickets at the prize counter, because you've spotted something ridiculous you both have to have.",
@@ -175,7 +182,8 @@
           "next": "photo_booth",
           "userMessage": "[I point at the battered photo booth in the corner.] One strip. For the record. To prove I survived a night with you."
         }
-      ]
+      ],
+      "act": "middle"
     },
     "prize_counter": {
       "npcInstruction": "At the glass counter you pool your tickets and discover you have enough for exactly one gloriously useless prize — a giant plush, a mood ring, matching keychains. Make a big, funny deal out of the negotiation. When you settle on it, the gag gift becomes oddly sincere: it's a thing to remember tonight by. Hand it to him, or claim it's 'shared custody.' Let the warmth peek through the bit.",
@@ -198,7 +206,8 @@
           "next": "photo_booth",
           "userMessage": "Perfect. Now there's exactly one thing left on tonight's agenda. [I nod at the photo booth.]"
         }
-      ]
+      ],
+      "act": "middle"
     },
     "photo_booth": {
       "npcInstruction": "You both cram into the tiny photo booth, way too close, the curtain barely shut. The first frames are dumb faces and bunny ears — then the booth gets very small and very quiet, your shoulder against his, both of you suddenly aware of how little space there is. The flash counts down. Drop the competitive armor here. This is the realest beat of the night.",
@@ -215,7 +224,8 @@
           "next": "neon_moment",
           "userMessage": "[I whisper something ridiculous right as the flash goes, and we both crack up into the last photo.]"
         }
-      ]
+      ],
+      "act": "end"
     },
     "neon_moment": {
       "npcInstruction": "The frantic energy settles into something warmer under the neon. The night's been a blast — and somewhere between the races and the bets and the absurd prize, this stopped feeling like just a hangout. Let Mina, for one beat, be genuine instead of competitive. Then let him pick the close: keep the night rolling, call her out on going soft, or make a real plan to do this again.",
@@ -238,19 +248,23 @@
           "next": "again_end",
           "userMessage": "Okay. This was the most fun I've had in forever. Same time next week? I'm serious."
         }
-      ]
+      ],
+      "act": "end"
     },
     "stay_end": {
       "npcInstruction": "He wants to keep the night going. Mina lights up — full energy, but with real affection under it now. Give a closing line as you bail out of the arcade together toward the taco place, plush or keychain in hand. End on a night that's nowhere near over. Fade to black. Don't open new threads.",
-      "choices": null
+      "choices": null,
+      "act": "end"
     },
     "soft_end": {
       "npcInstruction": "He caught her going soft and called it. Mina deflects with a shove and a laugh — but doesn't actually deny it. Give a final line that admits, in the most Mina way possible, that he got under her competitive armor tonight. Fade to black. Don't open new threads.",
-      "choices": null
+      "choices": null,
+      "act": "end"
     },
     "again_end": {
       "npcInstruction": "He asked to do this again, and meant it. Mina, who turns everything into a contest, gives a straight yes — then immediately makes the next meetup a challenge to save face. Close on that mix of giddy and competitive that's entirely her. Fade to black. Don't open new threads.",
-      "choices": null
+      "choices": null,
+      "act": "end"
     }
   }
 }
