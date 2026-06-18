@@ -233,6 +233,28 @@ router.get('/history/:characterId', requireAuth, async (req: Request, res: Respo
   }
 });
 
+// Transcript for one archived calendar day (read-only history view).
+router.get('/history/:characterId/:day', requireAuth, async (req: Request, res: Response) => {
+  const { characterId, day } = req.params;
+  if (!characterId || !/^\d{4}-\d{2}-\d{2}$/.test(day ?? '')) {
+    return res.status(400).json({ error: 'invalid_request' });
+  }
+
+  try {
+    const { rows } = await pool.query<{ role: 'user' | 'assistant'; content: string }>(
+      `SELECT role, content FROM chat_messages
+       WHERE user_id = $1 AND character_id = $2 AND pack_session_id IS NULL
+         AND created_at::date = $3::date
+       ORDER BY created_at ASC, id ASC`,
+      [req.user!.id, characterId, day],
+    );
+    return res.json({ day, messages: rows });
+  } catch (err) {
+    console.error('[chat] history day error:', err);
+    return res.status(500).json({ error: 'history_failed' });
+  }
+});
+
 router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, res: Response) => {
   const { characterId, message } = req.body as ChatRequestBody;
 

@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { Loader2, Plus, Trash2, MessageCircle, Sparkles, GitBranch, Flag, Dices } from "lucide-react";
+import { Loader2, Plus, Trash2, MessageCircle, Sparkles, GitBranch, Flag } from "lucide-react";
 import { CHARACTERS } from "../types/character";
 import PublishControl from "./PublishControl";
 import { StudioGuide, StudioField, StudioFieldHint, StudioOptionalSection } from "./StudioGuide";
@@ -25,7 +25,6 @@ import {
   listStudioCharacters,
   publishStudioPack,
   unpublishStudioPack,
-  fetchRandomPackDraft,
   type StudioPack,
   type StudioCharacter,
   type StudioMood,
@@ -39,9 +38,6 @@ const selectClass = studioSelectClass;
 const MOODS: StudioMood[] = [
   "romantic", "dramatic", "comedic", "thriller", "mystery", "playful", "cozy", "gothic", "tense", "sexy", "kinky",
 ];
-
-const randomBtnClass =
-  "inline-flex items-center gap-1.5 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-xs font-semibold text-accent transition-colors hover:bg-accent/15 disabled:opacity-50";
 
 const ACTS: { value: StudioStoryAct | "auto"; label: string }[] = [
   { value: "auto", label: "Auto (infer from graph)" },
@@ -57,6 +53,7 @@ const ACT_BADGE: Record<StudioStoryAct, string> = {
 };
 
 const END = "end";
+const CONTINUE = "continue";
 
 interface EditChoice {
   label: string;
@@ -101,7 +98,7 @@ function validateGraph(nodes: EditNode[]): { errors: string[]; warnings: string[
       const real = n.choices.filter((c) => c.label.trim());
       if (real.length === 0) errors.push(`Node "${n.id}" has no choices (add one, or mark it an ending).`);
       for (const c of real) {
-        if (c.next !== END && !ids.has(c.next)) errors.push(`A choice in "${n.id}" points to a missing node.`);
+        if (c.next !== END && c.next !== CONTINUE && !ids.has(c.next)) errors.push(`A choice in "${n.id}" points to a missing node.`);
       }
     }
   }
@@ -121,6 +118,7 @@ function validateGraph(nodes: EditNode[]): { errors: string[]; warnings: string[
     for (const c of node.choices) {
       if (!c.label.trim()) continue;
       if (c.next === END) { canEnd = true; continue; }
+      if (c.next === CONTINUE) continue;
       if (byId.has(c.next) && !reachable.has(c.next)) stack.push(c.next);
     }
   }
@@ -177,7 +175,6 @@ export default function AdventureBuilder() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
-  const [randomBusy, setRandomBusy] = useState(false);
 
   // My adventures list.
   const [packs, setPacks] = useState<StudioPack[]>([]);
@@ -240,49 +237,6 @@ export default function AdventureBuilder() {
     setMood("dramatic"); setCoPresent(true); setNodes(freshGraph()); setSeq(1);
   };
 
-  const applyRandomPack = async (randomCompanion: boolean) => {
-    setError(null);
-    setSavedMsg(null);
-    setRandomBusy(true);
-    try {
-      const draft = await fetchRandomPackDraft(randomCompanion ? undefined : characterId);
-      setCharacterId(draft.characterId);
-      setTitle(draft.title);
-      setBlurb(draft.blurb);
-      setMood(draft.mood);
-      setSetting(draft.setting);
-      setSituation(draft.situation);
-      setCoPresent(draft.coPresent);
-      setSystemInstruction(draft.systemInstruction);
-
-      const editNodes: EditNode[] = Object.entries(draft.nodes).map(([id, n]) => ({
-        id,
-        npcInstruction: n.npcInstruction,
-        introNarrative: n.introNarrative ?? "",
-        terminal: n.choices === null,
-        act: n.act ?? "auto",
-        choices:
-          n.choices === null
-            ? []
-            : n.choices.map((c) => ({
-                label: c.label,
-                userMessage: c.userMessage,
-                next: c.next,
-              })),
-      }));
-      setNodes(editNodes.length ? editNodes : freshGraph());
-      const maxSeq = editNodes.reduce((m, n) => {
-        const match = /^node_(\d+)$/.exec(n.id);
-        return match ? Math.max(m, Number(match[1]) + 1) : m;
-      }, 1);
-      setSeq(maxSeq);
-    } catch {
-      setError("Couldn't generate a random adventure. Try again.");
-    } finally {
-      setRandomBusy(false);
-    }
-  };
-
   const handleSave = async () => {
     setError(null); setSavedMsg(null);
     if (!title.trim()) return setError("Give your adventure a title.");
@@ -337,18 +291,9 @@ export default function AdventureBuilder() {
       <ol className="list-decimal space-y-1.5 pl-5">
         <li><span className="font-medium text-stone-800 dark:text-stone-100">Set the scene</span> — companion, title, and opening situation.</li>
         <li><span className="font-medium text-stone-800 dark:text-stone-100">Add beats</span> — each beat tells the character what to do; non-ending beats need at least one choice.</li>
-        <li><span className="font-medium text-stone-800 dark:text-stone-100">Wire choices</span> to the next beat or &quot;End the story.&quot; The checker below confirms every path can finish.</li>
+        <li><span className="font-medium text-stone-800 dark:text-stone-100">Wire choices</span> to the next beat, &quot;Continue story&quot; (stay on this beat), or &quot;End the story.&quot;</li>
       </ol>
       <p className="text-xs text-stone-500">For a single linear arc without branches, try the Stories tab instead.</p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" disabled={randomBusy} onClick={() => applyRandomPack(false)} className={randomBtnClass}>
-          {randomBusy ? <Loader2 size={14} className="animate-spin" /> : <Dices size={14} />}
-          Random adventure
-        </button>
-        <button type="button" disabled={randomBusy} onClick={() => applyRandomPack(true)} className={randomBtnClass}>
-          <Dices size={14} /> Random + companion
-        </button>
-      </div>
     </StudioGuide>
     <div className={`grid gap-8 lg:grid-cols-[1fr_340px] ${studioFormWrapperClass}`}>
       {/* Builder */}
@@ -474,7 +419,7 @@ export default function AdventureBuilder() {
                 {!n.terminal && (
                   <div className="mt-3 space-y-2">
                     <span className={labelClass}>Player choices</span>
-                    <StudioFieldHint>Button label is required. &quot;Goes to&quot; picks the next beat or ends the story.</StudioFieldHint>
+                    <StudioFieldHint>Button label is required. &quot;Goes to&quot; picks the next beat, continues this beat, or ends the story.</StudioFieldHint>
                     {n.choices.map((c, i) => (
                       <div key={i} className="rounded-xl border border-stone-200/80 bg-white/50 p-2.5 dark:border-stone-600 dark:bg-stone-900/20">
                         <div className="flex items-center gap-2">
@@ -489,6 +434,7 @@ export default function AdventureBuilder() {
                             {nodeIds.filter((id) => id !== n.id).map((id) => (
                               <option key={id} value={id}>→ go to {id === "start" ? "Start" : id}</option>
                             ))}
+                            <option value={CONTINUE}>→ Continue story</option>
                             <option value={END}>→ End the story</option>
                           </select>
                         </div>

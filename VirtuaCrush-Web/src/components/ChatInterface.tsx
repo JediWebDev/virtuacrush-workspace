@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
-import { fetchGreeting, fetchCharacterState, fetchAffinity, respondToDesire, fetchChatHistory, type CharacterState, type ChatHistoryDay } from "../lib/api";
+import { fetchGreeting, fetchCharacterState, fetchAffinity, respondToDesire, fetchChatHistory, fetchChatHistoryDay, type CharacterState, type ChatHistoryDay } from "../lib/api";
 import { splitNarration } from "../lib/narration";
 import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
@@ -72,6 +72,8 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     ((location.state as { studioArcTitle?: string } | null)?.studioArcTitle) ?? null,
   );
   const [activeStoryArc, setActiveStoryArc] = useState<{ id: string; title: string } | null>(null);
+  /** When set, the user is reading an archived day — not the live arc / free-roam thread. */
+  const [archiveDay, setArchiveDay] = useState<string | null>(null);
 
   // Pack mode
   const [activePackSession, setActivePackSession] = useState<PackSession | null>(null);
@@ -103,6 +105,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     setPackCompleted(false);
     setActiveThread('freeRoam');
     setActiveStoryArc(null);
+    setArchiveDay(null);
     setReadingStory(null);
     setReadingMessages([]);
     setAffinityToast({ open: false, amount: 0 });
@@ -156,6 +159,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     let cancelled = false;
     setGreetingLoading(true);
     setMessages([]);
+    setArchiveDay(null);
     clearReplyChoices();
 
     async function initGreeting() {
@@ -164,17 +168,15 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
 
         if (cancelled) return;
 
-        const arcTitle =
-          result.activeStoryArc?.title ??
-          studioArcTitleRef.current ??
-          null;
-        if (arcTitle || result.arcActive) {
+        if (result.arcActive && (result.activeStoryArc || studioArcTitleRef.current)) {
           setActiveStoryArc({
             id: result.activeStoryArc?.id ?? 'user:studio',
-            title: arcTitle ?? 'Story arc',
+            title: result.activeStoryArc?.title ?? studioArcTitleRef.current ?? 'Story arc',
           });
           studioArcTitleRef.current = null;
           try { window.history.replaceState({ ...window.history.state, usr: {} }, ''); } catch { /* ignore */ }
+        } else {
+          setActiveStoryArc(null);
         }
 
         // Scene header only when there is no transcript yet (Play seeds intro into history).
@@ -457,6 +459,66 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     onBack();
   };
 
+  const handleOpenHistoryDay = async (day: string) => {
+    setShowHistoryView(false);
+    setArchiveDay(day);
+    setGreetingLoading(true);
+    clearReplyChoices();
+    try {
+      const { messages: dayMsgs } = await fetchChatHistoryDay(character.id, day);
+      setMessages(
+        dayMsgs.map((m, i) => ({
+          id: `archive-${i}`,
+          role: m.role,
+          content: m.content,
+        })),
+      );
+    } catch {
+      setMessages([{ id: 'archive-err', role: 'assistant', content: '[NARRATOR] Could not load that conversation.' }]);
+    } finally {
+      setGreetingLoading(false);
+    }
+  };
+
+  const handleBackToLiveChat = async () => {
+    setArchiveDay(null);
+    setGreetingLoading(true);
+    clearReplyChoices();
+    try {
+      const result = await fetchGreeting(character.id);
+      if (result.arcActive && result.activeStoryArc) {
+        setActiveStoryArc(result.activeStoryArc);
+      } else {
+        setActiveStoryArc(null);
+      }
+      const sceneMsgs =
+        !result.hasHistory && result.sceneHeader
+          ? [{ id: 'scene-header', role: 'assistant' as const, content: `[NARRATOR] ${result.sceneHeader}` }]
+          : [];
+      if (result.hasHistory && result.history?.length) {
+        setMessages(
+          result.history.map((m, i) => ({
+            id: `history-${i}`,
+            role: m.role,
+            content: m.content,
+          })),
+        );
+      } else if (result.arcActive && sceneMsgs.length) {
+        setMessages(sceneMsgs);
+      } else if (result.greeting) {
+        setMessages([...sceneMsgs, { id: 'greeting', role: 'assistant', content: result.greeting }]);
+      } else if (sceneMsgs.length) {
+        setMessages(sceneMsgs);
+      } else {
+        setMessages([]);
+      }
+    } catch (err) {
+      console.error('[greet] reload failed:', err);
+    } finally {
+      setGreetingLoading(false);
+    }
+  };
+
   // Load the real conversation archive whenever the history panel is opened
   // (re-fetched on each open so new messages show up).
   useEffect(() => {
@@ -511,6 +573,8 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     return item.title.toLowerCase().includes(q) || item.preview.toLowerCase().includes(q);
   });
 
+  const showArcBanner = activeThread === 'freeRoam' && !archiveDay && !!activeStoryArc;
+
   const displayedMessages =
     activeThread === 'reading' ? readingMessages :
     activeThread === 'pack' ? packMessages :
@@ -521,7 +585,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     isLoading;
   // Reading a saved story is fully read-only; a finished active story also locks
   // the composer until the player switches threads or starts a new story.
-  const composerLocked = activeThread === 'reading' || (activeThread === 'pack' && packCompleted);
+  const composerLocked = activeThread === 'reading' || (activeThread === 'pack' && packCompleted) || !!archiveDay;
   const inputDisabled = displayedLoading || composerLocked;
 
   return (
@@ -722,7 +786,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                           <li key={item.id}>
                             <button
                               type="button"
-                              onClick={() => setShowHistoryView(false)}
+                              onClick={() => void handleOpenHistoryDay(item.id)}
                               className="flex w-full flex-col gap-1 rounded-xl px-4 py-3 text-left transition-colors hover:bg-black/[0.04] dark:bg-white/[0.04]"
                             >
                               <span className="text-[11px] font-medium uppercase tracking-wide text-stone-900 dark:text-stone-500">
@@ -799,16 +863,29 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               Saved story · read only
             </p>
           )}
-          {activeThread === 'freeRoam' && activeStoryArc && (
+          {archiveDay && (
+            <div className="mx-auto flex max-w-lg flex-col items-center gap-2 rounded-2xl border border-stone-300/50 bg-stone-100/80 px-4 py-3 text-center dark:border-stone-600/50 dark:bg-stone-800/40">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-stone-500">Archived conversation</p>
+              <p className="font-serif text-lg font-semibold text-stone-800 dark:text-stone-100">{formatHistoryDate(archiveDay)}</p>
+              <button
+                type="button"
+                onClick={() => void handleBackToLiveChat()}
+                className="mt-1 text-xs font-semibold text-accent transition-opacity hover:opacity-80"
+              >
+                Back to today&apos;s chat
+              </button>
+            </div>
+          )}
+          {showArcBanner && (
             <div className="mx-auto max-w-lg rounded-2xl border border-accent/35 bg-gradient-to-br from-accent/15 via-accent/5 to-transparent px-4 py-3 text-center shadow-sm">
               <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-accent/80">New scene</p>
-              <p className="mt-1 font-serif text-lg font-semibold text-accent">{activeStoryArc.title}</p>
+              <p className="mt-1 font-serif text-lg font-semibold text-accent">{activeStoryArc!.title}</p>
               <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
                 Earlier free-roam chat is saved in history — this arc starts fresh below.
               </p>
             </div>
           )}
-          {activeThread === 'freeRoam' && !activeStoryArc && displayedMessages.filter((m) => m.id !== "scene-header").length === 1 && (
+          {activeThread === 'freeRoam' && !showArcBanner && !archiveDay && displayedMessages.filter((m) => m.id !== "scene-header").length === 1 && (
             <div className="flex flex-col items-center justify-center space-y-6 py-16 text-center md:py-24">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10">
                     <Sparkles className="text-accent" size={26} />
@@ -964,7 +1041,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           )}
         </div>
 
-        {activeThread === 'freeRoam' && !isLoading && replyChoices.length > 0 && (
+        {activeThread === 'freeRoam' && !archiveDay && !isLoading && replyChoices.length > 0 && (
           <ChoiceButtons
             title="Suggested replies"
             choices={replyChoices.map((c, i) => ({ id: `rc_${i}`, label: c.label, userMessage: c.userMessage, next: '' }))}
@@ -1027,7 +1104,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                placeholder={composerLocked ? "This story has ended — switch to Free Roam to keep chatting" : displayedLoading ? "…" : `Message ${character.name}…`}
+                placeholder={composerLocked ? (archiveDay ? "Archived conversation — read only" : "This story has ended — switch to Free Roam to keep chatting") : displayedLoading ? "…" : `Message ${character.name}…`}
                 disabled={inputDisabled}
                 className="min-h-[52px] flex-1 rounded-[1.75rem] border border-purple-200/60 bg-white/90 py-3.5 pl-5 pr-14 text-[15px] text-stone-800 outline-none transition-all placeholder:text-purple-400/70 focus:border-purple-400/50 focus:ring-2 focus:ring-purple-300/25 dark:border-white/20 dark:bg-stone-600/75 dark:text-stone-50 dark:placeholder:text-stone-300 dark:focus:border-purple-300/40 dark:focus:ring-purple-400/20"
                 />

@@ -54,6 +54,13 @@ export function fetchChatHistory(characterId: string): Promise<{ days: ChatHisto
   return api<{ days: ChatHistoryDay[] }>(`/api/chat/history/${characterId}`);
 }
 
+export function fetchChatHistoryDay(
+  characterId: string,
+  day: string,
+): Promise<{ day: string; messages: { role: 'user' | 'assistant'; content: string }[] }> {
+  return api(`/api/chat/history/${encodeURIComponent(characterId)}/${encodeURIComponent(day)}`);
+}
+
 /**
  * URL for an image/media object served from the R2 bucket via the server's
  * asset proxy (falls back to bundled /public files when the object is

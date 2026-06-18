@@ -4,8 +4,7 @@ import { Sparkles, User, Menu, X, Sun, Moon, Shirt, Wand2, Users } from "lucide-
 import { useSession } from "../lib/auth-client";
 
 const navLinkClass = (active: boolean) =>
-  `text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 ${
-    active ? "text-accent" : "text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
+  `text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 ${active ? "text-accent" : "text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
   }`;
 
 const iconButtonClass =
@@ -78,14 +77,15 @@ export default function Nav() {
             <Link to="/avatar" className={navLinkClass(avatarActive)}>
               Avatar
             </Link>
-            <Link to="/community" className={navLinkClass(communityActive)}>
-              Community
-            </Link>
             {authed ? (
               <Link to="/studio" className={navLinkClass(studioActive)}>
                 Studio
               </Link>
             ) : null}
+            <Link to="/community" className={navLinkClass(communityActive)}>
+              Community
+            </Link>
+
           </nav>
 
           <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
@@ -149,13 +149,6 @@ export default function Nav() {
           >
             <Shirt size={16} /> Avatar
           </Link>
-          <Link
-            to="/community"
-            onClick={closeMobileMenu}
-            className={`flex items-center gap-2 rounded-xl px-4 py-3 transition-all duration-200 hover:scale-[1.01] hover:bg-black/[0.04] dark:bg-white/[0.04] active:scale-[0.99] ${navLinkClass(communityActive)}`}
-          >
-            <Users size={16} /> Community
-          </Link>
           {authed ? (
             <Link
               to="/studio"
@@ -165,6 +158,13 @@ export default function Nav() {
               <Wand2 size={16} /> Studio
             </Link>
           ) : null}
+          <Link
+            to="/community"
+            onClick={closeMobileMenu}
+            className={`flex items-center gap-2 rounded-xl px-4 py-3 transition-all duration-200 hover:scale-[1.01] hover:bg-black/[0.04] dark:bg-white/[0.04] active:scale-[0.99] ${navLinkClass(communityActive)}`}
+          >
+            <Users size={16} /> Community
+          </Link>
         </nav>
       ) : null}
     </header>

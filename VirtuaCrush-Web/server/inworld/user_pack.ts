@@ -98,7 +98,7 @@ export function validatePackSpec(input: unknown): PackValidation {
         choices = null;
       } else {
         for (const c of cleaned) {
-          if (c.next !== 'end' && !idSet.has(c.next)) {
+          if (c.next !== 'end' && c.next !== 'continue' && !idSet.has(c.next)) {
             return { ok: false, error: `choice "${c.label}" in node "${id}" points to unknown node "${c.next}"` };
           }
         }
@@ -129,6 +129,7 @@ export function validatePackSpec(input: unknown): PackValidation {
     if (node.choices == null) { canEnd = true; continue; }
     for (const c of node.choices) {
       if (c.next === 'end') { canEnd = true; continue; }
+      if (c.next === 'continue') continue;
       if (nodes[c.next] && !reachable.has(c.next)) stack.push(c.next);
     }
   }
