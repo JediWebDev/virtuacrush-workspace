@@ -27,8 +27,9 @@ export async function fetchGreeting(
   hasHistory: boolean;
   greeting?: string;
   history?: { role: 'user' | 'assistant'; content: string }[];
-  /** VN-style opening narration composed by the scene engine. */
   sceneHeader?: string;
+  activeStoryArc?: { id: string; title: string };
+  arcActive?: boolean;
 }> {
   const res = await fetch('/api/chat/greet', {
     method: 'POST',
@@ -304,7 +305,7 @@ export async function deleteStudioStory(id: string): Promise<void> {
 }
 
 /** Activates a user arc for its character's chat; returns the character + intro. */
-export async function playStudioStory(id: string): Promise<{ characterId: string; introNarrative: string }> {
+export async function playStudioStory(id: string): Promise<{ characterId: string; introNarrative: string; storyTitle?: string }> {
   const res = await api<{ ok: boolean; characterId: string; introNarrative: string }>(
     `/api/studio/stories/${id}/play`,
     { method: 'POST', body: JSON.stringify({}) },

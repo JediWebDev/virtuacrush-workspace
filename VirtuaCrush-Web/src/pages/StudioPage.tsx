@@ -317,8 +317,8 @@ export default function StudioPage() {
   const handlePlay = async (s: StudioStory) => {
     setBusyId(s.id);
     try {
-      const { characterId, introNarrative } = await playStudioStory(s.id);
-      navigate(`/chat/${characterId}`, { state: { studioIntro: introNarrative } });
+      const { characterId, storyTitle } = await playStudioStory(s.id);
+      navigate(`/chat/${characterId}`, { state: { studioArcTitle: storyTitle ?? s.title } });
     } catch {
       setError("Couldn't start that story.");
     } finally {

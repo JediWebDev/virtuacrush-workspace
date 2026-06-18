@@ -1,6 +1,7 @@
 // Arc runtime state: read/write helpers for the three arc columns on
 // character_state and the arc_completions ledger table.
 import { pool } from './pool';
+import { ensureCharacterStateRow } from './state';
 import type { StoryArc } from '../inworld/arcs';
 
 export interface ArcState {
@@ -44,17 +45,19 @@ export async function setArcActive(
   characterId: string,
   arcId: string,
 ): Promise<void> {
-  // Pure UPDATE — the row is always created by the state system (getSituation)
-  // before arc logic runs. An INSERT here would fail the NOT NULL constraint on
-  // state_date if the row doesn't exist yet.
-  await pool.query(
+  await ensureCharacterStateRow(userId, characterId);
+  const res = await pool.query(
     `UPDATE character_state
         SET current_arc_id        = $3,
             active_arc_started_at = NOW(),
-            abandonment_strikes   = 0
+            abandonment_strikes   = 0,
+            updated_at            = NOW()
       WHERE user_id = $1 AND character_id = $2`,
     [userId, characterId, arcId],
   );
+  if ((res.rowCount ?? 0) === 0) {
+    throw new Error(`setArcActive: no character_state row for ${characterId}`);
+  }
 }
 
 /** Clears the active arc and resets all arc tracking columns. */

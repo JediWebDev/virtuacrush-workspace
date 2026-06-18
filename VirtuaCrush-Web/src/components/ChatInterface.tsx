@@ -68,10 +68,10 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
-  // Opening narration handed off from the Story Studio when a user arc is played.
-  const studioIntroRef = useRef<string | null>(
-    ((location.state as { studioIntro?: string } | null)?.studioIntro) ?? null,
+  const studioArcTitleRef = useRef<string | null>(
+    ((location.state as { studioArcTitle?: string } | null)?.studioArcTitle) ?? null,
   );
+  const [activeStoryArc, setActiveStoryArc] = useState<{ id: string; title: string } | null>(null);
 
   // Pack mode
   const [activePackSession, setActivePackSession] = useState<PackSession | null>(null);
@@ -102,6 +102,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     setPackChoices(null);
     setPackCompleted(false);
     setActiveThread('freeRoam');
+    setActiveStoryArc(null);
     setReadingStory(null);
     setReadingMessages([]);
     setAffinityToast({ open: false, amount: 0 });
@@ -163,25 +164,43 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
 
         if (cancelled) return;
 
-        // Scene header: VN-style opening narration from the scene engine,
-        // rendered as a narrator bubble above the conversation.
-        const sceneMsgs = result.sceneHeader
-          ? [{ id: 'scene-header', role: 'assistant' as const, content: `[NARRATOR] ${result.sceneHeader}` }]
-          : [];
+        const arcTitle =
+          result.activeStoryArc?.title ??
+          studioArcTitleRef.current ??
+          null;
+        if (arcTitle) {
+          setActiveStoryArc({
+            id: result.activeStoryArc?.id ?? 'user:studio',
+            title: arcTitle,
+          });
+          studioArcTitleRef.current = null;
+          try { window.history.replaceState({ ...window.history.state, usr: {} }, ''); } catch { /* ignore */ }
+        }
+
+        // Scene header only when there is no transcript yet (Play seeds intro into history).
+        const sceneMsgs =
+          !result.hasHistory && result.sceneHeader
+            ? [{ id: 'scene-header', role: 'assistant' as const, content: `[NARRATOR] ${result.sceneHeader}` }]
+            : [];
 
         if (result.hasHistory) {
           if (result.history?.length) {
-            setMessages([
-              ...sceneMsgs,
-              ...result.history.map((m, i) => ({
+            setMessages(
+              result.history.map((m, i) => ({
                 id: `history-${i}`,
                 role: m.role,
                 content: m.content,
               })),
-            ]);
+            );
           } else if (sceneMsgs.length) {
             setMessages(sceneMsgs);
           }
+          setGreetingLoading(false);
+          return;
+        }
+
+        if (result.arcActive && sceneMsgs.length) {
+          setMessages(sceneMsgs);
           setGreetingLoading(false);
           return;
         }
@@ -195,6 +214,8 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               content: result.greeting,
             },
           ]);
+        } else if (sceneMsgs.length) {
+          setMessages(sceneMsgs);
         }
       } catch (err) {
         console.error('[greet] failed:', err);
@@ -206,22 +227,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     initGreeting();
     return () => { cancelled = true; };
   }, [character.id, setMessages, clearReplyChoices]);
-
-  // When a Story Studio arc was just launched, show its opening narration once
-  // the greeting/history has loaded, so the custom story visibly "opens."
-  useEffect(() => {
-    if (greetingLoading) return;
-    const intro = studioIntroRef.current;
-    if (!intro) return;
-    studioIntroRef.current = null;
-    setMessages((prev) =>
-      prev.some((m) => m.id === 'studio-intro')
-        ? prev
-        : [...prev, { id: 'studio-intro', role: 'assistant', content: `[NARRATOR] ${intro}` }],
-    );
-    // Drop the nav state so the intro doesn't replay on a later remount.
-    try { window.history.replaceState({ ...window.history.state, usr: {} }, ''); } catch { /* ignore */ }
-  }, [greetingLoading, setMessages]);
 
   // Fetch the character's current story-engine state for the status strip.
   useEffect(() => {
@@ -791,7 +796,12 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               Saved story · read only
             </p>
           )}
-          {activeThread === 'freeRoam' && displayedMessages.filter((m) => m.id !== "scene-header").length === 1 && (
+          {activeThread === 'freeRoam' && activeStoryArc && (
+            <p className="mx-auto w-fit rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-[11px] font-medium text-accent">
+              Story arc · {activeStoryArc.title}
+            </p>
+          )}
+          {activeThread === 'freeRoam' && !activeStoryArc && displayedMessages.filter((m) => m.id !== "scene-header").length === 1 && (
             <div className="flex flex-col items-center justify-center space-y-6 py-16 text-center md:py-24">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10">
                     <Sparkles className="text-accent" size={26} />

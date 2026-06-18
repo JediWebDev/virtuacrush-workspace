@@ -13,6 +13,7 @@ import { buildDirectorPrompt, parseDirectorOutput, parseDirectorTurns, companion
 import { selectArc, getArc, type SceneAnchor, type StoryArc } from '../inworld/arcs';
 import { getUserStory } from '../db/user_stories';
 import { userStoryToArc } from '../inworld/user_arc';
+import { resolveActiveStoryArc, arcOpeningLine } from '../inworld/active_arc';
 import { ensureUserCharacterLoaded } from '../db/user_characters';
 import { getArcState, setArcActive, clearArc as clearArcState, incrementAbandonmentStrikes, resetAbandonmentStrikes, saveCompletedArc, getCompletedArcIds } from '../db/arc_state';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
@@ -123,14 +124,27 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
   }
 
   try {
-    // Compose the opening scene (engine-authoritative: time, setting, outfit,
-    // who's around). Fail-soft: a composer hiccup must never block the chat.
+    const userId = req.user!.id;
+    const { arc: activeArc } = await resolveActiveStoryArc(userId, characterId);
+
+    // Opening scene: use the active story arc when one is running; otherwise free-roam compose.
     let sceneHeader: string | undefined;
+    let activeStoryArc: { id: string; title: string } | undefined;
     try {
       const character = getCharacter(characterId);
-      const situation = await getSituation(req.user!.id, characterId);
-      const comp = await getOrComposeScene(req.user!.id, characterId, character.displayName, situation);
-      if (comp) sceneHeader = renderSceneHeader(comp, character.displayName, characterId);
+      if (activeArc?.sceneAnchor) {
+        sceneHeader = arcOpeningLine(activeArc);
+        if (activeArc.id.startsWith('user:')) {
+          const story = await getUserStory(activeArc.id.slice('user:'.length));
+          if (story && story.ownerUserId === userId) {
+            activeStoryArc = { id: activeArc.id, title: story.title };
+          }
+        }
+      } else {
+        const situation = await getSituation(userId, characterId);
+        const comp = await getOrComposeScene(userId, characterId, character.displayName, situation);
+        if (comp) sceneHeader = renderSceneHeader(comp, character.displayName, characterId);
+      }
     } catch (sceneErr) {
       console.warn('[chat] scene composition failed:', sceneErr);
     }
@@ -140,27 +154,29 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
       `SELECT 1 FROM chat_messages
        WHERE user_id = $1 AND character_id = $2 AND pack_session_id IS NULL
        LIMIT 1`,
-      [req.user!.id, characterId],
+      [userId, characterId],
     );
 
     if (rows.length > 0) {
-      const history = await loadHistory(req.user!.id, characterId);
-      return res.json({ hasHistory: true, history, sceneHeader });
+      const history = await loadHistory(userId, characterId);
+      return res.json({ hasHistory: true, history, sceneHeader, activeStoryArc });
     }
 
-    // First contact: send the character's unique, hand-written greeting verbatim
-    // and persist it as the first assistant turn. On every later visit history
-    // exists, so this greeting is shown only once.
+    // First contact with no history: skip the meet-cute greeting when a Studio arc is active.
+    if (activeArc?.sceneAnchor) {
+      return res.json({ hasHistory: false, sceneHeader, activeStoryArc, arcActive: true });
+    }
+
     const character = getCharacter(characterId);
     const greetingText = character.greeting;
 
     await pool.query(
       `INSERT INTO chat_messages (user_id, character_id, role, content)
        VALUES ($1, $2, 'assistant', $3)`,
-      [req.user!.id, characterId, greetingText],
+      [userId, characterId, greetingText],
     );
 
-    return res.json({ hasHistory: false, greeting: greetingText, sceneHeader });
+    return res.json({ hasHistory: false, greeting: greetingText, sceneHeader, activeStoryArc });
   } catch (err) {
     console.error('[chat] greet error:', err);
     return res.status(500).json({ error: 'greet_failed' });
@@ -262,6 +278,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
   let arcContext: ArcContext | undefined;
   let arcJustStarted = false;
+  let arcSceneInit = false;
   let arcIntroNarrative: string | undefined;
   let earnedBadge: { title: string; description: string } | null = null;
 
@@ -301,6 +318,30 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       completionCriteria: activeArc.completionCriteria,
       completionExamples: activeArc.completionExamples,
     };
+    // Studio / user arcs: prepend intro on the first user turn unless Play already seeded it.
+    if (currentArcId?.startsWith('user:') && activeArc.introNarrative?.trim()) {
+      const startedAt = arcStateResult.activeArcStartedAt ?? new Date(0);
+      const { rows: userTurnRows } = await pool.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM chat_messages
+         WHERE user_id = $1 AND character_id = $2 AND role = 'user'
+           AND pack_session_id IS NULL AND created_at > $3::timestamptz`,
+        [req.user!.id, characterId, startedAt],
+      );
+      if (Number(userTurnRows[0]?.n ?? 0) === 0) {
+        const introNeedle = `[NARRATOR] ${activeArc.introNarrative.trim().slice(0, 80)}`;
+        const { rows: seeded } = await pool.query(
+          `SELECT 1 FROM chat_messages
+           WHERE user_id = $1 AND character_id = $2 AND role = 'assistant'
+             AND content LIKE $3 AND created_at > $4::timestamptz
+           LIMIT 1`,
+          [req.user!.id, characterId, `${introNeedle}%`, startedAt],
+        );
+        if (seeded.length === 0) arcIntroNarrative = activeArc.introNarrative;
+      }
+      if (Number(userTurnRows[0]?.n ?? 0) === 0 && activeArc.sceneAnchor) {
+        arcSceneInit = true;
+      }
+    }
   }
   let displayName = characterId;
   try { displayName = getCharacter(characterId).displayName; } catch { /* unknown id */ }
@@ -490,7 +531,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     }
     priorSceneStateForValidation = (() => {
       let prior = (companionEntity?.knowledge.sceneState as string | undefined) ?? '';
-      if (arcJustStarted && activeArc?.sceneAnchor && !prior.trim()) {
+      if ((arcJustStarted || arcSceneInit) && activeArc?.sceneAnchor && !prior.trim()) {
         prior = buildInitialSceneState(sceneValidationInput!);
       }
       return prior;

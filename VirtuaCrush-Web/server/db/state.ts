@@ -117,6 +117,26 @@ async function ensureFreshRow(userId: string, characterId: string): Promise<Stat
   }
 }
 
+/** Ensures a character_state row exists so arc/scene updates never no-op. */
+export async function ensureCharacterStateRow(userId: string, characterId: string): Promise<void> {
+  const today = utcDateString();
+  await pool.query(
+    `INSERT INTO character_state
+       (user_id, character_id, state_date, activity, mood, headline, goal_progress, updated_at)
+     VALUES ($1, $2, $3, '', '', '', 0, NOW())
+     ON CONFLICT (user_id, character_id) DO NOTHING`,
+    [userId, characterId, today],
+  );
+}
+
+/** Clears composed scene cache so the next turn recomposes (e.g. after arc play). */
+export async function resetSceneComposition(userId: string, characterId: string): Promise<void> {
+  await pool.query(
+    `UPDATE character_state SET scene_composition = NULL, updated_at = NOW()
+     WHERE user_id = $1 AND character_id = $2`,
+    [userId, characterId],
+  );
+}
 /** Current daily state for this user/character (lazily generated on a new day). */
 export async function getOrGenerateDailyState(
   userId: string,

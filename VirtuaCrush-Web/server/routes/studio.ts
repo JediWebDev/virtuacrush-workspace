@@ -24,7 +24,10 @@ import {
 import { validateArcSpec } from '../inworld/user_arc';
 import { validatePackSpec } from '../inworld/user_pack';
 import { setArcActive, clearArc } from '../db/arc_state';
-import { getSituation } from '../db/state';
+import { getSituation, resetSceneComposition } from '../db/state';
+import { pool } from '../db/pool';
+import { arcOpeningLine } from '../inworld/active_arc';
+import { userStoryToArc } from '../inworld/user_arc';
 import { getCharacter } from '../inworld/characters';
 import { moderateText, moderateImage } from '../inworld/moderation';
 import { generateImage } from '../llm/image';
@@ -400,16 +403,34 @@ router.post('/stories/:id/play', requireAuth, async (req: Request, res: Response
   if (story.format !== 'arc') return res.status(400).json({ error: 'unsupported_format' });
 
   try {
-    // Ensure the character_state row exists first — setArcActive is a pure
-    // UPDATE and would silently no-op for a character the user hasn't chatted
-    // with yet (no row), leaving the arc inactive.
-    await getSituation(req.user!.id, story.characterId);
-    await setArcActive(req.user!.id, story.characterId, `user:${story.id}`);
-    const intro = (story.spec as Record<string, unknown>).introNarrative;
+    const userId = req.user!.id;
+    const { characterId } = story;
+
+    if (characterId.startsWith('user:')) {
+      const ok = await ensureUserCharacterLoaded(characterId, userId);
+      if (!ok) return res.status(400).json({ error: 'unknown_character' });
+    }
+
+    await getSituation(userId, characterId);
+    await setArcActive(userId, characterId, `user:${story.id}`);
+    await resetSceneComposition(userId, characterId);
+
+    const arc = userStoryToArc(story);
+    const introNarrative = arc ? (arcOpeningLine(arc) ?? '') : '';
+
+    if (introNarrative) {
+      await pool.query(
+        `INSERT INTO chat_messages (user_id, character_id, role, content)
+         VALUES ($1, $2, 'assistant', $3)`,
+        [userId, characterId, `[NARRATOR] ${introNarrative}`],
+      );
+    }
+
     return res.json({
       ok: true,
-      characterId: story.characterId,
-      introNarrative: typeof intro === 'string' ? intro : '',
+      characterId,
+      introNarrative,
+      storyTitle: story.title,
     });
   } catch (err) {
     console.error('[studio] play failed:', err);
