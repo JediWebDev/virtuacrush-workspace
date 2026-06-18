@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { Wand2, Play, Trash2, Loader2, BookPlus, UserPlus, MessageCircle, ImagePlus, Sparkles, Upload, Dices } from "lucide-react";
 import VoiceTagPicker from "../components/VoiceTagPicker";
+import StudioNpcEditor from "../components/StudioNpcEditor";
+import { emptyStudioNpcDraft, studioNpcInputsFromDrafts, type StudioNpcDraft } from "../lib/studioNpc";
 import { CHARACTERS } from "../types/character";
 import AdventureBuilder from "../components/AdventureBuilder";
 import PublishControl from "../components/PublishControl";
@@ -113,6 +115,7 @@ export default function StudioPage() {
   const [charBusyId, setCharBusyId] = useState<string | null>(null);
   const [vocabulary, setVocabulary] = useState<StudioVocabulary | null>(null);
   const [randomBusy, setRandomBusy] = useState(false);
+  const [arcNpcs, setArcNpcs] = useState<StudioNpcDraft[]>([]);
 
   const charName = (id: string) => CHARACTERS.find((c) => c.id === id)?.name ?? characters.find((c) => customCharacterRef(c.id) === id)?.displayName ?? id;
 
@@ -180,6 +183,7 @@ export default function StudioPage() {
         coPresent: draft.coPresent,
         tone: (draft.tone as Tone) || "dramatic",
       });
+      setArcNpcs([]);
     } catch {
       setError("Couldn't generate a random story. Try again.");
     } finally {
@@ -290,6 +294,7 @@ export default function StudioPage() {
     }
     setSaving(true);
     try {
+      const npcInputs = studioNpcInputsFromDrafts(arcNpcs);
       await createStudioStory({
         characterId: form.characterId,
         title: form.title.trim() || "Untitled story",
@@ -304,8 +309,10 @@ export default function StudioPage() {
         completionCriteria: form.completionCriteria.trim(),
         coPresent: form.coPresent,
         tone: form.tone,
+        ...(npcInputs.length ? { npcs: npcInputs } : {}),
       });
       setForm(emptyForm(form.characterId));
+      setArcNpcs([]);
       refresh();
     } catch {
       setError("Couldn't save the story. Please try again.");
@@ -380,6 +387,7 @@ export default function StudioPage() {
         <ol className="list-decimal space-y-1.5 pl-5">
           <li><span className="font-medium text-stone-800 dark:text-stone-100">Pick a companion</span> and describe where you are and what&apos;s happening.</li>
           <li><span className="font-medium text-stone-800 dark:text-stone-100">Tell the character how to act</span> and how the story should end.</li>
+          <li><span className="font-medium text-stone-800 dark:text-stone-100">Add scene NPCs</span> (optional) — friends, rivals, or venue staff who can speak in the scene.</li>
           <li><span className="font-medium text-stone-800 dark:text-stone-100">Save, then Play</span> from the list on the right — or open their chat and pick your story from Stories.</li>
         </ol>
         <p className="text-xs text-stone-500">Want branching choices instead? Use the <button type="button" onClick={() => setTab("adventures")} className="font-semibold text-accent underline-offset-2 hover:underline">Adventures</button> tab.</p>
@@ -501,6 +509,15 @@ export default function StudioPage() {
             </div>
           </StudioOptionalSection>
 
+          <StudioOptionalSection title="Scene NPCs" summary="Friends, enemies, and bystanders in this arc">
+            <StudioNpcEditor
+              npcs={arcNpcs}
+              onChange={setArcNpcs}
+              vocabulary={vocabulary?.npcs}
+              disabled={saving}
+            />
+          </StudioOptionalSection>
+
           {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
 
           <button
@@ -525,14 +542,18 @@ export default function StudioPage() {
             </p>
           ) : (
             <ul className="space-y-3">
-              {stories.map((s) => (
+              {stories.map((s) => {
+                const npcCount = Array.isArray(s.spec?.npcs) ? s.spec.npcs.length : 0;
+                return (
                 <motion.li
                   key={s.id}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] p-4"
                 >
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-accent">{charName(s.characterId)} · {s.format}</p>
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-accent">
+                    {charName(s.characterId)} · {s.format}{npcCount ? ` · ${npcCount} NPC${npcCount === 1 ? "" : "s"}` : ""}
+                  </p>
                   <p className="mt-0.5 text-sm font-semibold text-stone-900 dark:text-stone-50">{s.title}</p>
                   {typeof s.spec.setting === "string" && (
                     <p className="mt-1 line-clamp-2 text-xs italic text-stone-500">{s.spec.setting as string}</p>
@@ -565,7 +586,8 @@ export default function StudioPage() {
                     onUnpublish={() => handleUnpublishStory(s)}
                   />
                 </motion.li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>
@@ -755,7 +777,7 @@ export default function StudioPage() {
       </>
       )}
 
-      {tab === "adventures" && <AdventureBuilder />}
+      {tab === "adventures" && <AdventureBuilder npcVocabulary={vocabulary?.npcs} />}
     </section>
   );
 }

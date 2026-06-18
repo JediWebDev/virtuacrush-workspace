@@ -12,6 +12,7 @@ import { Loader2, Plus, Trash2, MessageCircle, Sparkles, GitBranch, Flag } from 
 import { CHARACTERS } from "../types/character";
 import PublishControl from "./PublishControl";
 import { StudioGuide, StudioField, StudioFieldHint, StudioOptionalSection } from "./StudioGuide";
+import StudioNpcEditor from "./StudioNpcEditor";
 import {
   studioLabelClass,
   studioInputClass,
@@ -29,7 +30,9 @@ import {
   type StudioCharacter,
   type StudioMood,
   type StudioStoryAct,
+  type StudioVocabulary,
 } from "../lib/api";
+import { emptyStudioNpcDraft, studioNpcInputsFromDrafts, type StudioNpcDraft } from "../lib/studioNpc";
 
 const labelClass = studioLabelClass;
 const inputClass = studioInputClass;
@@ -142,7 +145,11 @@ function validateGraph(nodes: EditNode[]): { errors: string[]; warnings: string[
   return { errors, warnings };
 }
 
-export default function AdventureBuilder() {
+export default function AdventureBuilder({
+  npcVocabulary,
+}: {
+  npcVocabulary?: StudioVocabulary["npcs"] | null;
+}) {
   const navigate = useNavigate();
 
   // Companion options: built-ins + the user's custom characters.
@@ -167,6 +174,7 @@ export default function AdventureBuilder() {
   const [situation, setSituation] = useState("");
   const [systemInstruction, setSystemInstruction] = useState("");
   const [coPresent, setCoPresent] = useState(true);
+  const [packNpcs, setPackNpcs] = useState<StudioNpcDraft[]>([]);
 
   // Node graph.
   const [nodes, setNodes] = useState<EditNode[]>(freshGraph);
@@ -234,7 +242,7 @@ export default function AdventureBuilder() {
 
   const resetForm = () => {
     setTitle(""); setBlurb(""); setSetting(""); setSituation(""); setSystemInstruction("");
-    setMood("dramatic"); setCoPresent(true); setNodes(freshGraph()); setSeq(1);
+    setMood("dramatic"); setCoPresent(true); setPackNpcs([]); setNodes(freshGraph()); setSeq(1);
   };
 
   const handleSave = async () => {
@@ -261,6 +269,7 @@ export default function AdventureBuilder() {
 
     setSaving(true);
     try {
+      const npcInputs = studioNpcInputsFromDrafts(packNpcs);
       await createStudioPack({
         characterId,
         title: title.trim(),
@@ -271,6 +280,7 @@ export default function AdventureBuilder() {
         coPresent,
         systemInstruction: systemInstruction.trim(),
         nodes: nodeMap as unknown as Record<string, { npcInstruction: string; choices: EditChoice[] | null }>,
+        ...(npcInputs.length ? { npcs: npcInputs } : {}),
       });
       resetForm();
       setSavedMsg("Saved! It'll appear in the story list when you open this companion's chat.");
@@ -291,6 +301,7 @@ export default function AdventureBuilder() {
       <ol className="list-decimal space-y-1.5 pl-5">
         <li><span className="font-medium text-stone-800 dark:text-stone-100">Set the scene</span> — companion, title, and opening situation.</li>
         <li><span className="font-medium text-stone-800 dark:text-stone-100">Add beats</span> — each beat tells the character what to do; non-ending beats need at least one choice.</li>
+        <li><span className="font-medium text-stone-800 dark:text-stone-100">Add scene NPCs</span> (optional) — rivals, friends, or staff who can speak in tagged lines.</li>
         <li><span className="font-medium text-stone-800 dark:text-stone-100">Wire choices</span> to the next beat, &quot;Continue story&quot; (stay on this beat), or &quot;End the story.&quot;</li>
       </ol>
       <p className="text-xs text-stone-500">For a single linear arc without branches, try the Stories tab instead.</p>
@@ -357,6 +368,15 @@ export default function AdventureBuilder() {
               <input className={inputClass} value={setting} onChange={(e) => setSetting(e.target.value)} placeholder="a darkened artisan bakery after closing time" />
             </div>
           </StudioOptionalSection>
+
+          <div className="mt-4 border-t border-black/10 pt-4 dark:border-white/10">
+            <StudioNpcEditor
+              npcs={packNpcs}
+              onChange={setPackNpcs}
+              vocabulary={npcVocabulary}
+              disabled={saving}
+            />
+          </div>
         </div>
 
         {/* Story flow */}
@@ -525,6 +545,7 @@ export default function AdventureBuilder() {
           <ul className="space-y-3">
             {packs.map((p) => {
               const nodeCount = p.spec?.nodes ? Object.keys(p.spec.nodes).length : 0;
+              const npcCount = Array.isArray(p.spec?.npcs) ? p.spec.npcs.length : 0;
               return (
                 <motion.li
                   key={p.id}
@@ -532,7 +553,9 @@ export default function AdventureBuilder() {
                   animate={{ opacity: 1, y: 0 }}
                   className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] p-4"
                 >
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-accent">{companionName(p.characterId)} · {nodeCount} beats</p>
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-accent">
+                    {companionName(p.characterId)} · {nodeCount} beats{npcCount ? ` · ${npcCount} NPC${npcCount === 1 ? "" : "s"}` : ""}
+                  </p>
                   <p className="mt-0.5 text-sm font-semibold text-stone-900 dark:text-stone-50">{p.title}</p>
                   {p.blurb && <p className="mt-1 line-clamp-2 text-xs italic text-stone-500">{p.blurb}</p>}
                   <div className="mt-3 flex gap-2">

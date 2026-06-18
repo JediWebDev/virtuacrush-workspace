@@ -291,6 +291,7 @@ export interface StudioArcInput {
   completionExamples?: string[];
   tone?: 'light' | 'serious' | 'romantic' | 'dramatic';
   arcTags?: string[];
+  npcs?: StudioSceneNpcInput[];
 }
 
 export async function createStudioStory(input: StudioArcInput): Promise<StudioStory> {
@@ -352,6 +353,31 @@ export interface StudioVocabulary {
   voiceTagLimit: number;
   arcTones: string[];
   packMoods: string[];
+  npcs: {
+    stances: { id: StudioNpcStance; label: string }[];
+    bystanderRoles: { id: string; label: string; settingTags: string[] }[];
+    archetypes: {
+      id: string;
+      label: string;
+      stance: StudioNpcStance;
+      roleId: string | null;
+      brief: string;
+      settingTags: string[];
+      narrativeTags: string[];
+      chaosWeight: number;
+      canDisrupt: boolean;
+    }[];
+  };
+}
+
+export type StudioNpcStance = 'friend' | 'enemy' | 'bystander';
+
+export interface StudioSceneNpcInput {
+  name: string;
+  stance: StudioNpcStance;
+  archetypeId?: string;
+  roleId?: string;
+  description?: string;
 }
 
 export interface RandomCharacterDraft {
@@ -516,6 +542,7 @@ export interface StudioPackSpec {
   coPresent: boolean;
   systemInstruction: string;
   nodes: Record<string, StudioPackNode>;
+  npcs?: StudioSceneNpcInput[];
 }
 
 /** A stored adventure (user_stories row with format='pack'). */
@@ -544,6 +571,7 @@ export interface StudioPackInput {
   coPresent?: boolean;
   systemInstruction: string;
   nodes: Record<string, StudioPackNode>;
+  npcs?: StudioSceneNpcInput[];
 }
 
 export async function createStudioPack(input: StudioPackInput): Promise<StudioPack> {
