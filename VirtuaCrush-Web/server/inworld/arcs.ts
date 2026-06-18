@@ -22,6 +22,8 @@
 //   this arc before any other, gating all regular arcs behind it.
 // - rarity weights: common=10, uncommon=4, rare=1 (arbitrary relative units).
 
+import type { SceneNpcRef } from './npc_schema';
+
 export type NarrativeTag =
   // Interpersonal / Emotional
   | 'romance' | 'friendship' | 'conflict' | 'trust' | 'jealousy'
@@ -73,6 +75,8 @@ export interface StoryArc {
   repeatable: boolean;
   arcTags: NarrativeTag[];
   followUps?: string[];
+  /** Optional authored NPCs (friends, enemies, bystanders) for this arc. */
+  npcs?: SceneNpcRef[];
 }
 
 export interface CompletedArc {

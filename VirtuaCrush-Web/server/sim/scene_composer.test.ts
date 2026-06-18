@@ -94,12 +94,9 @@ test('returning visit: no meet-cute, normal narration', () => {
   assert.ok(!facts.includes('FIRST MEETING'));
 });
 
-test('renderSceneFactsBlock: authoritative facts incl. outfit lock + cast rules', () => {
+test('renderSceneFactsBlock: authoritative facts incl. outfit lock (NPC roster injected separately)', () => {
   const c = composeScene(BASE);
   const f = renderSceneFactsBlock(c, 'Becca');
   assert.ok(f.includes('SCENE FACTS'));
   assert.ok(f.includes('do not change or re-invent her outfit'));
-  if (c.cast.length) {
-    assert.ok(f.includes(c.cast[0].name.toUpperCase()));
-  }
 });

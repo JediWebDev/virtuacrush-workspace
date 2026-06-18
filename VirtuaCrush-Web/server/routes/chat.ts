@@ -29,6 +29,14 @@ import {
   storeSignificantEvent,
 } from '../db/memory';
 import { getCharacter, type CharacterId } from '../inworld/characters';
+import { getLocation } from '../inworld/locations';
+import {
+  formatSceneNpcBlock,
+  mergeSceneNpcs,
+  resolveSceneNpcs,
+  sceneCastToNpcRefs,
+  suggestBystanderForSetting,
+} from '../inworld/npc_schema';
 import { maybeAutonomousPost, postReasonForTurn } from '../inworld/social_post';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
 import { formatPersonaTraitsBlock, shouldRevealSecret } from '../sim/traits';
@@ -399,6 +407,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     // present (e.g. her friend) registered as a voiceable actor. Fail-soft.
     let sceneFacts = '';
     let sceneCast: SceneCastMember[] = [];
+    let sceneNpcBlock = '';
     let disruptionDirective = '';
     try {
       const comp = await getOrComposeScene(req.user!.id, characterId, displayName, situation);
@@ -448,12 +457,27 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     } catch (sceneErr) {
       console.warn('[chat] scene facts failed:', sceneErr);
     }
-    for (const m of sceneCast) {
+
+    const settingHint =
+      activeArc?.sceneAnchor?.setting ??
+      (situation.scene.location ? getLocation(situation.scene.location)?.name : undefined) ??
+      '';
+    const venueNpc =
+      situation.scene.location && settingHint
+        ? suggestBystanderForSetting(settingHint)
+        : null;
+    const resolvedSceneNpcs = mergeSceneNpcs([
+      resolveSceneNpcs(sceneCastToNpcRefs(sceneCast)),
+      activeArc?.npcs?.length ? resolveSceneNpcs(activeArc.npcs) : [],
+      venueNpc ? [venueNpc] : [],
+    ]);
+    sceneNpcBlock = formatSceneNpcBlock(resolvedSceneNpcs);
+    for (const n of resolvedSceneNpcs) {
       npcs.push({
-        tag: m.name.toUpperCase(),
-        name: m.name,
+        tag: n.speakerTag,
+        name: n.name,
         kind: 'npc',
-        brief: `${displayName}'s ${m.role} — ${m.vibe}; right now she ${m.agenda}`,
+        brief: `[${n.stance}] ${n.promptBrief}`,
       });
     }
 
@@ -535,6 +559,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           ? formatLocationBlock(situation.scene.location, displayName, affinity)
           : formatSituationBlock(situation.state, scene, displayName, affinity)) +
       sceneFacts +
+      sceneNpcBlock +
       disruptionDirective +
       formatCharacterFactsBlock(getLore(characterId)) +
       formatPersonaTraitsBlock(getLore(characterId), { discovered: secretDiscovered, revealNow: revealSecretNow }) +

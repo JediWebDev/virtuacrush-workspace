@@ -9,6 +9,7 @@
 import type { StoryArc } from './arcs';
 import type { UserStory } from '../db/user_stories';
 import { ARC_TONES, isArcTone, isNarrativeTag } from '../studio/schema';
+import { parseSceneNpcRefs, type SceneNpcRef } from './npc_schema';
 
 export interface UserArcSpec {
   setting: string;
@@ -25,6 +26,8 @@ export interface UserArcSpec {
   completionExamples: string[];
   tone: StoryArc['tone'];
   arcTags: string[];
+  /** Optional scene NPCs (friend / enemy / bystander). */
+  npcs?: SceneNpcRef[];
 }
 
 function str(v: unknown, max: number): string {
@@ -64,6 +67,7 @@ export function validateArcSpec(input: unknown): ArcValidation {
   const beginningInstruction = str(o.beginningInstruction, 800);
   const middleInstruction = str(o.middleInstruction, 800);
   const endInstruction = str(o.endInstruction, 800);
+  const npcs = parseSceneNpcRefs(o.npcs, 8);
 
   return {
     ok: true,
@@ -81,6 +85,7 @@ export function validateArcSpec(input: unknown): ArcValidation {
       completionExamples,
       tone,
       arcTags,
+      ...(npcs.length ? { npcs } : {}),
     },
   };
 }
@@ -119,5 +124,6 @@ export function userStoryToArc(story: UserStory): StoryArc | null {
     rarity: 'common',
     repeatable: true,
     arcTags: Array.isArray(s.arcTags) ? (s.arcTags as StoryArc['arcTags']) : [],
+    ...(Array.isArray(s.npcs) && s.npcs.length ? { npcs: s.npcs as StoryArc['npcs'] } : {}),
   };
 }

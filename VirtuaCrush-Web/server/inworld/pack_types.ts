@@ -1,5 +1,10 @@
 // TypeScript types for CYOA Story Packs.
 
+import type { StoryAct } from './story_structure';
+import type { BystanderRoleId, NpcStance } from './npc_schema';
+
+export type { StoryAct };
+
 export interface PackSceneAnchor {
   setting: string;
   situation: string;
@@ -12,12 +17,6 @@ export interface PackChoice {
   next: string;
   userMessage: string;
 }
-
-// TypeScript types for CYOA Story Packs.
-
-import type { StoryAct } from './story_structure';
-
-export type { StoryAct };
 
 export interface PackNode {
   introNarrative?: string;
@@ -33,6 +32,12 @@ export interface PackNpc {
   name: string;
   /** One-line brief describing who they are and how they behave. */
   description: string;
+  /** friend | enemy | bystander — drives prompt injection and chaos weighting. */
+  stance?: NpcStance;
+  /** Link to catalog entry in npc_schema.ts. */
+  archetypeId?: string;
+  /** Bystander role (waiter, barista, security_guard, …). */
+  roleId?: BystanderRoleId;
 }
 
 export type PackMood =

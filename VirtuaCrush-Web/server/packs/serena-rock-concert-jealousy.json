@@ -204,6 +204,8 @@
   "npcs": [
     {
       "name": "Urik",
+      "stance": "enemy",
+      "archetypeId": "rival",
       "description": "A tall, broad-shouldered man in his 20s in a faded band tee — an old high-school 'friend' who has always had an unrequited crush on Serena. Pushy, jealous, and bad at reading the room; he tries to bait the player into a macho confrontation and refuses to take a hint. He should speak in his OWN [Urik] lines with real, audible, escalating dialogue."
     }
   ]

@@ -9,6 +9,7 @@
 // Re-export narrative tags from the arc registry until arcs.ts imports from here.
 export type { NarrativeTag } from '../inworld/arcs';
 export { type StoryAct } from '../inworld/story_structure';
+import { npcVocabularyPayload } from '../inworld/npc_schema';
 
 // ---------------------------------------------------------------------------
 // Story arc tone (user arcs + built-in arcs)
@@ -267,6 +268,7 @@ export function studioVocabularyPayload() {
     voiceTagLimit: VOICE_TAG_LIMIT,
     arcTones: [...ARC_TONES],
     packMoods: [...PACK_MOODS],
+    npcs: npcVocabularyPayload(),
   };
 }
 

@@ -222,12 +222,7 @@ export function renderSceneFactsBlock(c: SceneComposition, displayName: string, 
         `Play genuine first-impressions energy: curious, feeling them out, a little guarded but interested.`,
     );
   } else if (c.cast.length) {
-    for (const m of c.cast) {
-      lines.push(
-        `ALSO PRESENT: ${m.name}, ${pro.possessive} ${m.role} -- ${m.vibe}. Right now ${m.name} ${m.agenda}. ` +
-          `Voice ${m.name} ONLY via [${m.name.toUpperCase()}] tagged lines; she can interject, react, or be overheard. She is real and persistent -- never rename her or swap her for someone else.`,
-      );
-    }
+    // Cast details are injected via formatSceneNpcBlock() in the chat/pack pipelines.
   }
   return lines.filter(Boolean).join(`
 `);

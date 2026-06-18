@@ -12,9 +12,10 @@
 //   - a node's choices are an array of { label, userMessage, next } where `next`
 //     is another node id or the sentinel "end"; a node with choices: null is a
 //     terminal/ending beat.
-import type { StoryPack, PackNode, PackChoice, PackMood } from './pack_types';
+import type { StoryPack, PackNode, PackChoice, PackMood, PackNpc } from './pack_types';
 import type { UserStory } from '../db/user_stories';
 import { PACK_MOODS, isPackMood } from '../studio/schema';
+import { parseSceneNpcRefs, type SceneNpcRef } from './npc_schema';
 
 const MOODS: ReadonlyArray<PackMood> = PACK_MOODS;
 
@@ -36,6 +37,8 @@ export interface UserPackSpec {
   coPresent: boolean;
   systemInstruction: string; // overall story framing injected every turn
   nodes: Record<string, PackNode>;
+  /** Optional scene NPCs (friend / enemy / bystander). */
+  npcs?: SceneNpcRef[];
 }
 
 export interface PackValidation {
@@ -137,6 +140,7 @@ export function validatePackSpec(input: unknown): PackValidation {
 
   const moodRaw = str(o.mood, 20);
   const mood: PackMood = isPackMood(moodRaw) ? moodRaw : 'dramatic';
+  const npcs = parseSceneNpcRefs(o.npcs, 8);
 
   return {
     ok: true,
@@ -149,6 +153,7 @@ export function validatePackSpec(input: unknown): PackValidation {
       coPresent: o.coPresent !== false, // default true
       systemInstruction,
       nodes,
+      ...(npcs.length ? { npcs } : {}),
     },
   };
 }
@@ -161,6 +166,16 @@ export function userStoryToPack(story: UserStory): StoryPack | null {
   const s = story.spec as unknown as Partial<UserPackSpec>;
   if (!s || typeof s.situation !== 'string' || !s.nodes || typeof s.nodes !== 'object') return null;
   if (!s.nodes['start']) return null;
+
+  const packNpcs: PackNpc[] | undefined = Array.isArray(s.npcs) && s.npcs.length
+    ? s.npcs.map((n) => ({
+        name: n.name,
+        description: n.description ?? '',
+        stance: n.stance,
+        ...(n.archetypeId ? { archetypeId: n.archetypeId } : {}),
+        ...(n.roleId ? { roleId: n.roleId } : {}),
+      }))
+    : undefined;
 
   return {
     id: `user:${story.id}`,
@@ -178,6 +193,7 @@ export function userStoryToPack(story: UserStory): StoryPack | null {
       situation: s.situation,
       coPresent: s.coPresent !== false,
     },
+    ...(packNpcs ? { npcs: packNpcs } : {}),
     nodes: s.nodes,
   };
 }

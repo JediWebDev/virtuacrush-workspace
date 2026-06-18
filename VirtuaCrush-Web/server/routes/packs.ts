@@ -16,6 +16,11 @@ import { getCharacter, NARRATOR_BRIEF } from '../inworld/characters';
 import { turnsToTranscript, parsePackScene } from '../inworld/director';
 import { packOpeningIntro } from '../inworld/pack_intro';
 import { sanitizeRoleplayTranscript } from '../inworld/transcript_sanitize';
+import {
+  formatSceneNpcBlock,
+  npcsToSpeakerBriefs,
+  resolvePackNpcsFromStory,
+} from '../inworld/npc_schema';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
 import { formatPersonaTraitsBlock } from '../sim/traits';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
@@ -154,13 +159,17 @@ function buildPackDirectorPrompt(
   const lore = getLore(characterId);
   const storyAct = resolvePackNodeAct(pack, nodeId);
   const actBlock = formatStoryActDirective(storyAct, 'pack');
+  const packNpcsResolved = resolvePackNpcsFromStory(pack);
 
   const sceneDirective = pack.sceneAnchor
     ? formatPersistentSceneDirective(
         sceneDirectiveFromAnchor(
           pack.sceneAnchor,
           name,
-          (pack.npcs ?? []).map((n) => ({ name: n.name, description: n.description })),
+          packNpcsResolved.map((n) => ({
+            name: n.name,
+            description: `[${n.stance}] ${n.promptBrief}`,
+          })),
         ),
       )
     : '';
@@ -171,11 +180,11 @@ function buildPackDirectorPrompt(
     ? `\n\n=== SCENE SO FAR (authoritative continuity — honor this; it persists beyond the recent messages) ===\n${priorSceneState}`
     : '';
 
-  const npcs = pack.npcs ?? [];
+  const npcBlock = formatSceneNpcBlock(packNpcsResolved);
   const speakerList = [
     `- "narrator" — ${NARRATOR_BRIEF} Owns ALL action/reaction in the scene (${name}, the NPCs, and the world); wrap actions in *asterisks*; no dialogue.`,
     `- "${name}" — speaks ONLY their own spoken words, first person; no actions or reactions in this line.`,
-    ...npcs.map((n) => `- "${n.name}" — ${n.description} Speaks only their own words; their actions are narrated by "narrator".`),
+    ...npcsToSpeakerBriefs(packNpcsResolved),
   ].join('\n');
 
   const authoredChoices = (node.choices && node.choices.length)
@@ -186,7 +195,7 @@ function buildPackDirectorPrompt(
     .map(([id, n]) => (n.choices == null ? `- ${id}  (ENDING — concludes the story)` : `- ${id}`))
     .join('\n');
 
-  const npcSpeakerExample = npcs.length ? ` | "${npcs[0]!.name}"` : '';
+  const npcSpeakerExample = packNpcsResolved.length ? ` | "${packNpcsResolved[0]!.name}"` : '';
   const schema =
     `\n\n=== HOW TO REPLY (ONE JSON OBJECT) ===\n` +
     `Reply with ONE JSON object only — no prose, no code fences:\n` +
@@ -218,6 +227,7 @@ function buildPackDirectorPrompt(
     `\n\n=== CURRENT BEAT ===\n${node.npcInstruction}` +
     actBlock +
     sceneDirective +
+    npcBlock +
     sceneSoFar +
     formatCharacterFactsBlock(lore) +
     formatPersonaTraitsBlock(lore, { discovered: false, revealNow: false }) +
