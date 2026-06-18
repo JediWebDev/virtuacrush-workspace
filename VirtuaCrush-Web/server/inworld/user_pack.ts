@@ -112,6 +112,8 @@ export function validatePackSpec(input: unknown): PackValidation {
     const node: PackNode = { npcInstruction, choices };
     const intro = str(n.introNarrative, 1000);
     if (intro) node.introNarrative = intro;
+    const actRaw = str(n.act, 12);
+    if (actRaw === 'beginning' || actRaw === 'middle' || actRaw === 'end') node.act = actRaw;
     nodes[id] = node;
   }
 

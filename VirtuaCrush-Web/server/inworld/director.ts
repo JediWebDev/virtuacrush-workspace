@@ -9,6 +9,7 @@
 import type { ChatMessage } from './chat';
 import { validateIntent, type PlayerIntent } from '../sim/intent';
 import { NARRATOR_BRIEF } from './characters';
+import { formatStoryActDirective, type StoryAct } from './story_structure';
 
 export type ActorKind = 'companion' | 'narrator' | 'npc';
 export interface Actor { tag: string; name: string; kind: ActorKind; brief?: string }
@@ -21,6 +22,10 @@ export interface ArcContext {
   completionCriteria: string;
   /** Concrete examples grounding the LLM's completion evaluation. */
   completionExamples: string[];
+  /** Three-act phase for structured arc pacing (not used in plain free roam). */
+  storyAct?: StoryAct;
+  /** Engine-owned scene/cast block — must not be contradicted without a transition. */
+  sceneDirective?: string;
 }
 
 export interface DirectorStage {
@@ -163,6 +168,8 @@ export function buildDirectorPrompt(stage: DirectorStage): string {
 
 === ACTIVE STORY ARC ===
 ${stage.arcContext.npcInstruction}
+${stage.arcContext.storyAct ? formatStoryActDirective(stage.arcContext.storyAct, 'arc') : ''}
+${stage.arcContext.sceneDirective ?? ''}
 
 ARC COMPLETION CRITERIA: ${stage.arcContext.completionCriteria}
 Examples of completion: ${stage.arcContext.completionExamples.map((e, i) => `(${i + 1}) ${e}`).join(' ')}

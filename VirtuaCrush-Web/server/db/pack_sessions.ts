@@ -40,6 +40,7 @@ export async function getPackSession(sessionId: number): Promise<PackSessionRow 
   const { rows } = await pool.query<{
     id: number; user_id: string; character_id: string; pack_id: string;
     current_node: string; status: string; started_at: Date; completed_at: Date | null;
+    scene_state: string | null;
   }>(
     `SELECT * FROM pack_sessions WHERE id = $1`,
     [sessionId],

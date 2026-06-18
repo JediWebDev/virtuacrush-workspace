@@ -36,6 +36,13 @@ import { storeSignificantEvent } from '../db/memory';
 import { getUserStory, listUserStories } from '../db/user_stories';
 import { userStoryToPack } from '../inworld/user_pack';
 import { ensureUserCharacterLoaded } from '../db/user_characters';
+import {
+  buildInitialSceneState,
+  formatPersistentSceneDirective,
+  formatStoryActDirective,
+  resolvePackNodeAct,
+  sceneDirectiveFromAnchor,
+} from '../inworld/story_structure';
 
 /** Affinity awarded for finishing a story when the pack doesn't specify its own. */
 const DEFAULT_AFFINITY_REWARD = 10;
@@ -126,23 +133,30 @@ function packToMeta(p: StoryPack): PackMeta {
 // "[TAG] ..." transcript line by turnsToTranscript (the client already parses
 // those into narrator / companion / NPC bubbles).
 // ---------------------------------------------------------------------------
-function buildPackDirectorPrompt(pack: StoryPack, node: PackNode, characterId: string, priorSceneState = ''): string {
+function buildPackDirectorPrompt(
+  pack: StoryPack,
+  node: PackNode,
+  nodeId: string,
+  characterId: string,
+  priorSceneState = '',
+): string {
   let character;
   try { character = getCharacter(characterId as Parameters<typeof getCharacter>[0]); }
   catch { return ''; }
 
   const name = character.displayName ?? characterId;
   const lore = getLore(characterId);
-  // The anchor describes where the story OPENS, not a fixed setting. The player
-  // can move the scene (e.g. garage → their apartment); the SCENE CONTINUITY
-  // rule below tells the director to follow the latest established location and
-  // not re-assert the opening one. Strip any embedded "CURRENT SETTING" header
-  // from the authored situation so the opening framing reads cleanly.
-  const openingSituation = (pack.sceneAnchor?.situation ?? '')
-    .replace(/^\s*===\s*CURRENT SETTING\s*===\s*/i, '')
-    .trim();
-  const sceneBlock = openingSituation
-    ? `\n\n=== WHERE THIS STORY OPENS (the scene may move from here as the player acts) ===\n${openingSituation}`
+  const storyAct = resolvePackNodeAct(pack, nodeId);
+  const actBlock = formatStoryActDirective(storyAct, 'pack');
+
+  const sceneDirective = pack.sceneAnchor
+    ? formatPersistentSceneDirective(
+        sceneDirectiveFromAnchor(
+          pack.sceneAnchor,
+          name,
+          (pack.npcs ?? []).map((n) => ({ name: n.name, description: n.description })),
+        ),
+      )
     : '';
 
   // Rolling "scene so far" — authoritative continuity that persists beyond the
@@ -186,8 +200,7 @@ function buildPackDirectorPrompt(pack: StoryPack, node: PackNode, characterId: s
     `- Leave "choices" EMPTY ([]) to reuse the story's authored buttons for the resulting beat. This is the DEFAULT — do it almost every turn.\n` +
     `- ONLY when the player clearly pulls the scene away from ALL the authored choices, return 2–3 NEW choices that fit the new direction (each "next":"dynamic", or a beat id if it rejoins the story) and steer back toward an ENDING.\n\n` +
     `NARRATION: characters speak ONLY dialogue; "narrator" owns ALL action and reaction. Include at least one "${name}" line whenever ${name} speaks. Respond ONLY in English. Never write the player's words or actions.\n\n` +
-    `SCENE CONTINUITY (important): The story OPENS at the setting above, but the player can move it elsewhere. Always narrate the location, props, and circumstances established by the MOST RECENT events plus the SCENE SO FAR snapshot. If the scene has moved (a different room, building, or place), do NOT reintroduce the opening location or its details — keep the characters exactly where they actually are now, and never describe two places at once. Treat CURRENT BEAT as the dramatic INTENT of this moment, not a fixed location: adapt that intent to wherever the scene currently is.\n` +
-    `Always return "sceneState": a short rewritten snapshot carrying forward everything STILL TRUE — who is physically present and what they already know, the location, the player's physical condition (gagged, bound, free, hurt), and key developments. Never drop a character still in the room, never re-introduce someone already present, never forget the player's condition. Set "memorable" only for a genuinely durable beat worth recalling in a FUTURE conversation; otherwise null.\n\n` +
+    `SCENE CONTINUITY: Honor the SCENE DIRECTIVE block and SCENE SO FAR snapshot. Always return "sceneState": a short rewritten snapshot carrying forward everything STILL TRUE — who is physically present and what they already know, the location, the player's physical condition (gagged, bound, free, hurt), and key developments. Never drop a character still in the room, never re-introduce someone already present, never forget the player's condition. Set "memorable" only for a genuinely durable beat worth recalling in a FUTURE conversation; otherwise null.\n\n` +
     `KEEP IT MOVING toward an ENDING — never loop the same beat. When the scene has resolved, set "advance":"end" and "arcStatus":"completed".\n\n` +
     `SPEAKERS (use the exact name in "speaker"):\n${speakerList}\n\n` +
     `THIS BEAT'S CHOICES (the player's options right now):\n${authoredChoices}\n\n` +
@@ -197,7 +210,8 @@ function buildPackDirectorPrompt(pack: StoryPack, node: PackNode, characterId: s
     character.systemPrompt +
     `\n\n=== STORY PACK: ${pack.title} ===\n${pack.systemInstruction}` +
     `\n\n=== CURRENT BEAT ===\n${node.npcInstruction}` +
-    sceneBlock +
+    actBlock +
+    sceneDirective +
     sceneSoFar +
     formatCharacterFactsBlock(lore) +
     formatPersonaTraitsBlock(lore, { discovered: false, revealNow: false }) +
@@ -276,6 +290,24 @@ router.post('/:id/start', requireAuth, async (req: Request, res: Response) => {
 
     const session = await createPackSession(req.user!.id, pack.characterId, id);
     const startNode = pack.nodes['start'];
+
+    // Seed rolling scene state from the pack anchor so continuity starts grounded.
+    if (pack.sceneAnchor) {
+      let companionName = pack.characterId;
+      try {
+        await ensurePackCharacter(pack.characterId, req.user!.id);
+        companionName = getCharacter(pack.characterId as Parameters<typeof getCharacter>[0]).displayName ?? pack.characterId;
+      } catch { /* keep id */ }
+      const seed = buildInitialSceneState(
+        sceneDirectiveFromAnchor(
+          pack.sceneAnchor,
+          companionName,
+          (pack.npcs ?? []).map((n) => ({ name: n.name, description: n.description })),
+        ),
+      );
+      try { await updatePackSceneState(session.id, seed); } catch (e) { console.warn('[packs] scene seed failed:', e); }
+    }
+
     return res.json({
       sessionId: session.id,
       packId: id,
@@ -431,7 +463,7 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
   catch { /* keep id */ }
 
   const history = await loadPackMessages(sessionId, 30);
-  const directorPrompt = buildPackDirectorPrompt(pack, node, session.characterId, session.sceneState);
+  const directorPrompt = buildPackDirectorPrompt(pack, node, currentNode, session.characterId, session.sceneState);
   const turnsStr = history
     .map((m) => (m.role === 'user' ? `Player: ${m.content}` : m.content))
     .join('\n');

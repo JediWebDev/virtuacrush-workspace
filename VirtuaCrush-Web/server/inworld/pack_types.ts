@@ -13,9 +13,17 @@ export interface PackChoice {
   userMessage: string;
 }
 
+// TypeScript types for CYOA Story Packs.
+
+import type { StoryAct } from './story_structure';
+
+export type { StoryAct };
+
 export interface PackNode {
   introNarrative?: string;
   npcInstruction: string;
+  /** Three-act phase for pacing. Inferred from graph position when omitted. */
+  act?: StoryAct;
   choices: PackChoice[] | null;
 }
 

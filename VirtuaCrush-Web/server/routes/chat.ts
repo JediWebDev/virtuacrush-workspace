@@ -66,6 +66,12 @@ import { describeLastSeenOutfit, itemsById, wornItems, describeOutfit, describeG
 import { upsertNpcState } from '../db/npc_state';
 import { looksDegenerate } from '../llm/quality';
 import { budgetHistory } from '../llm/budget';
+import {
+  formatPersistentSceneDirective,
+  resolveArcAct,
+  sceneDirectiveFromAnchor,
+  buildInitialSceneState,
+} from '../inworld/story_structure';
 
 // Recent turns fed to the LLM for local coherence. Long-term recall comes from
 // RAG memory (db/memory.ts), not from replaying a long transcript.
@@ -76,13 +82,17 @@ const RECENT_TURNS_FOR_PROMPT = 20;
 
 /** Formats a SceneAnchor as the authoritative "current setting" block, replacing
  *  formatSituationBlock() for arcs that place the companion and player together. */
-function formatAnchorBlock(anchor: SceneAnchor): string {
-  return (
-    `\n\n=== CURRENT SETTING ===\n` +
-    anchor.situation +
-    (anchor.coPresent
-      ? `\n\nThe scene evolves with the conversation — follow the history above for the current state. Do NOT reset to the opening moment.`
-      : '')
+function formatAnchorBlock(
+  anchor: SceneAnchor,
+  companionName: string,
+  sceneCast: SceneCastMember[] = [],
+): string {
+  return formatPersistentSceneDirective(
+    sceneDirectiveFromAnchor(
+      anchor,
+      companionName,
+      sceneCast.map((m) => ({ name: m.name, description: `${m.role} — ${m.vibe}` })),
+    ),
   );
 }
 
@@ -421,13 +431,26 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     effectPlan = planEffects(consequencesFor(effIntent, world));
     const engineFacts = formatEngineFactsBlock(effectPlan, authority);
 
+    if (arcContext && activeArc) {
+      const startedAt = arcStateResult.activeArcStartedAt ?? new Date(0);
+      const { rows: arcTurnRows } = await pool.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM chat_messages
+         WHERE user_id = $1 AND character_id = $2 AND role = 'user'
+           AND pack_session_id IS NULL AND created_at > $3::timestamptz`,
+        [req.user!.id, characterId, startedAt],
+      );
+      arcContext.storyAct = resolveArcAct({
+        userTurnsSinceStart: Number(arcTurnRows[0]?.n ?? 0),
+      });
+    }
+
     const directives =
       // Priority order for the CURRENT SETTING block:
       // 1. Arc sceneAnchor (meet arcs, story arcs with their own physical scene)
       // 2. Player travel location (player has moved to a city venue with companion)
       // 3. Default home/remote block (player and companion are texting from apart)
       (activeArc?.sceneAnchor
-        ? formatAnchorBlock(activeArc.sceneAnchor)
+        ? formatAnchorBlock(activeArc.sceneAnchor, displayName, sceneCast)
         : situation.scene.location
           ? formatLocationBlock(situation.scene.location, displayName, affinity)
           : formatSituationBlock(situation.state, scene, displayName, affinity)) +
@@ -454,7 +477,19 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       history: turns,
       userMessage: message,
       playerName: world?.user.profile.displayName ?? '',
-      priorSceneState: (companionEntity?.knowledge.sceneState as string | undefined) ?? '',
+      priorSceneState: (() => {
+        let prior = (companionEntity?.knowledge.sceneState as string | undefined) ?? '';
+        if (arcJustStarted && activeArc?.sceneAnchor && !prior.trim()) {
+          prior = buildInitialSceneState(
+            sceneDirectiveFromAnchor(
+              activeArc.sceneAnchor,
+              displayName,
+              sceneCast.map((m) => ({ name: m.name, description: `${m.role} — ${m.vibe}` })),
+            ),
+          );
+        }
+        return prior;
+      })(),
       arcContext,
     });
   }
