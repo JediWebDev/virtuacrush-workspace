@@ -11,6 +11,13 @@ import { motion } from "motion/react";
 import { Loader2, Plus, Trash2, MessageCircle, Sparkles, GitBranch, Flag } from "lucide-react";
 import { CHARACTERS } from "../types/character";
 import PublishControl from "./PublishControl";
+import { StudioGuide, StudioFieldHint, StudioOptionalSection } from "./StudioGuide";
+import {
+  studioLabelClass,
+  studioInputClass,
+  studioSelectClass,
+  studioFormWrapperClass,
+} from "./studioFormStyles";
 import {
   createStudioPack,
   listStudioPacks,
@@ -24,9 +31,9 @@ import {
   type StudioStoryAct,
 } from "../lib/api";
 
-const labelClass = "mb-1 block text-xs font-semibold uppercase tracking-wide text-stone-500";
-const inputClass =
-  "w-full rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.04] px-3 py-2.5 text-sm text-stone-800 dark:text-stone-100 outline-none transition-colors placeholder:text-stone-400 focus:border-accent/40 focus:ring-2 focus:ring-accent/10";
+const labelClass = studioLabelClass;
+const inputClass = studioInputClass;
+const selectClass = studioSelectClass;
 
 const MOODS: StudioMood[] = [
   "romantic", "dramatic", "comedic", "thriller", "mystery", "playful", "cozy", "gothic", "tense",
@@ -277,70 +284,90 @@ export default function AdventureBuilder() {
     companions.find((c) => c.value === id)?.label ?? id;
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
+    <>
+    <StudioGuide title="How adventures work">
+      <ol className="list-decimal space-y-1.5 pl-5">
+        <li><span className="font-medium text-stone-800 dark:text-stone-100">Set the scene</span> — companion, title, and opening situation.</li>
+        <li><span className="font-medium text-stone-800 dark:text-stone-100">Add beats</span> — each beat tells the character what to do; non-ending beats need at least one choice.</li>
+        <li><span className="font-medium text-stone-800 dark:text-stone-100">Wire choices</span> to the next beat or &quot;End the story.&quot; The checker below confirms every path can finish.</li>
+      </ol>
+      <p className="text-xs text-stone-500">For a single linear arc without branches, try the Stories tab instead.</p>
+    </StudioGuide>
+    <div className={`grid gap-8 lg:grid-cols-[1fr_340px] ${studioFormWrapperClass}`}>
       {/* Builder */}
       <div className="space-y-6">
         {/* Story basics */}
         <div className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
-          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
+          <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
             <Sparkles size={16} className="text-accent" /> Adventure basics
           </h2>
+          <p className="mb-4 text-xs text-stone-600 dark:text-stone-400">Companion, title, situation, and story framing are required.</p>
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className={labelClass}>Companion</label>
-              <select className={inputClass} value={characterId} onChange={(e) => setCharacterId(e.target.value)}>
+              <StudioFieldHint>Who leads this adventure — built-in or your custom companions.</StudioFieldHint>
+              <select className={selectClass} value={characterId} onChange={(e) => setCharacterId(e.target.value)}>
                 {companions.map((c) => (
                   <option key={c.value} value={c.value}>{c.label}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className={labelClass}>Title</label>
+              <label className={labelClass}>Title <span className="text-accent">*</span></label>
               <input className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="The Midnight Bakery Heist" />
             </div>
           </div>
 
           <div className="mt-4">
-            <label className={labelClass}>Short blurb (optional)</label>
-            <input className={inputClass} value={blurb} onChange={(e) => setBlurb(e.target.value)} placeholder="A flour-dusted caper with very high stakes and very fresh croissants." />
-          </div>
-
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <div>
-              <label className={labelClass}>Mood</label>
-              <select className={inputClass} value={mood} onChange={(e) => setMood(e.target.value as StudioMood)}>
-                {MOODS.map((m) => (<option key={m} value={m}>{m}</option>))}
-              </select>
-            </div>
-            <label className="flex items-end gap-2 pb-2.5 text-sm text-stone-600 dark:text-stone-300">
-              <input type="checkbox" checked={coPresent} onChange={(e) => setCoPresent(e.target.checked)} className="h-4 w-4 rounded accent-[var(--accent,#c9717d)]" />
-              {companionName(characterId)} is physically with you
-            </label>
-          </div>
-
-          <div className="mt-4">
-            <label className={labelClass}>Setting — where it opens</label>
-            <input className={inputClass} value={setting} onChange={(e) => setSetting(e.target.value)} placeholder="a darkened artisan bakery after closing time" />
-          </div>
-
-          <div className="mt-4">
-            <label className={labelClass}>Opening situation (the scene's ground truth)</label>
+            <label className={labelClass}>Opening situation <span className="text-accent">*</span></label>
+            <StudioFieldHint>What&apos;s happening when the player arrives — ground truth for the director.</StudioFieldHint>
             <textarea className={inputClass} rows={3} value={situation} onChange={(e) => setSituation(e.target.value)} placeholder="You and your accomplice have ten minutes to recover a stolen sourdough starter before the owner returns. The alarm is armed and the ovens are still warm." />
           </div>
 
           <div className="mt-4">
-            <label className={labelClass}>Story framing — overall instructions to the director</label>
+            <label className={labelClass}>Story framing <span className="text-accent">*</span></label>
+            <StudioFieldHint>Overall tone and rules for the whole adventure.</StudioFieldHint>
             <textarea className={inputClass} rows={3} value={systemInstruction} onChange={(e) => setSystemInstruction(e.target.value)} placeholder="A playful, fast-paced heist. Keep the tension light but real, lean into baking puns, and let choices genuinely change how the night goes." />
           </div>
+
+          <StudioOptionalSection title="Optional scene details" summary="Blurb, mood, setting, and co-presence">
+            <div>
+              <label className={labelClass}>Short blurb</label>
+              <StudioFieldHint>Shown in the story picker — one teaser line.</StudioFieldHint>
+              <input className={inputClass} value={blurb} onChange={(e) => setBlurb(e.target.value)} placeholder="A flour-dusted caper with very high stakes and very fresh croissants." />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className={labelClass}>Mood</label>
+                <select className={selectClass} value={mood} onChange={(e) => setMood(e.target.value as StudioMood)}>
+                  {MOODS.map((m) => (<option key={m} value={m}>{m}</option>))}
+                </select>
+              </div>
+              <label className="flex items-end gap-2 pb-2.5 text-sm text-stone-700 dark:text-stone-300">
+                <input type="checkbox" checked={coPresent} onChange={(e) => setCoPresent(e.target.checked)} className="h-4 w-4 rounded accent-[var(--accent,#c9717d)]" />
+                {companionName(characterId)} is physically with you
+              </label>
+            </div>
+
+            <div>
+              <label className={labelClass}>Setting</label>
+              <StudioFieldHint>Where it opens — optional if situation already sets the place.</StudioFieldHint>
+              <input className={inputClass} value={setting} onChange={(e) => setSetting(e.target.value)} placeholder="a darkened artisan bakery after closing time" />
+            </div>
+          </StudioOptionalSection>
         </div>
 
         {/* Story flow */}
         <div className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
-              <GitBranch size={16} className="text-accent" /> Story flow
-            </h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
+                <GitBranch size={16} className="text-accent" /> Story flow
+              </h2>
+              <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">Each beat needs a character instruction. Add choices unless the beat ends the story.</p>
+            </div>
             <button type="button" onClick={addNode} className="flex items-center gap-1.5 rounded-lg border border-black/10 dark:border-white/10 px-2.5 py-1.5 text-xs font-semibold text-stone-600 transition-colors hover:bg-black/[0.05] hover:text-accent dark:text-stone-300">
               <Plus size={13} /> Add beat
             </button>
@@ -367,35 +394,14 @@ export default function AdventureBuilder() {
                 </div>
 
                 <div className="mb-3 grid gap-3 md:grid-cols-2">
-                  <div>
-                    <label className={labelClass}>Story act</label>
-                    <select
-                      className={inputClass}
-                      value={n.act}
-                      onChange={(e) => {
-                        const act = e.target.value as StudioStoryAct | "auto";
-                        patchNode(n.id, {
-                          act,
-                          ...(act === "end" ? { terminal: true } : {}),
-                        });
-                      }}
-                    >
-                      {ACTS.map((a) => (
-                        <option key={a.value} value={a.value}>{a.label}</option>
-                      ))}
-                    </select>
+                  <div className="md:col-span-2">
+                    <label className={labelClass}>Character instruction <span className="text-accent">*</span></label>
+                    <StudioFieldHint>What {companionName(characterId)} should do or say at this beat.</StudioFieldHint>
+                    <textarea className={inputClass} rows={2} value={n.npcInstruction} onChange={(e) => patchNode(n.id, { npcInstruction: e.target.value })} placeholder="React to the player's plan, crack a nervous joke, and keep one ear on the door." />
                   </div>
                 </div>
 
-                <label className={labelClass}>What happens here — instruction to the character</label>
-                <textarea className={inputClass} rows={2} value={n.npcInstruction} onChange={(e) => patchNode(n.id, { npcInstruction: e.target.value })} placeholder="React to the player's plan, crack a nervous joke, and keep one ear on the door." />
-
-                <div className="mt-3">
-                  <label className={labelClass}>Opening narration for this beat (optional)</label>
-                  <textarea className={inputClass} rows={2} value={n.introNarrative} onChange={(e) => patchNode(n.id, { introNarrative: e.target.value })} placeholder="The display case glows faintly. Somewhere in the back, a timer ticks." />
-                </div>
-
-                <label className="mt-3 flex items-center gap-2 text-xs font-medium text-stone-600 dark:text-stone-300">
+                <label className="flex items-center gap-2 text-xs font-medium text-stone-700 dark:text-stone-300">
                   <input
                     type="checkbox"
                     checked={n.terminal}
@@ -412,9 +418,10 @@ export default function AdventureBuilder() {
 
                 {!n.terminal && (
                   <div className="mt-3 space-y-2">
-                    <span className={labelClass}>Choices</span>
+                    <span className={labelClass}>Player choices</span>
+                    <StudioFieldHint>Button label is required. &quot;Goes to&quot; picks the next beat or ends the story.</StudioFieldHint>
                     {n.choices.map((c, i) => (
-                      <div key={i} className="rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] p-2.5">
+                      <div key={i} className="rounded-xl border border-stone-200/80 bg-white/50 p-2.5 dark:border-stone-600 dark:bg-stone-900/20">
                         <div className="flex items-center gap-2">
                           <input className={inputClass} value={c.label} onChange={(e) => patchChoice(n.id, i, { label: e.target.value })} placeholder="Button text — e.g. “Pick the lock”" />
                           <button type="button" onClick={() => removeChoice(n.id, i)} className="shrink-0 text-stone-400 transition-colors hover:text-red-500" aria-label="Remove choice">
@@ -423,7 +430,7 @@ export default function AdventureBuilder() {
                         </div>
                         <div className="mt-2 grid gap-2 md:grid-cols-2">
                           <input className={inputClass} value={c.userMessage} onChange={(e) => patchChoice(n.id, i, { userMessage: e.target.value })} placeholder="What the player does/says (optional)" />
-                          <select className={inputClass} value={c.next} onChange={(e) => patchChoice(n.id, i, { next: e.target.value })}>
+                          <select className={selectClass} value={c.next} onChange={(e) => patchChoice(n.id, i, { next: e.target.value })}>
                             {nodeIds.filter((id) => id !== n.id).map((id) => (
                               <option key={id} value={id}>→ go to {id === "start" ? "Start" : id}</option>
                             ))}
@@ -437,6 +444,32 @@ export default function AdventureBuilder() {
                     </button>
                   </div>
                 )}
+
+                <StudioOptionalSection title="Beat extras" summary="Opening narration and story-act tag">
+                  <div>
+                    <label className={labelClass}>Story act</label>
+                    <StudioFieldHint>Leave on Auto unless you want explicit setup / middle / end pacing.</StudioFieldHint>
+                    <select
+                      className={selectClass}
+                      value={n.act}
+                      onChange={(e) => {
+                        const act = e.target.value as StudioStoryAct | "auto";
+                        patchNode(n.id, {
+                          act,
+                          ...(act === "end" ? { terminal: true } : {}),
+                        });
+                      }}
+                    >
+                      {ACTS.map((a) => (
+                        <option key={a.value} value={a.value}>{a.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClass}>Opening narration</label>
+                    <textarea className={inputClass} rows={2} value={n.introNarrative} onChange={(e) => patchNode(n.id, { introNarrative: e.target.value })} placeholder="The display case glows faintly. Somewhere in the back, a timer ticks." />
+                  </div>
+                </StudioOptionalSection>
               </div>
             ))}
           </div>
@@ -540,5 +573,6 @@ export default function AdventureBuilder() {
         )}
       </div>
     </div>
+    </>
   );
 }

@@ -5,6 +5,13 @@ import { Wand2, Play, Trash2, Loader2, BookPlus, UserPlus, MessageCircle, ImageP
 import { CHARACTERS } from "../types/character";
 import AdventureBuilder from "../components/AdventureBuilder";
 import PublishControl from "../components/PublishControl";
+import { StudioGuide, StudioFieldHint, StudioOptionalSection } from "../components/StudioGuide";
+import {
+  studioLabelClass,
+  studioInputClass,
+  studioSelectClass,
+  studioFormWrapperClass,
+} from "../components/studioFormStyles";
 import {
   createStudioStory,
   listStudioStories,
@@ -63,9 +70,13 @@ const ACT_HINTS = {
   end: "Resolution — pay off the arc and move toward completion.",
 } as const;
 
-const labelClass = "mb-1 block text-xs font-semibold uppercase tracking-wide text-stone-500";
-const inputClass =
-  "w-full rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.04] px-3 py-2.5 text-sm text-stone-800 dark:text-stone-100 outline-none transition-colors placeholder:text-stone-400 focus:border-accent/40 focus:ring-2 focus:ring-accent/10";
+const TAB_BLURBS: Record<"stories" | "characters" | "adventures", string> = {
+  stories:
+    "Linear story arcs — one scene with a clear beginning, middle, and end. Best for a focused date or mission with your companion.",
+  characters: "Create custom companions you can chat with or star in your stories.",
+  adventures:
+    "Branching choose-your-own-adventure — multiple beats and player choices. Best when you want different paths and endings.",
+};
 
 const emptyCharForm = () => ({ displayName: "", core: "", greeting: "", secret: "", tags: "" });
 
@@ -295,101 +306,124 @@ export default function StudioPage() {
         ))}
       </div>
 
+      <p className="mb-6 text-sm leading-relaxed text-stone-600 dark:text-stone-400">{TAB_BLURBS[tab]}</p>
+
       {tab === "stories" && (
-      <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
+      <>
+      <StudioGuide title="How story arcs work">
+        <ol className="list-decimal space-y-1.5 pl-5">
+          <li><span className="font-medium text-stone-800 dark:text-stone-100">Pick a companion</span> and describe where you are and what&apos;s happening.</li>
+          <li><span className="font-medium text-stone-800 dark:text-stone-100">Tell the character how to act</span> and how the story should end.</li>
+          <li><span className="font-medium text-stone-800 dark:text-stone-100">Save, then Play</span> from the list on the right — or open their chat and pick your story from Stories.</li>
+        </ol>
+        <p className="text-xs text-stone-500">Want branching choices instead? Use the <button type="button" onClick={() => setTab("adventures")} className="font-semibold text-accent underline-offset-2 hover:underline">Adventures</button> tab.</p>
+      </StudioGuide>
+      <div className={`grid gap-8 lg:grid-cols-[1fr_360px] ${studioFormWrapperClass}`}>
         {/* Builder form */}
         <div className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
-          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
+          <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
             <BookPlus size={16} className="text-accent" /> New story arc
           </h2>
+          <p className="mb-4 text-xs text-stone-600 dark:text-stone-400">Fields marked below are required to save.</p>
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <label className={labelClass}>Companion</label>
-              <select className={inputClass} value={form.characterId} onChange={(e) => set("characterId", e.target.value)}>
+              <label className={studioLabelClass}>Companion</label>
+              <StudioFieldHint>Who stars in this story.</StudioFieldHint>
+              <select className={studioSelectClass} value={form.characterId} onChange={(e) => set("characterId", e.target.value)}>
                 {CHARACTERS.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className={labelClass}>Title</label>
-              <input className={inputClass} value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="The Great Taco Hunt" />
+              <label className={studioLabelClass}>Title</label>
+              <StudioFieldHint>Optional — defaults to &quot;Untitled story&quot;.</StudioFieldHint>
+              <input className={studioInputClass} value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="The Great Taco Hunt" />
             </div>
           </div>
 
           <div className="mt-4">
-            <label className={labelClass}>Setting — where it happens</label>
-            <input className={inputClass} value={form.setting} onChange={(e) => set("setting", e.target.value)} placeholder="a sunny boardwalk lined with food trucks" />
+            <label className={studioLabelClass}>Setting <span className="text-accent">*</span></label>
+            <StudioFieldHint>Where the scene takes place — one vivid line is enough.</StudioFieldHint>
+            <input className={studioInputClass} value={form.setting} onChange={(e) => set("setting", e.target.value)} placeholder="a sunny boardwalk lined with food trucks" />
           </div>
 
           <div className="mt-4">
-            <label className={labelClass}>Situation — what's going on (the scene's ground truth)</label>
-            <textarea className={inputClass} rows={3} value={form.situation} onChange={(e) => set("situation", e.target.value)} placeholder="You're on a mission to track down the legendary taco truck everyone's raving about — but it keeps moving, and a smug rival foodie keeps beating you to the best spots." />
+            <label className={studioLabelClass}>Situation <span className="text-accent">*</span></label>
+            <StudioFieldHint>What&apos;s going on right now — the scene&apos;s ground truth the AI must respect.</StudioFieldHint>
+            <textarea className={studioInputClass} rows={3} value={form.situation} onChange={(e) => set("situation", e.target.value)} placeholder="You're on a mission to track down the legendary taco truck everyone's raving about — but it keeps moving, and a smug rival foodie keeps beating you to the best spots." />
           </div>
 
           <div className="mt-4">
-            <label className={labelClass}>Your role &amp; constraints (keeps the director honest)</label>
-            <textarea className={inputClass} rows={2} value={form.playerSituation} onChange={(e) => set("playerSituation", e.target.value)} placeholder="You're free and along for the ride — hungry, competitive, and armed with very strong opinions about hot sauce." />
+            <label className={studioLabelClass}>Character behavior <span className="text-accent">*</span></label>
+            <StudioFieldHint>How {charName(form.characterId)} should act for the whole arc.</StudioFieldHint>
+            <textarea className={studioInputClass} rows={3} value={form.npcInstruction} onChange={(e) => set("npcInstruction", e.target.value)} placeholder={`${charName(form.characterId)} treats this like a serious culinary expedition — hyping every lead and dramatically rating each taco out of ten.`} />
           </div>
 
           <div className="mt-4">
-            <label className={labelClass}>Overall character behavior (applies throughout)</label>
-            <textarea className={inputClass} rows={3} value={form.npcInstruction} onChange={(e) => set("npcInstruction", e.target.value)} placeholder={`${charName(form.characterId)} treats this like a serious culinary expedition — hyping every lead and dramatically rating each taco out of ten.`} />
+            <label className={studioLabelClass}>How it ends <span className="text-accent">*</span></label>
+            <StudioFieldHint>What counts as finishing the story — the director uses this to wrap up.</StudioFieldHint>
+            <textarea className={studioInputClass} rows={2} value={form.completionCriteria} onChange={(e) => set("completionCriteria", e.target.value)} placeholder="You hunt down the legendary truck together and crown the best taco — or get gloriously full trying." />
           </div>
 
-          <div className="mt-5 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.03] p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-accent">Three-act behavior (optional)</p>
-            <p className="mb-4 text-xs text-stone-500">
-              Add act-specific notes to steer pacing as the arc moves from setup → confrontation → resolution. The director picks the active act from turn count and story progress.
-            </p>
-            <div className="space-y-4">
-              {(["beginning", "middle", "end"] as const).map((act) => (
-                <div key={act}>
-                  <label className={labelClass}>
-                    Act {act === "beginning" ? "I" : act === "middle" ? "II" : "III"} — {act}
-                  </label>
-                  <p className="mb-1.5 text-[11px] text-stone-500">{ACT_HINTS[act]}</p>
-                  <textarea
-                    className={inputClass}
-                    rows={2}
-                    value={form[`${act}Instruction`]}
-                    onChange={(e) => set(`${act}Instruction`, e.target.value)}
-                    placeholder={
-                      act === "beginning"
-                        ? "Ground the scene — what's the immediate tension or hook?"
-                        : act === "middle"
-                          ? "Deepen the conflict — what complications or choices should land here?"
-                          : "Bring it home — how should they behave as the arc resolves?"
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <label className={labelClass}>Opening narration (optional)</label>
-            <textarea className={inputClass} rows={2} value={form.introNarrative} onChange={(e) => set("introNarrative", e.target.value)} placeholder="The boardwalk smells like grilled onions and possibility. Somewhere out there, the perfect taco is waiting." />
-          </div>
-
-          <div className="mt-4">
-            <label className={labelClass}>How does it resolve? (completion)</label>
-            <textarea className={inputClass} rows={2} value={form.completionCriteria} onChange={(e) => set("completionCriteria", e.target.value)} placeholder="You hunt down the legendary truck together and crown the best taco — or get gloriously full trying." />
-          </div>
-
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <StudioOptionalSection
+            title="Optional details"
+            summary="Your role, opening line, tone, and per-act pacing notes"
+          >
             <div>
-              <label className={labelClass}>Tone</label>
-              <select className={inputClass} value={form.tone} onChange={(e) => set("tone", e.target.value as Tone)}>
-                {TONES.map((t) => (<option key={t} value={t}>{t}</option>))}
-              </select>
+              <label className={studioLabelClass}>Your role &amp; constraints</label>
+              <StudioFieldHint>Who you are in the scene — keeps the director from putting words in your mouth.</StudioFieldHint>
+              <textarea className={studioInputClass} rows={2} value={form.playerSituation} onChange={(e) => set("playerSituation", e.target.value)} placeholder="You're free and along for the ride — hungry, competitive, and armed with very strong opinions about hot sauce." />
             </div>
-            <label className="flex items-end gap-2 pb-2.5 text-sm text-stone-600 dark:text-stone-300">
-              <input type="checkbox" checked={form.coPresent} onChange={(e) => set("coPresent", e.target.checked)} className="h-4 w-4 rounded accent-[var(--accent,#c9717d)]" />
-              {charName(form.characterId)} is physically with you in the scene
-            </label>
-          </div>
+
+            <div>
+              <label className={studioLabelClass}>Opening narration</label>
+              <StudioFieldHint>Shown once when the story starts — sets the mood before chat begins.</StudioFieldHint>
+              <textarea className={studioInputClass} rows={2} value={form.introNarrative} onChange={(e) => set("introNarrative", e.target.value)} placeholder="The boardwalk smells like grilled onions and possibility. Somewhere out there, the perfect taco is waiting." />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className={studioLabelClass}>Tone</label>
+                <select className={studioSelectClass} value={form.tone} onChange={(e) => set("tone", e.target.value as Tone)}>
+                  {TONES.map((t) => (<option key={t} value={t}>{t}</option>))}
+                </select>
+              </div>
+              <label className="flex items-end gap-2 pb-2.5 text-sm text-stone-700 dark:text-stone-300">
+                <input type="checkbox" checked={form.coPresent} onChange={(e) => set("coPresent", e.target.checked)} className="h-4 w-4 rounded accent-[var(--accent,#c9717d)]" />
+                {charName(form.characterId)} is physically with you
+              </label>
+            </div>
+
+            <div className="rounded-xl border border-stone-200/80 bg-white/60 p-3 dark:border-stone-600 dark:bg-stone-900/30">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-accent">Three-act pacing</p>
+              <StudioFieldHint>Steer how they behave in setup, confrontation, and resolution. Leave blank to use only the overall behavior above.</StudioFieldHint>
+              <div className="mt-3 space-y-4">
+                {(["beginning", "middle", "end"] as const).map((act) => (
+                  <div key={act}>
+                    <label className={studioLabelClass}>
+                      Act {act === "beginning" ? "I" : act === "middle" ? "II" : "III"} — {act}
+                    </label>
+                    <p className="mb-1.5 text-[11px] text-stone-600 dark:text-stone-400">{ACT_HINTS[act]}</p>
+                    <textarea
+                      className={studioInputClass}
+                      rows={2}
+                      value={form[`${act}Instruction`]}
+                      onChange={(e) => set(`${act}Instruction`, e.target.value)}
+                      placeholder={
+                        act === "beginning"
+                          ? "Ground the scene — what's the immediate tension or hook?"
+                          : act === "middle"
+                            ? "Deepen the conflict — what complications or choices should land here?"
+                            : "Bring it home — how should they behave as the arc resolves?"
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </StudioOptionalSection>
 
           {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
 
@@ -460,18 +494,19 @@ export default function StudioPage() {
           )}
         </div>
       </div>
+      </>
       )}
 
       {tab === "characters" && (
       <>
-      <div className="mb-6 rounded-2xl border border-accent/20 bg-accent/[0.06] p-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-accent">How character avatars work</p>
-        <ol className="space-y-1 text-sm text-stone-600 dark:text-stone-300">
-          <li><span className="font-semibold text-stone-800 dark:text-stone-100">1.</span> Create and save your companion below.</li>
-          <li><span className="font-semibold text-stone-800 dark:text-stone-100">2.</span> On its card under “My companions,” upload an image or AI-generate an avatar — <span className="text-stone-500">AI generation is a Pro feature.</span></li>
+      <StudioGuide title="How companions work">
+        <ol className="list-decimal space-y-1.5 pl-5">
+          <li><span className="font-medium text-stone-800 dark:text-stone-100">Name and personality</span> are required — everything else is optional.</li>
+          <li><span className="font-medium text-stone-800 dark:text-stone-100">Save</span>, then add an avatar on the card to the right (upload or AI-generate — <span className="text-stone-500">AI is Pro</span>).</li>
+          <li><span className="font-medium text-stone-800 dark:text-stone-100">Chat</span> freely, or pick them as the star in Stories or Adventures.</li>
         </ol>
-      </div>
-      <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
+      </StudioGuide>
+      <div className={`grid gap-8 lg:grid-cols-[1fr_360px] ${studioFormWrapperClass}`}>
         {/* Character builder */}
         <div className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
           <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
@@ -480,29 +515,34 @@ export default function StudioPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <label className={labelClass}>Name</label>
-              <input className={inputClass} value={charForm.displayName} onChange={(e) => setChar("displayName", e.target.value)} placeholder="Captain Pancake" />
+              <label className={studioLabelClass}>Name <span className="text-accent">*</span></label>
+              <input className={studioInputClass} value={charForm.displayName} onChange={(e) => setChar("displayName", e.target.value)} placeholder="Captain Pancake" />
             </div>
             <div>
-              <label className={labelClass}>Tags (optional)</label>
-              <input className={inputClass} value={charForm.tags} onChange={(e) => setChar("tags", e.target.value)} placeholder="Playful, Warm, Creative" />
+              <label className={studioLabelClass}>Tags</label>
+              <StudioFieldHint>Comma-separated vibe words — optional.</StudioFieldHint>
+              <input className={studioInputClass} value={charForm.tags} onChange={(e) => setChar("tags", e.target.value)} placeholder="Playful, Warm, Creative" />
             </div>
           </div>
 
           <div className="mt-4">
-            <label className={labelClass}>Personality — who are they?</label>
-            <textarea className={inputClass} rows={4} value={charForm.core} onChange={(e) => setChar("core", e.target.value)} placeholder="A retired pirate turned brunch-cafe owner who flirts in nautical puns, takes their syrup very seriously, and secretly writes terrible sea-shanty poetry." />
+            <label className={studioLabelClass}>Personality <span className="text-accent">*</span></label>
+            <StudioFieldHint>Who they are — at least a sentence or two. This drives how they talk.</StudioFieldHint>
+            <textarea className={studioInputClass} rows={4} value={charForm.core} onChange={(e) => setChar("core", e.target.value)} placeholder="A retired pirate turned brunch-cafe owner who flirts in nautical puns, takes their syrup very seriously, and secretly writes terrible sea-shanty poetry." />
           </div>
 
-          <div className="mt-4">
-            <label className={labelClass}>Greeting (optional) — their first message to you</label>
-            <textarea className={inputClass} rows={2} value={charForm.greeting} onChange={(e) => setChar("greeting", e.target.value)} placeholder="Ahoy! Pull up a stool — the pancakes are hot and the coffee's stronger than a kraken's grip." />
-          </div>
-
-          <div className="mt-4">
-            <label className={labelClass}>Secret (optional) — revealed as you grow closer</label>
-            <textarea className={inputClass} rows={2} value={charForm.secret} onChange={(e) => setChar("secret", e.target.value)} placeholder="They never actually sailed the high seas — the whole pirate thing started as a costume-party bit that got gloriously out of hand." />
-          </div>
+          <StudioOptionalSection title="Optional extras" summary="Custom greeting and a secret revealed as you grow closer">
+            <div>
+              <label className={studioLabelClass}>Greeting</label>
+              <StudioFieldHint>Their first message when you start a new chat.</StudioFieldHint>
+              <textarea className={studioInputClass} rows={2} value={charForm.greeting} onChange={(e) => setChar("greeting", e.target.value)} placeholder="Ahoy! Pull up a stool — the pancakes are hot and the coffee's stronger than a kraken's grip." />
+            </div>
+            <div>
+              <label className={studioLabelClass}>Secret</label>
+              <StudioFieldHint>Something they reveal only after you&apos;ve built rapport.</StudioFieldHint>
+              <textarea className={studioInputClass} rows={2} value={charForm.secret} onChange={(e) => setChar("secret", e.target.value)} placeholder="They never actually sailed the high seas — the whole pirate thing started as a costume-party bit that got gloriously out of hand." />
+            </div>
+          </StudioOptionalSection>
 
           {charError && <p className="mt-4 text-sm text-red-500">{charError}</p>}
 
@@ -554,7 +594,7 @@ export default function StudioPage() {
 
                   {/* Avatar controls */}
                   <textarea
-                    className="mt-2 w-full rounded-lg border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.04] px-2.5 py-1.5 text-xs text-stone-800 dark:text-stone-100 outline-none placeholder:text-stone-400 focus:border-accent/40"
+                    className="mt-2 w-full rounded-lg border border-stone-300/80 bg-white px-2.5 py-1.5 text-xs text-stone-900 outline-none placeholder:text-stone-400 focus:border-accent/50 dark:border-stone-500 dark:bg-stone-100 dark:text-stone-900"
                     rows={2}
                     value={imgPrompt[c.id] ?? ""}
                     onChange={(e) => setImgPrompt((p) => ({ ...p, [c.id]: e.target.value }))}

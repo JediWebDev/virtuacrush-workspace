@@ -67,3 +67,13 @@
 ::-webkit-scrollbar-thumb {
   @apply rounded-full bg-black/15 transition-colors hover:bg-accent/40 dark:bg-white/15 dark:hover:bg-accent/35;
 }
+
+/* Story Studio — legible native select menus in light and dark app themes */
+.studio-form select {
+  color-scheme: light;
+}
+
+.studio-form select option {
+  color: #1c1917;
+  background-color: #ffffff;
+}
