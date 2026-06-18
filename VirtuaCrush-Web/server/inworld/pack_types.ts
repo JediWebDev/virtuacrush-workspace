@@ -44,7 +44,9 @@ export type PackMood =
   | 'playful'
   | 'cozy'
   | 'gothic'
-  | 'tense';
+  | 'tense'
+  | 'sexy'
+  | 'kinky';
 
 export interface StoryPack {
   id: string;

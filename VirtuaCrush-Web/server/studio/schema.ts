@@ -240,6 +240,36 @@ export function isCompanionArchetypeId(v: string): v is CompanionArchetypeId {
   return (COMPANION_ARCHETYPE_IDS as readonly string[]).includes(v as CompanionArchetypeId);
 }
 
+/** Deduped voice tags for API/UI pickers (VOICE_TAGS may list aliases twice). */
+export function uniqueVoiceTags(): VoiceTag[] {
+  return [...new Set(VOICE_TAGS)];
+}
+
+/** Normalize author input (string or tag array) for DB storage; null if none valid. */
+export function normalizeVoiceTagsInput(raw: unknown): string | null {
+  if (Array.isArray(raw)) {
+    const tags = raw
+      .map((t) => (typeof t === 'string' ? norm(t).replace(/-/g, '_') : ''))
+      .filter((t): t is VoiceTag => isVoiceTag(t));
+    const deduped = [...new Set(tags)].slice(0, VOICE_TAG_LIMIT);
+    return deduped.length ? formatVoiceTags(deduped) : null;
+  }
+  if (typeof raw === 'string') {
+    const tags = parseVoiceTags(raw);
+    return tags.length ? formatVoiceTags(tags) : null;
+  }
+  return null;
+}
+
+export function studioVocabularyPayload() {
+  return {
+    voiceTags: uniqueVoiceTags(),
+    voiceTagLimit: VOICE_TAG_LIMIT,
+    arcTones: [...ARC_TONES],
+    packMoods: [...PACK_MOODS],
+  };
+}
+
 /** Parse comma/semicolon-separated tags; drops unknown tokens; dedupes; caps count. */
 export function parseVoiceTags(raw: string | null | undefined, limit = VOICE_TAG_LIMIT): VoiceTag[] {
   if (!raw?.trim()) return [];

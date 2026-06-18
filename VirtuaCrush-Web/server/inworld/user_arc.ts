@@ -8,6 +8,7 @@
 // that is injected authoritatively so the director can't drift the scene.
 import type { StoryArc } from './arcs';
 import type { UserStory } from '../db/user_stories';
+import { ARC_TONES, isArcTone, isNarrativeTag } from '../studio/schema';
 
 export interface UserArcSpec {
   setting: string;
@@ -25,8 +26,6 @@ export interface UserArcSpec {
   tone: StoryArc['tone'];
   arcTags: string[];
 }
-
-const TONES: ReadonlyArray<StoryArc['tone']> = ['light', 'serious', 'romantic', 'dramatic'];
 
 function str(v: unknown, max: number): string {
   return typeof v === 'string' ? v.trim().slice(0, max) : '';
@@ -52,11 +51,11 @@ export function validateArcSpec(input: unknown): ArcValidation {
   if (!npcInstruction) return { ok: false, error: 'character behavior (npcInstruction) is required' };
   if (!completionCriteria) return { ok: false, error: 'completion criteria is required' };
 
-  const toneRaw = str(o.tone, 20) as StoryArc['tone'];
-  const tone: StoryArc['tone'] = TONES.includes(toneRaw) ? toneRaw : 'dramatic';
+  const toneRaw = str(o.tone, 20);
+  const tone: StoryArc['tone'] = isArcTone(toneRaw) ? (toneRaw as StoryArc['tone']) : 'dramatic';
 
   const arcTags = Array.isArray(o.arcTags)
-    ? o.arcTags.map((t) => str(t, 24)).filter(Boolean).slice(0, 6)
+    ? o.arcTags.map((t) => str(t, 24)).filter((t) => t && isNarrativeTag(t)).slice(0, 6)
     : [];
   const completionExamples = Array.isArray(o.completionExamples)
     ? o.completionExamples.map((e) => str(e, 240)).filter(Boolean).slice(0, 4)

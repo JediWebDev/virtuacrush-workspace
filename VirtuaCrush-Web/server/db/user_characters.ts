@@ -2,6 +2,9 @@
 // creator for now; public sharing + moderation come in a later phase.
 import { pool } from './pool';
 import { buildUserCharacter, registerUserCharacter } from '../inworld/characters';
+import { parseVoiceTags, composeVoiceToneBlock, normalizeVoiceTagsInput } from '../studio/schema';
+
+export { normalizeVoiceTagsInput };
 
 export interface UserCharacter {
   id: string;                 // numeric DB id as string
@@ -86,7 +89,7 @@ export async function createUserCharacter(p: {
       p.core.slice(0, 4000),
       (p.greeting ?? '').slice(0, 600),
       p.secret ? p.secret.slice(0, 600) : null,
-      p.tone ? p.tone.slice(0, 60) : null,
+      normalizeVoiceTagsInput(p.tone),
     ],
   );
   return rowTo(rows[0]!);
@@ -201,9 +204,11 @@ export async function copyCharacterToUser(sourceId: string, newOwnerUserId: stri
 
 /** Composes the full system-prompt core from the stored persona parts. */
 function composeCore(c: UserCharacter): string {
+  const tags = parseVoiceTags(c.tone);
+  const toneBlock = tags.length ? `\n\n${composeVoiceToneBlock(tags)}` : '';
   return (
     c.core +
-    (c.tone ? `\n\nVOICE & TONE: ${c.tone}` : '') +
+    toneBlock +
     (c.secret
       ? `\n\nSECRET: You are quietly hiding this: ${c.secret}. Never volunteer it; only let it surface if the player earns real, sustained trust.`
       : '')

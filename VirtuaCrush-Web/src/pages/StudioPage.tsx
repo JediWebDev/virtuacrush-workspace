@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { Wand2, Play, Trash2, Loader2, BookPlus, UserPlus, MessageCircle, ImagePlus, Sparkles, Upload } from "lucide-react";
+import { Wand2, Play, Trash2, Loader2, BookPlus, UserPlus, MessageCircle, ImagePlus, Sparkles, Upload, Dices } from "lucide-react";
+import VoiceTagPicker from "../components/VoiceTagPicker";
 import { CHARACTERS } from "../types/character";
 import AdventureBuilder from "../components/AdventureBuilder";
 import PublishControl from "../components/PublishControl";
@@ -30,6 +31,10 @@ import {
   deleteStudioCharacterImage,
   assetUrl,
   ApiError,
+  fetchStudioVocabulary,
+  fetchRandomCharacterDraft,
+  fetchRandomArcDraft,
+  type StudioVocabulary,
   type StudioStory,
   type StudioArcInput,
   type StudioCharacter,
@@ -78,7 +83,16 @@ const TAB_BLURBS: Record<"stories" | "characters" | "adventures", string> = {
     "Branching choose-your-own-adventure — multiple beats and player choices. Best when you want different paths and endings.",
 };
 
-const emptyCharForm = () => ({ displayName: "", core: "", greeting: "", secret: "", tags: "" });
+const emptyCharForm = () => ({
+  displayName: "",
+  core: "",
+  greeting: "",
+  secret: "",
+  voiceTags: [] as string[],
+});
+
+const randomBtnClass =
+  "inline-flex items-center gap-1.5 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-xs font-semibold text-accent transition-colors hover:bg-accent/15 disabled:opacity-50";
 
 export default function StudioPage() {
   const navigate = useNavigate();
@@ -97,8 +111,14 @@ export default function StudioPage() {
   const [charSaving, setCharSaving] = useState(false);
   const [charError, setCharError] = useState<string | null>(null);
   const [charBusyId, setCharBusyId] = useState<string | null>(null);
+  const [vocabulary, setVocabulary] = useState<StudioVocabulary | null>(null);
+  const [randomBusy, setRandomBusy] = useState(false);
 
-  const charName = (id: string) => CHARACTERS.find((c) => c.id === id)?.name ?? id;
+  const charName = (id: string) => CHARACTERS.find((c) => c.id === id)?.name ?? characters.find((c) => customCharacterRef(c.id) === id)?.displayName ?? id;
+
+  useEffect(() => {
+    fetchStudioVocabulary().then(setVocabulary).catch(() => setVocabulary(null));
+  }, []);
 
   const refresh = () => {
     setLoading(true);
@@ -118,8 +138,54 @@ export default function StudioPage() {
   };
   useEffect(refreshChars, []);
 
-  const setChar = <K extends keyof ReturnType<typeof emptyCharForm>>(k: K, v: string) =>
+  const setChar = <K extends keyof ReturnType<typeof emptyCharForm>>(k: K, v: ReturnType<typeof emptyCharForm>[K]) =>
     setCharForm((f) => ({ ...f, [k]: v }));
+
+  const handleRandomCharacter = async () => {
+    setCharError(null);
+    setRandomBusy(true);
+    try {
+      const draft = await fetchRandomCharacterDraft();
+      setCharForm({
+        displayName: draft.displayName,
+        core: draft.core,
+        greeting: draft.greeting ?? "",
+        secret: draft.secret ?? "",
+        voiceTags: draft.meta.voiceTags,
+      });
+    } catch {
+      setCharError("Couldn't generate a random companion. Try again.");
+    } finally {
+      setRandomBusy(false);
+    }
+  };
+
+  const handleRandomArc = async (randomCompanion = false) => {
+    setError(null);
+    setRandomBusy(true);
+    try {
+      const draft = await fetchRandomArcDraft(randomCompanion ? undefined : form.characterId);
+      setForm({
+        characterId: draft.characterId,
+        title: draft.title,
+        setting: draft.setting,
+        situation: draft.situation,
+        playerSituation: draft.playerSituation ?? "",
+        npcInstruction: draft.npcInstruction,
+        beginningInstruction: draft.beginningInstruction ?? "",
+        middleInstruction: draft.middleInstruction ?? "",
+        endInstruction: draft.endInstruction ?? "",
+        introNarrative: draft.introNarrative ?? "",
+        completionCriteria: draft.completionCriteria,
+        coPresent: draft.coPresent,
+        tone: (draft.tone as Tone) || "dramatic",
+      });
+    } catch {
+      setError("Couldn't generate a random story. Try again.");
+    } finally {
+      setRandomBusy(false);
+    }
+  };
 
   const handleCreateChar = async () => {
     setCharError(null);
@@ -138,7 +204,7 @@ export default function StudioPage() {
         core: charForm.core.trim(),
         greeting: charForm.greeting.trim() || undefined,
         secret: charForm.secret.trim() || undefined,
-        tone: charForm.tags.trim() || undefined,
+        tone: charForm.voiceTags.length ? charForm.voiceTags : undefined,
       });
       setCharForm(emptyCharForm());
       refreshChars();
@@ -321,10 +387,23 @@ export default function StudioPage() {
       <div className={`grid gap-8 lg:grid-cols-[1fr_360px] ${studioFormWrapperClass}`}>
         {/* Builder form */}
         <div className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
-          <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
-            <BookPlus size={16} className="text-accent" /> New story arc
-          </h2>
-          <p className="mb-4 text-xs text-stone-600 dark:text-stone-400">Fields marked below are required to save.</p>
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
+                <BookPlus size={16} className="text-accent" /> New story arc
+              </h2>
+              <p className="text-xs text-stone-600 dark:text-stone-400">Fields marked below are required to save.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" disabled={randomBusy} onClick={() => handleRandomArc(false)} className={randomBtnClass}>
+                {randomBusy ? <Loader2 size={14} className="animate-spin" /> : <Dices size={14} />}
+                Random story
+              </button>
+              <button type="button" disabled={randomBusy} onClick={() => handleRandomArc(true)} className={randomBtnClass}>
+                <Dices size={14} /> Random + companion
+              </button>
+            </div>
+          </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             <StudioField label="Companion" hint="Who stars in this story.">
@@ -506,16 +585,32 @@ export default function StudioPage() {
       <div className={`grid gap-8 lg:grid-cols-[1fr_360px] ${studioFormWrapperClass}`}>
         {/* Character builder */}
         <div className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
-          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
-            <UserPlus size={16} className="text-accent" /> New companion
-          </h2>
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
+              <UserPlus size={16} className="text-accent" /> New companion
+            </h2>
+            <button type="button" disabled={randomBusy} onClick={handleRandomCharacter} className={randomBtnClass}>
+              {randomBusy ? <Loader2 size={14} className="animate-spin" /> : <Dices size={14} />}
+              Random companion
+            </button>
+          </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             <StudioField label="Name" required hint="Display name in chat and story lists.">
               <input className={studioInputClass} value={charForm.displayName} onChange={(e) => setChar("displayName", e.target.value)} placeholder="Captain Pancake" />
             </StudioField>
-            <StudioField label="Tags" hint="Comma-separated vibe words — optional.">
-              <input className={studioInputClass} value={charForm.tags} onChange={(e) => setChar("tags", e.target.value)} placeholder="Playful, Warm, Creative" />
+            <StudioField label="Voice tags" hint="Pick up to 3 — shapes how they talk.">
+              {vocabulary ? (
+                <VoiceTagPicker
+                  tags={vocabulary.voiceTags}
+                  selected={charForm.voiceTags}
+                  limit={vocabulary.voiceTagLimit}
+                  onChange={(voiceTags) => setChar("voiceTags", voiceTags)}
+                  disabled={charSaving}
+                />
+              ) : (
+                <p className="text-xs text-stone-500">Loading tags…</p>
+              )}
             </StudioField>
           </div>
 

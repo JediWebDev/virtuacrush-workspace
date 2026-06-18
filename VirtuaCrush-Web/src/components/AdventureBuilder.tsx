@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { Loader2, Plus, Trash2, MessageCircle, Sparkles, GitBranch, Flag } from "lucide-react";
+import { Loader2, Plus, Trash2, MessageCircle, Sparkles, GitBranch, Flag, Dices } from "lucide-react";
 import { CHARACTERS } from "../types/character";
 import PublishControl from "./PublishControl";
 import { StudioGuide, StudioField, StudioFieldHint, StudioOptionalSection } from "./StudioGuide";
@@ -25,6 +25,7 @@ import {
   listStudioCharacters,
   publishStudioPack,
   unpublishStudioPack,
+  fetchRandomPackDraft,
   type StudioPack,
   type StudioCharacter,
   type StudioMood,
@@ -36,8 +37,11 @@ const inputClass = studioInputClass;
 const selectClass = studioSelectClass;
 
 const MOODS: StudioMood[] = [
-  "romantic", "dramatic", "comedic", "thriller", "mystery", "playful", "cozy", "gothic", "tense",
+  "romantic", "dramatic", "comedic", "thriller", "mystery", "playful", "cozy", "gothic", "tense", "sexy", "kinky",
 ];
+
+const randomBtnClass =
+  "inline-flex items-center gap-1.5 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-xs font-semibold text-accent transition-colors hover:bg-accent/15 disabled:opacity-50";
 
 const ACTS: { value: StudioStoryAct | "auto"; label: string }[] = [
   { value: "auto", label: "Auto (infer from graph)" },
@@ -173,6 +177,7 @@ export default function AdventureBuilder() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const [randomBusy, setRandomBusy] = useState(false);
 
   // My adventures list.
   const [packs, setPacks] = useState<StudioPack[]>([]);
@@ -235,6 +240,49 @@ export default function AdventureBuilder() {
     setMood("dramatic"); setCoPresent(true); setNodes(freshGraph()); setSeq(1);
   };
 
+  const applyRandomPack = async (randomCompanion: boolean) => {
+    setError(null);
+    setSavedMsg(null);
+    setRandomBusy(true);
+    try {
+      const draft = await fetchRandomPackDraft(randomCompanion ? undefined : characterId);
+      setCharacterId(draft.characterId);
+      setTitle(draft.title);
+      setBlurb(draft.blurb);
+      setMood(draft.mood);
+      setSetting(draft.setting);
+      setSituation(draft.situation);
+      setCoPresent(draft.coPresent);
+      setSystemInstruction(draft.systemInstruction);
+
+      const editNodes: EditNode[] = Object.entries(draft.nodes).map(([id, n]) => ({
+        id,
+        npcInstruction: n.npcInstruction,
+        introNarrative: n.introNarrative ?? "",
+        terminal: n.choices === null,
+        act: n.act ?? "auto",
+        choices:
+          n.choices === null
+            ? []
+            : n.choices.map((c) => ({
+                label: c.label,
+                userMessage: c.userMessage,
+                next: c.next,
+              })),
+      }));
+      setNodes(editNodes.length ? editNodes : freshGraph());
+      const maxSeq = editNodes.reduce((m, n) => {
+        const match = /^node_(\d+)$/.exec(n.id);
+        return match ? Math.max(m, Number(match[1]) + 1) : m;
+      }, 1);
+      setSeq(maxSeq);
+    } catch {
+      setError("Couldn't generate a random adventure. Try again.");
+    } finally {
+      setRandomBusy(false);
+    }
+  };
+
   const handleSave = async () => {
     setError(null); setSavedMsg(null);
     if (!title.trim()) return setError("Give your adventure a title.");
@@ -292,6 +340,15 @@ export default function AdventureBuilder() {
         <li><span className="font-medium text-stone-800 dark:text-stone-100">Wire choices</span> to the next beat or &quot;End the story.&quot; The checker below confirms every path can finish.</li>
       </ol>
       <p className="text-xs text-stone-500">For a single linear arc without branches, try the Stories tab instead.</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" disabled={randomBusy} onClick={() => applyRandomPack(false)} className={randomBtnClass}>
+          {randomBusy ? <Loader2 size={14} className="animate-spin" /> : <Dices size={14} />}
+          Random adventure
+        </button>
+        <button type="button" disabled={randomBusy} onClick={() => applyRandomPack(true)} className={randomBtnClass}>
+          <Dices size={14} /> Random + companion
+        </button>
+      </div>
     </StudioGuide>
     <div className={`grid gap-8 lg:grid-cols-[1fr_340px] ${studioFormWrapperClass}`}>
       {/* Builder */}

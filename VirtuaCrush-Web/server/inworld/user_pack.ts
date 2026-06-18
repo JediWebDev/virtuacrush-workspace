@@ -14,10 +14,9 @@
 //     terminal/ending beat.
 import type { StoryPack, PackNode, PackChoice, PackMood } from './pack_types';
 import type { UserStory } from '../db/user_stories';
+import { PACK_MOODS, isPackMood } from '../studio/schema';
 
-const MOODS: ReadonlyArray<PackMood> = [
-  'romantic', 'dramatic', 'comedic', 'thriller', 'mystery', 'playful', 'cozy', 'gothic', 'tense',
-];
+const MOODS: ReadonlyArray<PackMood> = PACK_MOODS;
 
 function str(v: unknown, max: number): string {
   return typeof v === 'string' ? v.trim().slice(0, max) : '';
@@ -135,8 +134,8 @@ export function validatePackSpec(input: unknown): PackValidation {
   }
   if (!canEnd) return { ok: false, error: 'the story has no reachable ending (add a terminal node or a choice that goes to "end")' };
 
-  const moodRaw = str(o.mood, 20) as PackMood;
-  const mood: PackMood = MOODS.includes(moodRaw) ? moodRaw : 'dramatic';
+  const moodRaw = str(o.mood, 20);
+  const mood: PackMood = isPackMood(moodRaw) ? moodRaw : 'dramatic';
 
   return {
     ok: true,

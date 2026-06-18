@@ -13,14 +13,19 @@ export function customAvatar(name: string): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-/** Splits the stored tone string (comma-separated traits) into display tags. */
+/** Splits stored tone tags into display labels (e.g. "playful, warm" → "Playful", "Warm"). */
 export function parseCharacterTags(tone: string | null | undefined): string[] {
   if (!tone?.trim()) return [];
   return tone
     .split(/[,;]+/)
     .map((t) => t.trim())
     .filter(Boolean)
-    .map((t) => t.charAt(0).toUpperCase() + t.slice(1));
+    .map((t) =>
+      t
+        .split(/[\s_]+/)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(" "),
+    );
 }
 
 /** Builds a frontend Character from a stored custom persona. */

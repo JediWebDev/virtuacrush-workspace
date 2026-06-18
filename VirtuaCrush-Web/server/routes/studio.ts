@@ -31,6 +31,13 @@ import { generateImage } from '../llm/image';
 import { putObject, getObjectBytes } from '../lib/r2';
 import { isSubscribed } from '../db/subscriptions';
 import { randomUUID } from 'node:crypto';
+import { studioVocabularyPayload, normalizeVoiceTagsInput } from '../studio/schema';
+import {
+  randomCharacterDraft,
+  randomArcDraft,
+  randomPackDraft,
+  pickRandomCharacterId,
+} from '../studio/random';
 
 // Accepted avatar upload types (magic-byte sniffed) and the max decoded size.
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
@@ -115,7 +122,7 @@ router.post('/characters', requireAuth, async (req: Request, res: Response) => {
       core,
       greeting: typeof b.greeting === 'string' ? b.greeting : '',
       secret: typeof b.secret === 'string' && b.secret.trim() ? b.secret.trim() : null,
-      tone: typeof b.tone === 'string' && b.tone.trim() ? b.tone.trim() : null,
+      tone: normalizeVoiceTagsInput(b.tone),
     });
     return res.json({ character });
   } catch (err) {
@@ -420,6 +427,71 @@ router.post('/stories/:id/stop', requireAuth, async (req: Request, res: Response
   } catch (err) {
     console.error('[studio] stop failed:', err);
     return res.status(500).json({ error: 'stop_failed' });
+  }
+});
+
+// --- Studio vocabulary + random drafts (template-based) --------------------
+
+router.get('/vocabulary', requireAuth, (_req: Request, res: Response) => {
+  return res.json(studioVocabularyPayload());
+});
+
+router.post('/random/character', requireAuth, (_req: Request, res: Response) => {
+  try {
+    return res.json({ draft: randomCharacterDraft() });
+  } catch (err) {
+    console.error('[studio] random character failed:', err);
+    return res.status(500).json({ error: 'random_failed' });
+  }
+});
+
+router.post('/random/arc', requireAuth, async (req: Request, res: Response) => {
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const userId = req.user!.id;
+  let characterId = typeof b.characterId === 'string' ? b.characterId.trim() : '';
+  if (!characterId) {
+    const customs = await listUserCharacters(userId);
+    characterId = pickRandomCharacterId(customs.map((c) => c.id));
+  }
+  if (!(await resolveStudioCharacter(characterId, userId))) {
+    return res.status(400).json({ error: 'invalid_character' });
+  }
+  let displayName: string | undefined;
+  if (characterId.startsWith('user:')) {
+    const row = await getUserCharacter(characterId.slice('user:'.length));
+    displayName = row?.displayName;
+  }
+  try {
+    const draft = randomArcDraft(characterId, { displayName });
+    return res.json({ draft });
+  } catch (err) {
+    console.error('[studio] random arc failed:', err);
+    return res.status(500).json({ error: 'random_failed' });
+  }
+});
+
+router.post('/random/pack', requireAuth, async (req: Request, res: Response) => {
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const userId = req.user!.id;
+  let characterId = typeof b.characterId === 'string' ? b.characterId.trim() : '';
+  if (!characterId) {
+    const customs = await listUserCharacters(userId);
+    characterId = pickRandomCharacterId(customs.map((c) => c.id));
+  }
+  if (!(await resolveStudioCharacter(characterId, userId))) {
+    return res.status(400).json({ error: 'invalid_character' });
+  }
+  let displayName: string | undefined;
+  if (characterId.startsWith('user:')) {
+    const row = await getUserCharacter(characterId.slice('user:'.length));
+    displayName = row?.displayName;
+  }
+  try {
+    const draft = randomPackDraft(characterId, { displayName });
+    return res.json({ draft });
+  } catch (err) {
+    console.error('[studio] random pack failed:', err);
+    return res.status(500).json({ error: 'random_failed' });
   }
 });
 

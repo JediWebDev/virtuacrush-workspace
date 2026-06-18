@@ -335,7 +335,89 @@ export interface StudioCharacterInput {
   core: string;
   greeting?: string;
   secret?: string;
-  tone?: string;
+  /** Comma-separated tags or structured tag array — validated server-side. */
+  tone?: string | string[];
+}
+
+export interface StudioVocabulary {
+  voiceTags: string[];
+  voiceTagLimit: number;
+  arcTones: string[];
+  packMoods: string[];
+}
+
+export interface RandomCharacterDraft {
+  displayName: string;
+  core: string;
+  greeting?: string;
+  secret?: string;
+  tone: string;
+  meta: { archetypeId: string; voiceTags: string[] };
+}
+
+export interface RandomArcDraft {
+  characterId: string;
+  title: string;
+  setting: string;
+  situation: string;
+  playerSituation?: string;
+  npcInstruction: string;
+  introNarrative?: string;
+  completionCriteria: string;
+  completionExamples?: string[];
+  beginningInstruction?: string;
+  middleInstruction?: string;
+  endInstruction?: string;
+  coPresent: boolean;
+  tone: string;
+  arcTags: string[];
+  meta: { templateId: string; templateLabel: string };
+}
+
+export interface RandomPackDraft {
+  characterId: string;
+  title: string;
+  blurb: string;
+  mood: StudioMood;
+  setting: string;
+  situation: string;
+  coPresent: boolean;
+  systemInstruction: string;
+  nodes: Record<
+    string,
+    {
+      npcInstruction: string;
+      introNarrative?: string;
+      act?: StudioStoryAct;
+      choices: Array<{ label: string; userMessage: string; next: string }> | null;
+    }
+  >;
+  meta: { graphTemplateId: string; moodCopyApplied: boolean };
+}
+
+export async function fetchStudioVocabulary(): Promise<StudioVocabulary> {
+  return api<StudioVocabulary>(`/api/studio/vocabulary`);
+}
+
+export async function fetchRandomCharacterDraft(): Promise<RandomCharacterDraft> {
+  const res = await api<{ draft: RandomCharacterDraft }>(`/api/studio/random/character`, { method: 'POST', body: '{}' });
+  return res.draft;
+}
+
+export async function fetchRandomArcDraft(characterId?: string): Promise<RandomArcDraft> {
+  const res = await api<{ draft: RandomArcDraft }>(`/api/studio/random/arc`, {
+    method: 'POST',
+    body: JSON.stringify(characterId ? { characterId } : {}),
+  });
+  return res.draft;
+}
+
+export async function fetchRandomPackDraft(characterId?: string): Promise<RandomPackDraft> {
+  const res = await api<{ draft: RandomPackDraft }>(`/api/studio/random/pack`, {
+    method: 'POST',
+    body: JSON.stringify(characterId ? { characterId } : {}),
+  });
+  return res.draft;
 }
 
 /** The chat/route id for a custom character. */
@@ -398,7 +480,7 @@ export async function deleteStudioCharacterImage(id: string): Promise<void> {
 
 export type StudioMood =
   | 'romantic' | 'dramatic' | 'comedic' | 'thriller' | 'mystery'
-  | 'playful' | 'cozy' | 'gothic' | 'tense';
+  | 'playful' | 'cozy' | 'gothic' | 'tense' | 'sexy' | 'kinky';
 
 export interface StudioPackChoice {
   id?: string;

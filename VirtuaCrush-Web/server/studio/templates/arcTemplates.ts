@@ -119,9 +119,9 @@ export const ARC_SCENARIO_TEMPLATES: ArcScenarioTemplate[] = [
     id: 'arc_escape_room_countdown',
     label: 'Escape Room Countdown',
     tone: 'suspenseful',
-    arcTags: ['mystery', 'suspenseful'],
+    arcTags: ['chaos', 'stress'],
     coPresent: true,
-    settingTemplate: 'a ',
+    settingTemplate: 'a dimly lit escape room facility after hours',
     situationTemplate:
       `You and {{companionName}} enter an escape room expecting a fun challenge, but the experience is far more convincing than either of you anticipated. ` +
       `Locked doors, cryptic messages, strange recordings, and a steadily ticking countdown create mounting pressure. ` +
