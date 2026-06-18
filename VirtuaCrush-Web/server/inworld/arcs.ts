@@ -45,6 +45,13 @@ export interface SceneAnchor {
   coPresent: boolean;
 }
 
+/** Optional per-act companion behavior for user-authored and future built-in arcs. */
+export interface ArcPhaseInstructions {
+  beginning?: string;
+  middle?: string;
+  end?: string;
+}
+
 export interface StoryArc {
   id: string;
   characterId: string;
@@ -55,6 +62,8 @@ export interface StoryArc {
   sceneAnchor?: SceneAnchor;
   introNarrative: string;
   npcInstruction: string;
+  /** Optional act-specific behavior layered on npcInstruction at runtime. */
+  phaseInstructions?: ArcPhaseInstructions;
   completionCriteria: string;
   completionExamples: string[];
   tone: 'light' | 'serious' | 'romantic' | 'dramatic';

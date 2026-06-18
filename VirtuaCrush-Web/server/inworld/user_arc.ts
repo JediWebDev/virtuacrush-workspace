@@ -10,13 +10,17 @@ import type { StoryArc } from './arcs';
 import type { UserStory } from '../db/user_stories';
 
 export interface UserArcSpec {
-  setting: string;            // short location phrase ("an abandoned warehouse at the edge of town")
-  situation: string;          // authoritative "what's going on" paragraph
-  coPresent: boolean;         // is the companion physically with the player?
-  playerSituation: string;    // the player's role + constraints right now
-  introNarrative: string;     // opening [NARRATOR] beat
-  npcInstruction: string;     // how the companion should behave in this arc
-  completionCriteria: string; // when the arc resolves
+  setting: string;
+  situation: string;
+  coPresent: boolean;
+  playerSituation: string;
+  introNarrative: string;
+  npcInstruction: string;
+  /** Optional act-specific companion behavior (setup / confrontation / resolution). */
+  beginningInstruction?: string;
+  middleInstruction?: string;
+  endInstruction?: string;
+  completionCriteria: string;
   completionExamples: string[];
   tone: StoryArc['tone'];
   arcTags: string[];
@@ -58,6 +62,10 @@ export function validateArcSpec(input: unknown): ArcValidation {
     ? o.completionExamples.map((e) => str(e, 240)).filter(Boolean).slice(0, 4)
     : [];
 
+  const beginningInstruction = str(o.beginningInstruction, 800);
+  const middleInstruction = str(o.middleInstruction, 800);
+  const endInstruction = str(o.endInstruction, 800);
+
   return {
     ok: true,
     spec: {
@@ -67,6 +75,9 @@ export function validateArcSpec(input: unknown): ArcValidation {
       playerSituation: str(o.playerSituation, 600),
       introNarrative: str(o.introNarrative, 1000),
       npcInstruction,
+      ...(beginningInstruction ? { beginningInstruction } : {}),
+      ...(middleInstruction ? { middleInstruction } : {}),
+      ...(endInstruction ? { endInstruction } : {}),
       completionCriteria,
       completionExamples,
       tone,
@@ -88,6 +99,12 @@ export function userStoryToArc(story: UserStory): StoryArc | null {
     ? `\n\nPLAYER'S CURRENT SITUATION (authoritative — honor this exactly): ${s.playerSituation}`
     : '';
 
+  const phaseInstructions = {
+    ...(s.beginningInstruction ? { beginning: s.beginningInstruction } : {}),
+    ...(s.middleInstruction ? { middle: s.middleInstruction } : {}),
+    ...(s.endInstruction ? { end: s.endInstruction } : {}),
+  };
+
   return {
     id: `user:${story.id}`,
     characterId: story.characterId,
@@ -99,6 +116,7 @@ export function userStoryToArc(story: UserStory): StoryArc | null {
     },
     introNarrative: s.introNarrative ?? '',
     npcInstruction: s.npcInstruction ?? '',
+    ...(Object.keys(phaseInstructions).length ? { phaseInstructions } : {}),
     completionCriteria: s.completionCriteria ?? 'The scene reaches a satisfying resolution.',
     completionExamples: Array.isArray(s.completionExamples) ? s.completionExamples : [],
     tone: (s.tone as StoryArc['tone']) ?? 'dramatic',

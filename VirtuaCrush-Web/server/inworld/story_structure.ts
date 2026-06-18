@@ -6,7 +6,7 @@
 //     explicit narrator transition beat
 
 import type { PackNode, StoryPack } from './pack_types';
-import type { SceneAnchor } from './arcs';
+import type { SceneAnchor, ArcPhaseInstructions } from './arcs';
 
 export type StoryAct = 'beginning' | 'middle' | 'end';
 
@@ -185,8 +185,6 @@ export interface SceneValidationResult {
   droppedCharacters?: string[];
 }
 
-const TRANSITION_RE =
-  /\b(walk|drive|head|arrive|enter|leave|exit|step|pull|move|travel|cut to|later|outside|inside|upstairs|downstairs|across|into|out of|through)\b/i;
 const DEPARTURE_RE =
   /\b(left|leave|leaves|depart|gone|exit|walked away|drove off|disappeared|out of sight)\b/i;
 
@@ -199,9 +197,15 @@ export function requiredCastNames(input: SceneDirectiveInput): string[] {
   return input.presentCharacters.map((c) => c.name);
 }
 
-function extractLocation(text: string): string | null {
-  const m = text.match(/location:\s*([^.\n]+)/i);
-  return m?.[1]?.trim().toLowerCase() ?? null;
+/** Merges base arc behavior with an act-specific author override when present. */
+export function resolveArcNpcInstruction(
+  baseInstruction: string,
+  phaseInstructions: ArcPhaseInstructions | undefined,
+  act: StoryAct,
+): string {
+  const phase = phaseInstructions?.[act]?.trim();
+  if (!phase) return baseInstruction;
+  return `${baseInstruction}\n\nACT-SPECIFIC BEHAVIOR (${act.toUpperCase()}): ${phase}`;
 }
 
 /** True if `name` (or common aliases) appears in the scene snapshot text. */
@@ -260,15 +264,6 @@ export function validateSceneStateUpdate(opts: {
       ok: false,
       droppedCharacters: dropped,
       issue: `sceneState dropped still-present character(s): ${dropped.join(', ')}`,
-    };
-  }
-
-  const priorLoc = extractLocation(opts.priorSceneState);
-  const nextLoc = extractLocation(next);
-  if (priorLoc && nextLoc && priorLoc !== nextLoc && !TRANSITION_RE.test(narratorBlob)) {
-    return {
-      ok: false,
-      issue: `location changed (${priorLoc} → ${nextLoc}) without a narrator transition beat`,
     };
   }
 

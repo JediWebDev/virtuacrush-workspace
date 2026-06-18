@@ -269,13 +269,17 @@ export interface StudioArcInput {
   characterId: string;
   title: string;
   blurb?: string;
-  setting: string;            // where the scene takes place
-  situation: string;          // what's going on (authoritative)
-  coPresent?: boolean;        // is the companion physically with the player?
-  playerSituation?: string;   // the player's role + constraints right now
-  introNarrative?: string;    // opening narration
-  npcInstruction: string;     // how the character should behave
-  completionCriteria: string; // when the arc resolves
+  setting: string;
+  situation: string;
+  coPresent?: boolean;
+  playerSituation?: string;
+  introNarrative?: string;
+  npcInstruction: string;
+  /** Optional act-specific companion behavior. */
+  beginningInstruction?: string;
+  middleInstruction?: string;
+  endInstruction?: string;
+  completionCriteria: string;
   completionExamples?: string[];
   tone?: 'light' | 'serious' | 'romantic' | 'dramatic';
   arcTags?: string[];

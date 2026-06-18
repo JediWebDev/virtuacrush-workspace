@@ -48,11 +48,20 @@ const emptyForm = (characterId: string) => ({
   situation: "",
   playerSituation: "",
   npcInstruction: "",
+  beginningInstruction: "",
+  middleInstruction: "",
+  endInstruction: "",
   introNarrative: "",
   completionCriteria: "",
   coPresent: true,
   tone: "dramatic" as Tone,
 });
+
+const ACT_HINTS = {
+  beginning: "Setup — establish stakes, who is present, and the opening dynamic.",
+  middle: "Confrontation — escalate complications and let player choices matter.",
+  end: "Resolution — pay off the arc and move toward completion.",
+} as const;
 
 const labelClass = "mb-1 block text-xs font-semibold uppercase tracking-wide text-stone-500";
 const inputClass =
@@ -211,6 +220,9 @@ export default function StudioPage() {
         situation: form.situation.trim(),
         playerSituation: form.playerSituation.trim() || undefined,
         npcInstruction: form.npcInstruction.trim(),
+        beginningInstruction: form.beginningInstruction.trim() || undefined,
+        middleInstruction: form.middleInstruction.trim() || undefined,
+        endInstruction: form.endInstruction.trim() || undefined,
         introNarrative: form.introNarrative.trim() || undefined,
         completionCriteria: form.completionCriteria.trim(),
         coPresent: form.coPresent,
@@ -322,8 +334,38 @@ export default function StudioPage() {
           </div>
 
           <div className="mt-4">
-            <label className={labelClass}>How should {charName(form.characterId)} behave?</label>
+            <label className={labelClass}>Overall character behavior (applies throughout)</label>
             <textarea className={inputClass} rows={3} value={form.npcInstruction} onChange={(e) => set("npcInstruction", e.target.value)} placeholder={`${charName(form.characterId)} treats this like a serious culinary expedition — hyping every lead and dramatically rating each taco out of ten.`} />
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.03] p-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-accent">Three-act behavior (optional)</p>
+            <p className="mb-4 text-xs text-stone-500">
+              Add act-specific notes to steer pacing as the arc moves from setup → confrontation → resolution. The director picks the active act from turn count and story progress.
+            </p>
+            <div className="space-y-4">
+              {(["beginning", "middle", "end"] as const).map((act) => (
+                <div key={act}>
+                  <label className={labelClass}>
+                    Act {act === "beginning" ? "I" : act === "middle" ? "II" : "III"} — {act}
+                  </label>
+                  <p className="mb-1.5 text-[11px] text-stone-500">{ACT_HINTS[act]}</p>
+                  <textarea
+                    className={inputClass}
+                    rows={2}
+                    value={form[`${act}Instruction`]}
+                    onChange={(e) => set(`${act}Instruction`, e.target.value)}
+                    placeholder={
+                      act === "beginning"
+                        ? "Ground the scene — what's the immediate tension or hook?"
+                        : act === "middle"
+                          ? "Deepen the conflict — what complications or choices should land here?"
+                          : "Bring it home — how should they behave as the arc resolves?"
+                    }
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="mt-4">

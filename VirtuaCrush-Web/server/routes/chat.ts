@@ -75,6 +75,7 @@ import {
   formatSceneValidationRetryHint,
   repairSceneStateCast,
   requiredCastNames,
+  resolveArcNpcInstruction,
   type SceneDirectiveInput,
 } from '../inworld/story_structure';
 
@@ -449,6 +450,11 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       arcContext.storyAct = resolveArcAct({
         userTurnsSinceStart: Number(arcTurnRows[0]?.n ?? 0),
       });
+      arcContext.npcInstruction = resolveArcNpcInstruction(
+        activeArc.npcInstruction,
+        activeArc.phaseInstructions,
+        arcContext.storyAct,
+      );
     }
 
     const directives =

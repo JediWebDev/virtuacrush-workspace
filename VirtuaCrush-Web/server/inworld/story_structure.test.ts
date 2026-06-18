@@ -7,6 +7,7 @@ import {
   formatPersistentSceneDirective,
   validateSceneStateUpdate,
   nameInSceneState,
+  resolveArcNpcInstruction,
 } from './story_structure';
 import type { StoryPack } from './pack_types';
 
@@ -108,4 +109,15 @@ test('validateSceneStateUpdate allows explicit departure', () => {
 
 test('nameInSceneState matches player aliases', () => {
   assert.equal(nameInSceneState('Present: you (player)', 'you'), true);
+});
+
+test('resolveArcNpcInstruction appends act-specific block', () => {
+  const out = resolveArcNpcInstruction('Base behavior.', { middle: 'Escalate the tension.' }, 'middle');
+  assert.match(out, /Base behavior/);
+  assert.match(out, /Escalate the tension/);
+  assert.match(out, /MIDDLE/);
+});
+
+test('resolveArcNpcInstruction returns base when no phase override', () => {
+  assert.equal(resolveArcNpcInstruction('Only base.', undefined, 'beginning'), 'Only base.');
 });
