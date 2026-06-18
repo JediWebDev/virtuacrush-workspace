@@ -11,7 +11,7 @@ import { motion } from "motion/react";
 import { Loader2, Plus, Trash2, MessageCircle, Sparkles, GitBranch, Flag } from "lucide-react";
 import { CHARACTERS } from "../types/character";
 import PublishControl from "./PublishControl";
-import { StudioGuide, StudioFieldHint, StudioOptionalSection } from "./StudioGuide";
+import { StudioGuide, StudioField, StudioFieldHint, StudioOptionalSection } from "./StudioGuide";
 import {
   studioLabelClass,
   studioInputClass,
@@ -304,19 +304,16 @@ export default function AdventureBuilder() {
           <p className="mb-4 text-xs text-stone-600 dark:text-stone-400">Companion, title, situation, and story framing are required.</p>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className={labelClass}>Companion</label>
-              <StudioFieldHint>Who leads this adventure — built-in or your custom companions.</StudioFieldHint>
+            <StudioField label="Companion" hint="Who leads this adventure — built-in or your custom companions.">
               <select className={selectClass} value={characterId} onChange={(e) => setCharacterId(e.target.value)}>
                 {companions.map((c) => (
                   <option key={c.value} value={c.value}>{c.label}</option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label className={labelClass}>Title <span className="text-accent">*</span></label>
+            </StudioField>
+            <StudioField label="Title" required hint="Shown in the story picker and chat.">
               <input className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="The Midnight Bakery Heist" />
-            </div>
+            </StudioField>
           </div>
 
           <div className="mt-4">
@@ -339,16 +336,17 @@ export default function AdventureBuilder() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className={labelClass}>Mood</label>
+              <StudioField label="Mood">
                 <select className={selectClass} value={mood} onChange={(e) => setMood(e.target.value as StudioMood)}>
                   {MOODS.map((m) => (<option key={m} value={m}>{m}</option>))}
                 </select>
-              </div>
-              <label className="flex items-end gap-2 pb-2.5 text-sm text-stone-700 dark:text-stone-300">
-                <input type="checkbox" checked={coPresent} onChange={(e) => setCoPresent(e.target.checked)} className="h-4 w-4 rounded accent-[var(--accent,#c9717d)]" />
-                {companionName(characterId)} is physically with you
-              </label>
+              </StudioField>
+              <StudioField label="Co-presence" hint="Whether they share the scene with you.">
+                <label className="flex min-h-[2.625rem] items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
+                  <input type="checkbox" checked={coPresent} onChange={(e) => setCoPresent(e.target.checked)} className="h-4 w-4 shrink-0 rounded accent-[var(--accent,#c9717d)]" />
+                  <span>{companionName(characterId)} is physically with you</span>
+                </label>
+              </StudioField>
             </div>
 
             <div>

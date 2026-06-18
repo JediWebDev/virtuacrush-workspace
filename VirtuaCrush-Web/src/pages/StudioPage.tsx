@@ -5,7 +5,7 @@ import { Wand2, Play, Trash2, Loader2, BookPlus, UserPlus, MessageCircle, ImageP
 import { CHARACTERS } from "../types/character";
 import AdventureBuilder from "../components/AdventureBuilder";
 import PublishControl from "../components/PublishControl";
-import { StudioGuide, StudioFieldHint, StudioOptionalSection } from "../components/StudioGuide";
+import { StudioGuide, StudioField, StudioFieldHint, StudioOptionalSection } from "../components/StudioGuide";
 import {
   studioLabelClass,
   studioInputClass,
@@ -327,20 +327,16 @@ export default function StudioPage() {
           <p className="mb-4 text-xs text-stone-600 dark:text-stone-400">Fields marked below are required to save.</p>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className={studioLabelClass}>Companion</label>
-              <StudioFieldHint>Who stars in this story.</StudioFieldHint>
+            <StudioField label="Companion" hint="Who stars in this story.">
               <select className={studioSelectClass} value={form.characterId} onChange={(e) => set("characterId", e.target.value)}>
                 {CHARACTERS.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label className={studioLabelClass}>Title</label>
-              <StudioFieldHint>Optional — defaults to &quot;Untitled story&quot;.</StudioFieldHint>
+            </StudioField>
+            <StudioField label="Title" hint={<>Optional — defaults to &quot;Untitled story&quot;.</>}>
               <input className={studioInputClass} value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="The Great Taco Hunt" />
-            </div>
+            </StudioField>
           </div>
 
           <div className="mt-4">
@@ -384,16 +380,17 @@ export default function StudioPage() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className={studioLabelClass}>Tone</label>
+              <StudioField label="Tone">
                 <select className={studioSelectClass} value={form.tone} onChange={(e) => set("tone", e.target.value as Tone)}>
                   {TONES.map((t) => (<option key={t} value={t}>{t}</option>))}
                 </select>
-              </div>
-              <label className="flex items-end gap-2 pb-2.5 text-sm text-stone-700 dark:text-stone-300">
-                <input type="checkbox" checked={form.coPresent} onChange={(e) => set("coPresent", e.target.checked)} className="h-4 w-4 rounded accent-[var(--accent,#c9717d)]" />
-                {charName(form.characterId)} is physically with you
-              </label>
+              </StudioField>
+              <StudioField label="Co-presence" hint="Whether they share the scene with you.">
+                <label className="flex min-h-[2.625rem] items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
+                  <input type="checkbox" checked={form.coPresent} onChange={(e) => set("coPresent", e.target.checked)} className="h-4 w-4 shrink-0 rounded accent-[var(--accent,#c9717d)]" />
+                  <span>{charName(form.characterId)} is physically with you</span>
+                </label>
+              </StudioField>
             </div>
 
             <div className="rounded-xl border border-stone-200/80 bg-white/60 p-3 dark:border-stone-600 dark:bg-stone-900/30">
@@ -514,15 +511,12 @@ export default function StudioPage() {
           </h2>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className={studioLabelClass}>Name <span className="text-accent">*</span></label>
+            <StudioField label="Name" required hint="Display name in chat and story lists.">
               <input className={studioInputClass} value={charForm.displayName} onChange={(e) => setChar("displayName", e.target.value)} placeholder="Captain Pancake" />
-            </div>
-            <div>
-              <label className={studioLabelClass}>Tags</label>
-              <StudioFieldHint>Comma-separated vibe words — optional.</StudioFieldHint>
+            </StudioField>
+            <StudioField label="Tags" hint="Comma-separated vibe words — optional.">
               <input className={studioInputClass} value={charForm.tags} onChange={(e) => setChar("tags", e.target.value)} placeholder="Playful, Warm, Creative" />
-            </div>
+            </StudioField>
           </div>
 
           <div className="mt-4">
@@ -586,51 +580,50 @@ export default function StudioPage() {
                         {(c.displayName.trim()[0] || "?").toUpperCase()}
                       </div>
                     )}
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-stone-900 dark:text-stone-50">{c.displayName}</p>
                       <p className="mt-1 line-clamp-2 text-xs italic text-stone-500">{c.core}</p>
+
+                      <textarea
+                        className="mt-2 w-full rounded-lg border border-stone-300/80 bg-white px-2.5 py-1.5 text-xs text-stone-900 outline-none placeholder:text-stone-400 focus:border-accent/50 dark:border-stone-500 dark:bg-stone-100 dark:text-stone-900"
+                        rows={2}
+                        value={imgPrompt[c.id] ?? ""}
+                        onChange={(e) => setImgPrompt((p) => ({ ...p, [c.id]: e.target.value }))}
+                        placeholder="Describe the avatar for AI generation — e.g. weathered sea captain, silver beard, navy coat, warm grin, soft harbor light, painterly"
+                      />
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-black/10 dark:border-white/10 px-2 py-1 text-[11px] font-medium text-stone-600 transition-colors hover:bg-black/[0.05] dark:text-stone-300">
+                          {imgBusyId === c.id ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />} Upload
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            className="hidden"
+                            disabled={imgBusyId === c.id}
+                            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadImage(c, f); e.target.value = ""; }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateImage(c)}
+                          disabled={imgBusyId === c.id}
+                          className="inline-flex items-center gap-1 rounded-lg border border-black/10 dark:border-white/10 px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"
+                        >
+                          {imgBusyId === c.id ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />} Generate
+                        </button>
+                        {c.imageKey && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveImage(c)}
+                            disabled={imgBusyId === c.id}
+                            className="inline-flex items-center gap-1 rounded-lg border border-black/10 dark:border-white/10 px-2 py-1 text-[11px] font-medium text-stone-400 transition-colors hover:text-red-500 disabled:opacity-50"
+                          >
+                            <ImagePlus size={11} /> Remove
+                          </button>
+                        )}
+                      </div>
+                      {imgError && imgBusyId === null && <p className="mt-1 text-[11px] text-red-500">{imgError}</p>}
                     </div>
                   </div>
-
-                  {/* Avatar controls */}
-                  <textarea
-                    className="mt-2 w-full rounded-lg border border-stone-300/80 bg-white px-2.5 py-1.5 text-xs text-stone-900 outline-none placeholder:text-stone-400 focus:border-accent/50 dark:border-stone-500 dark:bg-stone-100 dark:text-stone-900"
-                    rows={2}
-                    value={imgPrompt[c.id] ?? ""}
-                    onChange={(e) => setImgPrompt((p) => ({ ...p, [c.id]: e.target.value }))}
-                    placeholder="Describe the avatar for AI generation — e.g. weathered sea captain, silver beard, navy coat, warm grin, soft harbor light, painterly"
-                  />
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-black/10 dark:border-white/10 px-2 py-1 text-[11px] font-medium text-stone-600 transition-colors hover:bg-black/[0.05] dark:text-stone-300">
-                      {imgBusyId === c.id ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />} Upload
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        className="hidden"
-                        disabled={imgBusyId === c.id}
-                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadImage(c, f); e.target.value = ""; }}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => handleGenerateImage(c)}
-                      disabled={imgBusyId === c.id}
-                      className="inline-flex items-center gap-1 rounded-lg border border-black/10 dark:border-white/10 px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"
-                    >
-                      {imgBusyId === c.id ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />} Generate
-                    </button>
-                    {c.imageKey && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveImage(c)}
-                        disabled={imgBusyId === c.id}
-                        className="inline-flex items-center gap-1 rounded-lg border border-black/10 dark:border-white/10 px-2 py-1 text-[11px] font-medium text-stone-400 transition-colors hover:text-red-500 disabled:opacity-50"
-                      >
-                        <ImagePlus size={11} /> Remove
-                      </button>
-                    )}
-                  </div>
-                  {imgError && imgBusyId === null && <p className="mt-1 text-[11px] text-red-500">{imgError}</p>}
 
                   <div className="mt-3 flex gap-2">
                     <button

@@ -1,4 +1,9 @@
 import type { ReactNode } from "react";
+import { studioLabelClass } from "./studioFormStyles";
+
+/** Reserved height so paired fields in a row keep inputs aligned. */
+const hintSlotClass =
+  "mb-1.5 min-h-[2.5rem] text-xs leading-relaxed text-stone-600 dark:text-stone-400";
 
 export function StudioGuide({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -10,7 +15,31 @@ export function StudioGuide({ title, children }: { title: string; children: Reac
 }
 
 export function StudioFieldHint({ children }: { children: ReactNode }) {
-  return <p className="mb-1.5 text-xs leading-relaxed text-stone-600 dark:text-stone-400">{children}</p>;
+  return <div className={hintSlotClass}>{children}</div>;
+}
+
+/** Label + hint slot + control — use in side-by-side grids so inputs line up. */
+export function StudioField({
+  label,
+  hint,
+  required,
+  children,
+}: {
+  label: ReactNode;
+  hint?: ReactNode;
+  required?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <label className={studioLabelClass}>
+        {label}
+        {required ? <span className="text-accent"> *</span> : null}
+      </label>
+      <div className={hintSlotClass}>{hint}</div>
+      {children}
+    </div>
+  );
 }
 
 /** Collapsible optional/advanced block to reduce form overwhelm. */
