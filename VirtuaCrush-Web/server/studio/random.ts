@@ -195,8 +195,11 @@ export function randomPackDraft(
   opts: { displayName?: string; mood?: PackMood } = {},
 ): RandomPackDraft {
   const mood = opts.mood && isPackMood(opts.mood) ? opts.mood : pickOne(PACK_MOODS);
-  const graphs = packGraphsForMood(mood);
-  const graph = weightedPick(graphs.length ? graphs : PACK_GRAPH_TEMPLATES);
+  const moodGraphs = packGraphsForMood(mood);
+  // Random adventures should always be multi-beat; skip one-choice fork graphs.
+  const multiBeat = moodGraphs.filter((g) => g.id === 'pack_linear_three_beat');
+  const pool = multiBeat.length ? multiBeat : PACK_GRAPH_TEMPLATES.filter((g) => g.id === 'pack_linear_three_beat');
+  const graph = weightedPick(pool.length ? pool : PACK_GRAPH_TEMPLATES);
   const moodCopy = moodCopyForGraph(graph.id, mood);
   const { companionName, companionRole } = resolveCompanionMeta(characterId, opts.displayName);
   const settingRoll = pickOne(SETTING_PRESETS);

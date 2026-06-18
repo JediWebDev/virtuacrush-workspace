@@ -168,10 +168,10 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           result.activeStoryArc?.title ??
           studioArcTitleRef.current ??
           null;
-        if (arcTitle) {
+        if (arcTitle || result.arcActive) {
           setActiveStoryArc({
             id: result.activeStoryArc?.id ?? 'user:studio',
-            title: arcTitle,
+            title: arcTitle ?? 'Story arc',
           });
           studioArcTitleRef.current = null;
           try { window.history.replaceState({ ...window.history.state, usr: {} }, ''); } catch { /* ignore */ }
@@ -657,6 +657,9 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="sticky top-0 z-10 border-b border-black/[0.06] dark:border-white/[0.06] bg-stone-50/90 dark:bg-surface/90 px-5 py-4 backdrop-blur-xl md:px-8">
               <h3 className="text-lg font-semibold text-stone-900 dark:text-stone-50">Chat History</h3>
+              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                Free-roam chat resets each day — past days are saved here with timestamps.
+              </p>
               <div className="relative mt-3">
                 <Search
                   size={16}
@@ -797,9 +800,13 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             </p>
           )}
           {activeThread === 'freeRoam' && activeStoryArc && (
-            <p className="mx-auto w-fit rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-[11px] font-medium text-accent">
-              Story arc · {activeStoryArc.title}
-            </p>
+            <div className="mx-auto max-w-lg rounded-2xl border border-accent/35 bg-gradient-to-br from-accent/15 via-accent/5 to-transparent px-4 py-3 text-center shadow-sm">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-accent/80">New scene</p>
+              <p className="mt-1 font-serif text-lg font-semibold text-accent">{activeStoryArc.title}</p>
+              <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+                Earlier free-roam chat is saved in history — this arc starts fresh below.
+              </p>
+            </div>
           )}
           {activeThread === 'freeRoam' && !activeStoryArc && displayedMessages.filter((m) => m.id !== "scene-header").length === 1 && (
             <div className="flex flex-col items-center justify-center space-y-6 py-16 text-center md:py-24">

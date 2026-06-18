@@ -43,6 +43,8 @@ export interface SceneAnchor {
   situation: string;
   /** True when companion and player are physically together. */
   coPresent: boolean;
+  /** Player role/constraints — director-only; never shown in user-facing intro prose. */
+  playerSituation?: string;
 }
 
 /** Optional per-act companion behavior for user-authored and future built-in arcs. */

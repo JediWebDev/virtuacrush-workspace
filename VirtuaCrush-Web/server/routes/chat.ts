@@ -14,6 +14,8 @@ import { selectArc, getArc, type SceneAnchor, type StoryArc } from '../inworld/a
 import { getUserStory } from '../db/user_stories';
 import { userStoryToArc } from '../inworld/user_arc';
 import { resolveActiveStoryArc, arcOpeningLine } from '../inworld/active_arc';
+import { resolveFreeRoamWindow, freeRoamWindowClause, type FreeRoamWindow } from '../db/chat_window';
+import { sanitizeRoleplayTranscript } from '../inworld/transcript_sanitize';
 import { ensureUserCharacterLoaded } from '../db/user_characters';
 import { getArcState, setArcActive, clearArc as clearArcState, incrementAbandonmentStrikes, resetAbandonmentStrikes, saveCompletedArc, getCompletedArcIds } from '../db/arc_state';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
@@ -125,6 +127,7 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
 
   try {
     const userId = req.user!.id;
+    const freeRoamWindow = await resolveFreeRoamWindow(userId, characterId);
     const { arc: activeArc } = await resolveActiveStoryArc(userId, characterId);
 
     // Opening scene: use the active story arc when one is running; otherwise free-roam compose.
@@ -149,17 +152,18 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
       console.warn('[chat] scene composition failed:', sceneErr);
     }
 
-    // Check for existing history
+    // Check for existing history in the live window (today, or since arc start).
+    const windowClause = freeRoamWindowClause(freeRoamWindow, 3);
     const { rows } = await pool.query(
       `SELECT 1 FROM chat_messages
-       WHERE user_id = $1 AND character_id = $2 AND pack_session_id IS NULL
+       WHERE user_id = $1 AND character_id = $2 AND pack_session_id IS NULL${windowClause.sql}
        LIMIT 1`,
-      [userId, characterId],
+      [userId, characterId, ...windowClause.params],
     );
 
     if (rows.length > 0) {
-      const history = await loadHistory(userId, characterId);
-      return res.json({ hasHistory: true, history, sceneHeader, activeStoryArc });
+      const history = await loadHistory(userId, characterId, freeRoamWindow);
+      return res.json({ hasHistory: true, history, sceneHeader, activeStoryArc, arcActive: !!activeArc?.sceneAnchor });
     }
 
     // First contact with no history: skip the meet-cute greeting when a Studio arc is active.
@@ -251,7 +255,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   // budgetHistory keeps the newest turns verbatim and snips older ones so the
   // window never blows up the per-message token bill.
   const turns: ChatMessage[] = budgetHistory(
-    await loadRecentTurns(req.user!.id, characterId, RECENT_TURNS_FOR_PROMPT),
+    await loadRecentTurns(req.user!.id, characterId, RECENT_TURNS_FOR_PROMPT, await resolveFreeRoamWindow(req.user!.id, characterId)),
   );
 
   // Retrieve long-term memories relevant to this message, and score hostility,
@@ -645,7 +649,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         ...(arcIntroNarrative ? [{ speaker: 'narrator', text: arcIntroNarrative }] : []),
         ...(dturns.length ? dturns : [{ speaker: displayName, text: 'Mm — say that again? You had me for a second there.' }]),
       ];
-      assistantFull = turnsToTranscript(replyTurns);
+      assistantFull = sanitizeRoleplayTranscript(turnsToTranscript(replyTurns));
 
       // --- Arc evaluation ---
       if (arcResult && activeArc) {
@@ -771,21 +775,27 @@ async function loadRecentTurns(
   userId: string,
   characterId: string,
   limit: number,
+  window = { since: null, todayOnly: true } as FreeRoamWindow,
 ): Promise<ChatMessage[]> {
+  const windowClause = freeRoamWindowClause(window, 4);
   // Query DESC + LIMIT to get the N most-recent turns, then reverse for chronological order.
   const { rows } = await pool.query<{ role: 'user' | 'assistant'; content: string }>(
     `SELECT role, content FROM chat_messages
-     WHERE user_id = $1 AND character_id = $2 AND pack_session_id IS NULL
+     WHERE user_id = $1 AND character_id = $2 AND pack_session_id IS NULL${windowClause.sql}
      ORDER BY created_at DESC, id DESC
      LIMIT $3`,
-    [userId, characterId, limit],
+    [userId, characterId, limit, ...windowClause.params],
   );
   return rows.reverse();
 }
 
 // Full-ish backlog used by /greet to render the conversation when it already exists.
-function loadHistory(userId: string, characterId: string): Promise<ChatMessage[]> {
-  return loadRecentTurns(userId, characterId, 30);
+function loadHistory(
+  userId: string,
+  characterId: string,
+  window: FreeRoamWindow,
+): Promise<ChatMessage[]> {
+  return loadRecentTurns(userId, characterId, 30, window);
 }
 
 async function persistTurn(p: {

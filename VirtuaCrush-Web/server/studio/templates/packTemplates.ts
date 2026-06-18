@@ -65,6 +65,7 @@ export const PACK_GRAPH_TEMPLATES: PackGraphTemplate[] = [
     nodes: {
       start: {
         act: 'beginning',
+        introNarrativeTemplate: `Backstage is supposed to be empty after hours. The door in front of you says otherwise.`,
         npcInstructionTemplate:
           `{{companionName}} whispers what they heard and waits for the player's call — investigate or leave.`,
         choices: [

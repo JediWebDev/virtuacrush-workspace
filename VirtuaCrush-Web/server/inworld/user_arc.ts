@@ -94,10 +94,6 @@ export function userStoryToArc(story: UserStory): StoryArc | null {
   const s = story.spec as unknown as Partial<UserArcSpec>;
   if (!s || typeof s.situation !== 'string') return null;
 
-  const playerLine = s.playerSituation
-    ? `\n\nPLAYER'S CURRENT SITUATION (authoritative — honor this exactly): ${s.playerSituation}`
-    : '';
-
   const phaseInstructions = {
     ...(s.beginningInstruction ? { beginning: s.beginningInstruction } : {}),
     ...(s.middleInstruction ? { middle: s.middleInstruction } : {}),
@@ -110,8 +106,9 @@ export function userStoryToArc(story: UserStory): StoryArc | null {
     isMeetArc: false,
     sceneAnchor: {
       setting: s.setting ?? '',
-      situation: `${s.situation}${playerLine}`,
+      situation: s.situation ?? '',
       coPresent: s.coPresent !== false,
+      ...(s.playerSituation ? { playerSituation: s.playerSituation } : {}),
     },
     introNarrative: s.introNarrative ?? '',
     npcInstruction: s.npcInstruction ?? '',

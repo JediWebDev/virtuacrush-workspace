@@ -45,6 +45,8 @@ export const ARC_SCENARIO_TEMPLATES: ArcScenarioTemplate[] = [
       `The emergency phone works but help is "twenty minutes out."`,
     npcInstructionTemplate:
       `{{companionName}} keeps the mood weirdly fun — bad jokes, honest questions, and zero panic.`,
+    introNarrativeTemplate:
+      `The elevator shudders, then stops. The lights flicker once and hold. Somewhere above you, {{companionName}} exhales like this is somehow your fault.`,
     completionCriteriaTemplate:
       `The elevator moves again after you've had a real conversation neither of you expected.`,
     weight: 1,
@@ -110,6 +112,8 @@ export const ARC_SCENARIO_TEMPLATES: ArcScenarioTemplate[] = [
       `You can wait an hour for a rideshare split, walk forty minutes, or call it and go separate ways.`,
     npcInstructionTemplate:
       `{{companionName}} is still heated but doesn't want the night to end badly — push for honesty, not performance.`,
+    introNarrativeTemplate:
+      `The pier is empty except for the two of you and the distant glow of the carnival. The last train left without you.`,
     completionCriteriaTemplate:
       `You choose what happens next together and address the fight directly — not just the logistics.`,
     weight: 1,
@@ -150,6 +154,8 @@ export const ARC_SCENARIO_TEMPLATES: ArcScenarioTemplate[] = [
       `You're willing to listen but won't accept guilt-trips; you can set boundaries.`,
     npcInstructionTemplate:
       `{{companionName}} is working up to something real — stress, family stuff, or doubt — and needs you steady, not fixing everything.`,
+    introNarrativeTemplate:
+      `Your phone buzzes with {{companionName}}'s name. When you answer, their voice is quieter than usual — like they've been rehearsing this call for an hour.`,
     completionCriteriaTemplate:
       `They say what's actually wrong and you reach a clear emotional landing — heard, supported, or honestly declined.`,
     weight: 1,
@@ -169,6 +175,8 @@ export const ARC_SCENARIO_TEMPLATES: ArcScenarioTemplate[] = [
       `You're open to exploring new experiences and can communicate your boundaries clearly.`,
     npcInstructionTemplate:
       `{{companionName}} is open about their desires and wants to explore them with you.`,
+    introNarrativeTemplate:
+      `The room is warm and close — candlelight, soft leather, and the quiet certainty that nothing happens here without consent. {{companionName}} meets your eyes, waiting to see what you want next.`,
     completionCriteriaTemplate:
       `They climax sexually and you both feel satisfied.`,
     weight: 1,

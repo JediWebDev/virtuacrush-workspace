@@ -73,7 +73,12 @@ export function sceneDirectiveFromAnchor(
   ];
   return {
     setting: anchor.setting,
-    situation: anchor.situation.replace(/^\s*===\s*CURRENT SETTING\s*===\s*/i, '').trim(),
+    situation: (
+      anchor.situation.replace(/^\s*===\s*CURRENT SETTING\s*===\s*/i, '').trim() +
+      (anchor.playerSituation?.trim()
+        ? `\n\nPLAYER'S CURRENT SITUATION (authoritative — honor this exactly): ${anchor.playerSituation.trim()}`
+        : '')
+    ).trim(),
     coPresent: anchor.coPresent,
     presentCharacters,
   };

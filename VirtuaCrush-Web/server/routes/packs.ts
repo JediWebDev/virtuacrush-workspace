@@ -14,6 +14,8 @@ import { requireAuth } from '../middleware/auth';
 import { completePrompt } from '../llm';
 import { getCharacter, NARRATOR_BRIEF } from '../inworld/characters';
 import { turnsToTranscript, parsePackScene } from '../inworld/director';
+import { packOpeningIntro } from '../inworld/pack_intro';
+import { sanitizeRoleplayTranscript } from '../inworld/transcript_sanitize';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
 import { formatPersonaTraitsBlock } from '../sim/traits';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
@@ -227,28 +229,9 @@ function buildPackDirectorPrompt(
 
 // Conservative cleanup for a streamed pack transcript. Preserves "[TAG]" line
 // prefixes and *action* asterisks while removing code fences and any leaked
-// JSON-key artifacts a weaker model might emit. Used for the final persisted
-// text and the `finalText` sent on the done event (so the bubble renders clean
-// even if a stray fragment slipped through mid-stream).
+// JSON-key artifacts a weaker model might emit.
 function sanitizePackTranscript(raw: string): string {
-  const noFences = (raw ?? '').replace(/```[a-z]*|```/gi, '');
-  const lines = noFences
-    .split('\n')
-    .map((line) =>
-      line
-        // leaked per-character keys: serena_actions": [ , serena_lines": "
-        .replace(/"?[A-Za-z0-9_]+_(?:actions|lines)"?\s*:\s*\[?\s*/gi, '')
-        // leaked schema keys: "lines": / "speaker": / "text": / "intent":
-        .replace(/"(?:lines|speaker|text|intent|arcStatus)"\s*:\s*"?/gi, '')
-        .trimEnd(),
-    )
-    // drop lines that are now only JSON punctuation / empty quotes
-    .filter((line) => {
-      const t = line.trim();
-      if (!t) return false;
-      return !/^[{}\[\],"'`]+$/.test(t);
-    });
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return sanitizeRoleplayTranscript(raw);
 }
 
 // ---------------------------------------------------------------------------
@@ -317,7 +300,7 @@ router.post('/:id/start', requireAuth, async (req: Request, res: Response) => {
       packId: id,
       characterId: pack.characterId,
       currentNode: 'start',
-      introNarrative: startNode?.introNarrative ?? null,
+      introNarrative: packOpeningIntro(pack, startNode),
       choices: startNode?.choices ?? null,
     });
   } catch (err) {
@@ -387,7 +370,7 @@ router.get('/session/:sid/greet', requireAuth, async (req: Request, res: Respons
   const startNode = pack.nodes['start'];
   return res.json({
     hasHistory: false,
-    introNarrative: startNode?.introNarrative ?? null,
+    introNarrative: packOpeningIntro(pack, startNode),
     choices: startNode?.choices ?? null,
     currentNode: 'start',
     pack: packToMeta(pack),
@@ -542,8 +525,11 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
   if (nextNode !== currentNode) await updatePackNode(sessionId, nextNode);
 
   // Landing on a terminal beat, an explicit 'end', or a 'completed' arc finishes it.
-  if (pack.nodes[nextNode]?.choices == null) completeNow = true;
-  if (result.arcStatus === 'completed') completeNow = true;
+  // Guard: require at least one full exchange before the director can end a multi-beat graph early.
+  const userTurnCount = history.filter((m) => m.role === 'user').length + 1;
+  const minTurnsBeforeEnd = pack.nodes['middle'] ? 2 : 1;
+  if (pack.nodes[nextNode]?.choices == null && userTurnCount >= minTurnsBeforeEnd) completeNow = true;
+  if (result.arcStatus === 'completed' && userTurnCount >= minTurnsBeforeEnd) completeNow = true;
 
   const transcript = sanitizePackTranscript(turnsToTranscript(result.turns)) || '[NARRATOR] *A quiet beat passes.*';
 
