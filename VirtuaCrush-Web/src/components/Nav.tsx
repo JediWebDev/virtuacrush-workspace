@@ -5,7 +5,7 @@ import { useSession } from "../lib/auth-client";
 import BrandLogo from "./BrandLogo";
 
 const navLinkClass = (active: boolean) =>
-  `text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 ${active ? "text-accent" : "text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
+  `text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 ${active ? "text-accent" : "text-stone-600 hover:text-stone-900 dark:text-white dark:hover:text-brand-aqua"
   }`;
 
 const iconButtonClass =

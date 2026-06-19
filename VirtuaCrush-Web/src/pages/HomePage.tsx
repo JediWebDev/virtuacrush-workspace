@@ -99,7 +99,7 @@ export default function HomePage({ onSelect, userTier }: HomePageProps) {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="mx-auto max-w-xl text-lg leading-relaxed text-stone-600 dark:text-stone-400 lg:mx-0"
+              className="mx-auto max-w-xl text-lg leading-relaxed text-stone-600 dark:text-white lg:mx-0"
             >
               Every AI has their own story, their own circle, their own personalities. The closer you get, the more they reveal.
             </motion.p>
