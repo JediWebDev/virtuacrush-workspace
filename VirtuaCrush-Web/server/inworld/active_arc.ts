@@ -1,8 +1,9 @@
 /** Resolve the currently active story arc for a user/character chat session. */
-import { getArcState } from '../db/arc_state';
+import { getArcState, clearArc as clearArcState, setArcActive } from '../db/arc_state';
 import { getUserStory } from '../db/user_stories';
 import { getArc, type SceneAnchor, type StoryArc } from './arcs';
 import { userStoryToArc } from './user_arc';
+import { hasCompletedMeetArc, meetArcIdFor } from './meet_arc';
 
 export async function resolveActiveStoryArc(
   userId: string,
@@ -29,6 +30,38 @@ export async function resolveActiveStoryArc(
   } catch {
     return { arc: null, arcId, startedAt: state.activeArcStartedAt };
   }
+}
+
+/**
+ * Arc that should drive greet + free-roam chat. Until the meet-cute completes,
+ * clears stale studio/built-in arcs and always returns the meet arc.
+ */
+export async function resolveMeetFirstStoryArc(
+  userId: string,
+  characterId: string,
+  completedArcIds: Set<string>,
+): Promise<{ arc: StoryArc | null; arcId: string | null; startedAt: Date | null }> {
+  if (hasCompletedMeetArc(characterId, completedArcIds)) {
+    return resolveActiveStoryArc(userId, characterId);
+  }
+
+  const meetId = meetArcIdFor(characterId);
+  const meetArc = getArc(meetId);
+  if (!meetArc) {
+    return resolveActiveStoryArc(userId, characterId);
+  }
+
+  const state = await getArcState(userId, characterId);
+  if (state.currentArcId && state.currentArcId !== meetId) {
+    await clearArcState(userId, characterId);
+  }
+  if (state.currentArcId !== meetId) {
+    await setArcActive(userId, characterId, meetId);
+    const refreshed = await getArcState(userId, characterId);
+    return { arc: meetArc, arcId: meetId, startedAt: refreshed.activeArcStartedAt };
+  }
+
+  return { arc: meetArc, arcId: meetId, startedAt: state.activeArcStartedAt };
 }
 
 function capitalizeSentence(s: string): string {

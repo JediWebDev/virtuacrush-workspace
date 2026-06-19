@@ -3,9 +3,8 @@ import { pool } from './pool';
 
 export function isDevResetEnabled(): boolean {
   if (process.env.DISABLE_DEV_RESET === '1') return false;
-  if (process.env.NODE_ENV === 'production') {
-    return process.env.ALLOW_DEV_RESET === '1';
-  }
+  if (process.env.ALLOW_DEV_RESET === '1') return true;
+  if (process.env.NODE_ENV === 'production') return false;
   return true;
 }
 

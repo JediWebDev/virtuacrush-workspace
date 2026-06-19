@@ -13,8 +13,8 @@ import { buildDirectorPrompt, parseDirectorOutput, parseDirectorTurns, companion
 import { selectArc, getArc, type SceneAnchor, type StoryArc } from '../inworld/arcs';
 import { getUserStory } from '../db/user_stories';
 import { userStoryToArc } from '../inworld/user_arc';
-import { resolveActiveStoryArc, arcOpeningLine } from '../inworld/active_arc';
-import { hasCompletedMeetArc, MEET_AFFINITY_REWARD, meetArcReadyToComplete, resolveMeetCompletionBadge } from '../inworld/meet_arc';
+import { resolveMeetFirstStoryArc, arcOpeningLine } from '../inworld/active_arc';
+import { hasCompletedMeetArc, meetArcIdFor, MEET_AFFINITY_REWARD, meetArcReadyToComplete, resolveMeetCompletionBadge } from '../inworld/meet_arc';
 import { resolveFreeRoamWindow, freeRoamWindowClause, type FreeRoamWindow } from '../db/chat_window';
 import { sanitizeRoleplayTranscript } from '../inworld/transcript_sanitize';
 import { ensureUserCharacterLoaded } from '../db/user_characters';
@@ -152,7 +152,7 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
     const freeRoamWindow = await resolveFreeRoamWindow(userId, characterId);
     const completedArcIds = await getCompletedArcIds(userId, characterId);
     const meetArcComplete = hasCompletedMeetArc(characterId, completedArcIds);
-    const { arc: activeArc } = await resolveActiveStoryArc(userId, characterId);
+    const { arc: activeArc } = await resolveMeetFirstStoryArc(userId, characterId, completedArcIds);
 
     // Opening scene: use the active story arc when one is running; otherwise free-roam compose.
     let sceneHeader: string | undefined;
@@ -161,13 +161,14 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
       const character = getCharacter(characterId);
       if (activeArc?.sceneAnchor) {
         sceneHeader = arcOpeningLine(activeArc);
-        if (activeArc.id.startsWith('user:')) {
+        // Studio arc banner only after meet-cute — never overlay a stale Play session.
+        if (meetArcComplete && activeArc.id.startsWith('user:')) {
           const story = await getUserStory(activeArc.id.slice('user:'.length));
           if (story && story.ownerUserId === userId) {
             activeStoryArc = { id: activeArc.id, title: story.title };
           }
         }
-      } else {
+      } else if (meetArcComplete) {
         const situation = await getSituation(userId, characterId);
         const comp = await getOrComposeScene(userId, characterId, character.displayName, situation);
         if (comp) sceneHeader = renderSceneHeader(comp, character.displayName, characterId);
@@ -187,11 +188,18 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
 
     if (rows.length > 0) {
       const history = await loadHistory(userId, characterId, freeRoamWindow);
-      return res.json({ hasHistory: true, history, sceneHeader, activeStoryArc, arcActive: !!activeArc?.sceneAnchor, meetArcComplete });
+      return res.json({
+        hasHistory: true,
+        history,
+        sceneHeader: meetArcComplete ? sceneHeader : undefined,
+        activeStoryArc,
+        arcActive: meetArcComplete && !!activeArc?.sceneAnchor,
+        meetArcComplete,
+      });
     }
 
     // First contact with no history: skip the meet-cute greeting when a Studio arc is active.
-    if (activeArc?.sceneAnchor) {
+    if (meetArcComplete && activeArc?.sceneAnchor) {
       return res.json({ hasHistory: false, sceneHeader, activeStoryArc, arcActive: true, meetArcComplete });
     }
 
@@ -338,18 +346,24 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   // --- Arc selection / continuation ---
   // If one is active, load it (a "user:<id>" ref is a player-authored Studio
   // arc, loaded from the DB; otherwise it's a built-in arc). If none is running,
-  // auto-select a built-in one. A valid user arc is NEVER auto-overridden.
-  const currentArcId = arcStateResult.currentArcId;
+  // auto-select a built-in one. Meet-cute always wins until completed.
+  const meetComplete = hasCompletedMeetArc(characterId, completedArcIds);
+  const priorArcId = arcStateResult.currentArcId;
   let activeArc: StoryArc | null = null;
   let onUserArc = false;
-  if (currentArcId?.startsWith('user:')) {
+
+  if (!meetComplete && getArc(meetArcIdFor(characterId))) {
+    const resolved = await resolveMeetFirstStoryArc(req.user!.id, characterId, completedArcIds);
+    activeArc = resolved.arc;
+    arcJustStarted = priorArcId !== resolved.arcId;
+  } else if (priorArcId?.startsWith('user:')) {
     onUserArc = true;
-    if (!hasCompletedMeetArc(characterId, completedArcIds)) {
+    if (!meetComplete) {
       await clearArcState(req.user!.id, characterId).catch(() => {});
       onUserArc = false;
     } else {
       try {
-        const story = await getUserStory(currentArcId.slice('user:'.length));
+        const story = await getUserStory(priorArcId.slice('user:'.length));
         if (story && story.ownerUserId === req.user!.id) activeArc = userStoryToArc(story);
       } catch (e) { console.warn('[chat] user arc load failed:', e); }
       if (!activeArc) {
@@ -357,8 +371,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         onUserArc = false;
       }
     }
-  } else if (currentArcId) {
-    activeArc = getArc(currentArcId);
+  } else if (priorArcId) {
+    activeArc = getArc(priorArcId);
   }
   if (!activeArc && !onUserArc) {
     const candidate = selectArc(characterId, completedArcIds, null);
@@ -379,7 +393,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       isMeetArc: !!activeArc.isMeetArc,
     };
     // Studio / user arcs: prepend intro on the first user turn unless Play already seeded it.
-    if (currentArcId?.startsWith('user:') && activeArc.introNarrative?.trim()) {
+    if (priorArcId?.startsWith('user:') && activeArc.introNarrative?.trim()) {
       const startedAt = arcStateResult.activeArcStartedAt ?? new Date(0);
       const { rows: userTurnRows } = await pool.query<{ n: number }>(
         `SELECT count(*)::int AS n FROM chat_messages

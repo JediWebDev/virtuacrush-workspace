@@ -291,6 +291,10 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   }, [character.id, onAffinityChange]);
 
   useEffect(() => {
+    if (import.meta.env.DEV) {
+      setDevResetEnabled(true);
+      return;
+    }
     fetchDevResetEnabled().then(setDevResetEnabled).catch(() => setDevResetEnabled(false));
   }, []);
 
@@ -747,6 +751,18 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           <span className="mb-5 inline-flex items-center rounded-full border border-black/10 dark:border-white/10 bg-black/[0.04] dark:bg-white/[0.04] px-3 py-1 text-[11px] font-semibold text-stone-600 dark:text-stone-300">
             Affinity {affinity}%
           </span>
+
+          {devResetEnabled ? (
+            <button
+              type="button"
+              onClick={() => void handleDevReset()}
+              disabled={devResetting || isLoading}
+              className="mb-5 flex w-full max-w-[220px] items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-500/15 disabled:opacity-50 dark:text-amber-200"
+            >
+              <RotateCcw size={14} className={devResetting ? 'animate-spin' : ''} />
+              {devResetting ? 'Resetting…' : 'Dev: reset character'}
+            </button>
+          ) : null}
           
           <PackList
             characterId={character.id}
@@ -760,18 +776,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           <ActivityLog characterId={character.id} name={character.name} />
         </div>
 
-        <div className="mt-auto border-t border-black/[0.06] dark:border-white/[0.06] pt-6 space-y-3">
-            {devResetEnabled ? (
-              <button
-                type="button"
-                onClick={() => void handleDevReset()}
-                disabled={devResetting || isLoading}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-500/15 disabled:opacity-50 dark:text-amber-200"
-              >
-                <RotateCcw size={14} className={devResetting ? 'animate-spin' : ''} />
-                {devResetting ? 'Resetting…' : 'Dev: reset character'}
-              </button>
-            ) : null}
+        <div className="mt-auto border-t border-black/[0.06] dark:border-white/[0.06] pt-6">
             <p className="text-center text-[11px] leading-relaxed text-stone-900 dark:text-stone-500">
               Private chat · Encrypted in transit
             </p>
@@ -1313,6 +1318,17 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                 <span className="mb-4 inline-flex items-center rounded-full border border-black/10 dark:border-white/10 bg-black/[0.04] dark:bg-white/[0.04] px-3 py-1 text-[11px] font-semibold text-stone-600 dark:text-stone-300">
                   Affinity {affinity}%
                 </span>
+                {devResetEnabled ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleDevReset()}
+                    disabled={devResetting || isLoading}
+                    className="mb-4 flex w-full max-w-[220px] items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-500/15 disabled:opacity-50 dark:text-amber-200"
+                  >
+                    <RotateCcw size={14} className={devResetting ? 'animate-spin' : ''} />
+                    {devResetting ? 'Resetting…' : 'Dev: reset character'}
+                  </button>
+                ) : null}
                       <SecretCard secret={storyState?.secret} name={character.name} />
                 <ActivityLog characterId={character.id} name={character.name} />
               </div>
