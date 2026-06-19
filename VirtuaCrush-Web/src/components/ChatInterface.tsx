@@ -742,7 +742,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             whileHover={{ scale: 1.02 }}
             className="relative mb-5 h-44 w-44 overflow-hidden rounded-[2rem] border border-black/10 dark:border-white/10 bg-stone-200 dark:bg-stone-800/40 p-1 shadow-xl shadow-black/20"
           >
-            <img src={character.image} alt="" className="h-full w-full rounded-[1.75rem] object-cover" />
+            <img src={character.image} alt="" className="h-full w-full rounded-[1.75rem] object-cover object-top" />
             <div className="absolute bottom-3 right-3 h-3.5 w-3.5 rounded-full border-2 border-stone-50 bg-emerald-400 dark:border-surface shadow-[0_0_0_2px_rgba(16,185,129,0.35)]" />
           </motion.div>
           
@@ -796,7 +796,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                   <ArrowLeft size={20} />
                 </button>
                 <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 ring-accent/25">
-                    <img src={character.image} alt="" className="h-full w-full object-cover" />
+                    <img src={character.image} alt="" className="h-full w-full object-cover object-top" />
                 </div>
                 <div className="min-w-0">
                     <h3 className="truncate font-semibold text-stone-900 dark:text-stone-50">{character.name}</h3>
@@ -1311,7 +1311,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               </div>
               <div className="flex flex-col items-center p-6 text-center">
                 <div className="relative mb-4 h-32 w-32 overflow-hidden rounded-[1.5rem] border border-black/10 dark:border-white/10 bg-stone-200 dark:bg-stone-800/40 shadow-xl">
-                  <img src={character.image} alt="" className="h-full w-full object-cover" />
+                  <img src={character.image} alt="" className="h-full w-full object-cover object-top" />
                 </div>
                 <h2 className="mb-1 font-serif text-xl font-bold text-stone-900 dark:text-stone-50">{character.name}</h2>
                 <p className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-accent">{character.role}</p>

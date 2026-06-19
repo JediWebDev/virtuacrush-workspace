@@ -31,7 +31,7 @@ export default function CompanionCard({ character, onSelect, userTier }: Props) 
           <img
             src={character.image}
             alt={character.name}
-            className={`h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03] ${
+            className={`h-full w-full object-cover object-top transition-transform duration-700 ease-out group-hover:scale-[1.03] ${
               isLocked ? "opacity-75 grayscale-[0.35]" : ""
             }`}
           />

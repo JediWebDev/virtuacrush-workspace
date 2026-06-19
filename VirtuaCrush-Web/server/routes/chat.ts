@@ -129,6 +129,42 @@ function formatAnchorBlock(
 
 const router = Router();
 
+function meetIntroLine(arc: StoryArc | undefined): string | undefined {
+  if (!arc) return undefined;
+  const opening = arcOpeningLine(arc);
+  return opening?.trim() ? `[NARRATOR] ${opening.trim()}` : undefined;
+}
+
+function historyIncludesMeetIntro(history: ChatMessage[], introLine: string): boolean {
+  return history.some((m) => m.role === 'assistant' && m.content === introLine);
+}
+
+/** Persist meet-cute opening narration before the first greeting when missing. */
+async function ensureMeetIntroPersisted(
+  userId: string,
+  characterId: string,
+  introLine: string,
+  history: ChatMessage[],
+): Promise<ChatMessage[]> {
+  if (historyIncludesMeetIntro(history, introLine)) return history;
+
+  await pool.query(
+    `INSERT INTO chat_messages (user_id, character_id, role, content, created_at)
+     VALUES (
+       $1, $2, 'assistant', $3,
+       COALESCE(
+         (SELECT MIN(created_at) - INTERVAL '1 millisecond'
+          FROM chat_messages
+          WHERE user_id = $1 AND character_id = $2 AND pack_session_id IS NULL),
+         NOW()
+       )
+     )`,
+    [userId, characterId, introLine],
+  );
+
+  return [{ role: 'assistant', content: introLine }, ...history];
+}
+
 interface ChatRequestBody {
   characterId: CharacterId;
   message: string;
@@ -187,7 +223,13 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
     );
 
     if (rows.length > 0) {
-      const history = await loadHistory(userId, characterId, freeRoamWindow);
+      let history = await loadHistory(userId, characterId, freeRoamWindow);
+      if (!meetArcComplete) {
+        const introLine = meetIntroLine(activeArc);
+        if (introLine) {
+          history = await ensureMeetIntroPersisted(userId, characterId, introLine, history);
+        }
+      }
       return res.json({
         hasHistory: true,
         history,
@@ -205,6 +247,15 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
 
     const character = getCharacter(characterId);
     const greetingText = character.greeting;
+    const introLine = meetIntroLine(activeArc);
+
+    if (introLine) {
+      await pool.query(
+        `INSERT INTO chat_messages (user_id, character_id, role, content)
+         VALUES ($1, $2, 'assistant', $3)`,
+        [userId, characterId, introLine],
+      );
+    }
 
     await pool.query(
       `INSERT INTO chat_messages (user_id, character_id, role, content)

@@ -36,7 +36,7 @@ export default function DesireEventCard({ characterName, characterImage, event, 
     >
       <div className="mb-3 flex items-center gap-3">
         {characterImage ? (
-          <img src={characterImage} alt="" className="h-10 w-10 rounded-full object-cover ring-2 ring-accent/30" />
+          <img src={characterImage} alt="" className="h-10 w-10 rounded-full object-cover object-top ring-2 ring-accent/30" />
         ) : null}
         <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-accent">
           <Heart size={13} /> A moment with {characterName}
