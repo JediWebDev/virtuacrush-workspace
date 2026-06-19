@@ -1,0 +1,56 @@
+/**
+ * Unified runtime context for a single chat turn — schemas, NPCs, arcs, and
+ * scene composition in one place for the chaos engine and director.
+ */
+import type { StoryArc } from '../inworld/arcs';
+import type { NarrativeTag } from '../inworld/arcs';
+import type { ResolvedSceneNpc } from '../inworld/npc_schema';
+import type { SceneComposition } from './scene_composer';
+import type { WorldState } from './world';
+
+export type SceneMode = 'freeRoam' | 'arc' | 'pack';
+
+export interface SceneContext {
+  mode: SceneMode;
+  world: WorldState;
+  composition: SceneComposition | null;
+  resolvedNpcs: ResolvedSceneNpc[];
+  activeArc: StoryArc | null;
+  arcTags: NarrativeTag[];
+  turn: number;
+  companionId: string;
+  companionName: string;
+  /** True when ambient phone/texture disruptions should be suppressed. */
+  suppressAmbientDisruptions: boolean;
+  coPresent: boolean;
+}
+
+export interface BuildSceneContextInput {
+  world: WorldState;
+  composition: SceneComposition | null;
+  resolvedNpcs: ResolvedSceneNpc[];
+  activeArc: StoryArc | null;
+  turn: number;
+  companionId: string;
+  companionName: string;
+  atVenue: boolean;
+  mode?: SceneMode;
+}
+
+export function buildSceneContext(input: BuildSceneContextInput): SceneContext {
+  const coPresent = Boolean(input.activeArc?.sceneAnchor?.coPresent) || input.atVenue;
+  const arcTags = input.activeArc?.arcTags ?? [];
+  return {
+    mode: input.mode ?? (input.activeArc ? 'arc' : 'freeRoam'),
+    world: input.world,
+    composition: input.composition,
+    resolvedNpcs: input.resolvedNpcs,
+    activeArc: input.activeArc,
+    arcTags,
+    turn: input.turn,
+    companionId: input.companionId,
+    companionName: input.companionName,
+    suppressAmbientDisruptions: coPresent || input.atVenue,
+    coPresent,
+  };
+}

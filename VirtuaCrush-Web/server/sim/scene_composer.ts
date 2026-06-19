@@ -59,6 +59,8 @@ export interface SceneComposition {
   disruptions?: PlannedDisruption[];
   /** Ids of disruptions that already fired this scene. */
   firedDisruptions?: string[];
+  /** NPC names (lowercase) that already fired schema-driven chaos this scene. */
+  firedNpcChaos?: string[];
 }
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];

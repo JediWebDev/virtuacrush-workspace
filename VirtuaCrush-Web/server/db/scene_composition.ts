@@ -104,3 +104,21 @@ export async function markDisruptionFired(
     [userId, characterId, id],
   );
 }
+
+/** Records schema-driven NPC chaos so the same disruptor does not fire twice per scene. */
+export async function markNpcChaosFired(
+  userId: string,
+  characterId: string,
+  npcKey: string,
+): Promise<void> {
+  await pool.query(
+    `UPDATE character_state
+       SET scene_composition = jsonb_set(
+         COALESCE(scene_composition, '{}'::jsonb),
+         '{firedNpcChaos}',
+         COALESCE(scene_composition->'firedNpcChaos', '[]'::jsonb) || to_jsonb($3::text)
+       )
+     WHERE user_id = $1 AND character_id = $2`,
+    [userId, characterId, npcKey],
+  );
+}

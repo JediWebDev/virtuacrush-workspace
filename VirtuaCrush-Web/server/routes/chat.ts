@@ -66,15 +66,16 @@ import {
 } from '../sim/emotions';
 import { getSituation, setMood } from '../db/state';
 import { moodShiftForIntent } from '../sim/vitals';
-import { getOrComposeScene, renderSceneHeader, renderSceneFactsBlock, markDisruptionFired } from '../db/scene_composition';
+import { getOrComposeScene, renderSceneHeader, renderSceneFactsBlock, markDisruptionFired, markNpcChaosFired } from '../db/scene_composition';
 import type { SceneCastMember } from '../sim/scene_composer';
 import {
-  nextDueDisruption,
-  renderDisruptionDirective,
-  disruptionResidue,
   rerollUnfiredDisruptions,
   type PlannedDisruption,
 } from '../sim/interruptions';
+import { detectWorldEvent } from '../db/world_util';
+import { buildSceneContext } from '../sim/scene_context';
+import { planChaosTurn } from '../sim/chaos_engine';
+import { npcEntityIdFromName } from '../sim/world_npcs';
 import { formatSituationBlock, formatLocationBlock } from '../db/scene_util';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
 import { assembleWorld } from '../db/sim_world';
@@ -85,7 +86,6 @@ import type { WorldState, NpcEntity } from '../sim/world';
 import { consequencesFor } from '../sim/rules';
 import { planEffects, formatEngineFactsBlock, type EffectPlan } from '../sim/effects';
 import { applyEffects } from '../db/sim_apply';
-import { advanceNpcs } from '../sim/agency';
 import { describeKnownPlayer, observePlayer, describeAppearance } from '../sim/player';
 import { describeLastSeenOutfit, itemsById, wornItems, describeOutfit, describeGrooming } from '../sim/wardrobe';
 import { upsertNpcState } from '../db/npc_state';
@@ -483,6 +483,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let revealSecretNow = false;
   let emotions: EmotionState | undefined;
   let firedDisruption: PlannedDisruption | null = null;
+  let firedNpcChaosKey: string | null = null;
+  let chaosResidues: string[] = [];
   let newPendingEvent: DriveEventCard | undefined;
   let appliedAffinity: number | null = null;
   let effIntent: PlayerIntent | undefined;
@@ -502,39 +504,33 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     let sceneFacts = '';
     let sceneCast: SceneCastMember[] = [];
     let sceneNpcBlock = '';
-    let disruptionDirective = '';
+    let chaosDirective = '';
+    let sceneTurn = 1;
+    let sceneComp = null as Awaited<ReturnType<typeof getOrComposeScene>>;
     try {
-      const comp = await getOrComposeScene(req.user!.id, characterId, displayName, situation);
-      if (comp) {
-        sceneFacts = renderSceneFactsBlock(comp, displayName, characterId, {
+      sceneComp = await getOrComposeScene(req.user!.id, characterId, displayName, situation);
+      if (sceneComp) {
+        sceneFacts = renderSceneFactsBlock(sceneComp, displayName, characterId, {
           suppressFirstMeeting: !!activeArc?.sceneAnchor || !!situation.scene.location,
         });
-        sceneCast = comp.cast;
+        sceneCast = sceneComp.cast;
 
-        // Mid-scene interruptions: fire the next pre-rolled disruption when
-        // its turn arrives. Turn index = user messages since this scene was
-        // composed, plus the message being answered right now.
         const { rows: turnRows } = await pool.query<{ n: number }>(
           `SELECT count(*)::int AS n FROM chat_messages
            WHERE user_id = $1 AND character_id = $2 AND role = 'user' AND created_at > $3::timestamptz`,
-          [req.user!.id, characterId, comp.composedAt],
+          [req.user!.id, characterId, sceneComp.composedAt],
         );
-        const turn = Number(turnRows[0]?.n ?? 0) + 1;
-        const due = nextDueDisruption(comp, turn);
-        if (due && !activeArc?.sceneAnchor?.coPresent && !situation.scene.location) {
-          disruptionDirective = renderDisruptionDirective(due, displayName, characterId);
-          firedDisruption = due;
-        }
+        sceneTurn = Number(turnRows[0]?.n ?? 0) + 1;
 
         // When a new arc just activated, re-bias the remaining unfired
         // disruption slots toward thematically resonant events.
-        if (arcJustStarted && activeArc && (comp.disruptions ?? []).length > 0) {
-          const firedIds = new Set(comp.firedDisruptions ?? []);
+        if (arcJustStarted && activeArc && (sceneComp.disruptions ?? []).length > 0) {
+          const firedIds = new Set(sceneComp.firedDisruptions ?? []);
           const rerolled = rerollUnfiredDisruptions(
-            comp.disruptions ?? [],
+            sceneComp.disruptions ?? [],
             firedIds,
             activeArc.arcTags,
-            { phase: 'home', hasFriend: (comp.cast ?? []).length > 0 },
+            { phase: 'home', hasFriend: (sceneComp.cast ?? []).length > 0 },
           );
           void pool.query(
             `UPDATE character_state
@@ -546,6 +542,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
              WHERE user_id = $1 AND character_id = $2`,
             [req.user!.id, characterId, JSON.stringify(rerolled)],
           ).catch((e) => console.warn('[chat] arc disruption re-roll persist failed:', e));
+          sceneComp = { ...sceneComp, disruptions: rerolled };
         }
       }
     } catch (sceneErr) {
@@ -575,14 +572,40 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       });
     }
 
-    // NPC agency: autonomous, goal-driven actions this tick (not scripted).
-    let agencyHint = '';
-    for (const act of advanceNpcs(world, { next: () => Math.random() })) {
-      if (act.npc === characterId) {
-        agencyHint += `\n\nINNER DRIVE: ${displayName} feels inclined to ${act.action.replace(/_/g, ' ')} (${act.reason}) — let it color the reply, in character.`;
+    // Chaos engine: ambient disruptions + NPC agency + schema-weighted chaos.
+    const sceneCtx = buildSceneContext({
+      world,
+      composition: sceneComp,
+      resolvedNpcs: resolvedSceneNpcs,
+      activeArc: activeArc ?? null,
+      turn: sceneTurn,
+      companionId: characterId,
+      companionName: displayName,
+      atVenue: Boolean(situation.scene.location),
+    });
+    const chaos = planChaosTurn(sceneCtx, { worldEvent: detectWorldEvent(message) });
+    chaosDirective = chaos.directiveBlock;
+    firedDisruption = chaos.firedDisruption;
+    firedNpcChaosKey = chaos.firedNpcChaosKey;
+    chaosResidues = chaos.residues;
+    for (const act of chaos.agencyActions) {
+      if (act.npc === characterId) continue;
+      const resolved = resolvedSceneNpcs.find((n) => npcEntityIdFromName(n.name) === act.npc);
+      if (resolved) {
+        npcs.push({
+          tag: resolved.speakerTag,
+          name: resolved.name,
+          kind: 'npc',
+          brief: `${act.action.replace(/_/g, ' ')} — ${act.reason}`,
+        });
       } else {
         const other = world.npcs[act.npc];
-        npcs.push({ tag: (other?.name ?? act.npc).toUpperCase(), name: other?.name ?? act.npc, kind: 'npc', brief: `${act.action.replace(/_/g, ' ')} — ${act.reason}` });
+        npcs.push({
+          tag: (other?.name ?? act.npc).toUpperCase(),
+          name: other?.name ?? act.npc,
+          kind: 'npc',
+          brief: `${act.action.replace(/_/g, ' ')} — ${act.reason}`,
+        });
       }
     }
 
@@ -655,14 +678,13 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           : formatSituationBlock(situation.state, scene, displayName, affinity)) +
       sceneFacts +
       sceneNpcBlock +
-      disruptionDirective +
+      chaosDirective +
       formatCharacterFactsBlock(getLore(characterId)) +
       formatPersonaTraitsBlock(getLore(characterId), { discovered: secretDiscovered, revealNow: revealSecretNow }) +
       ROLEPLAY_INPUT_DIRECTIVE +
       directorDisciplineDirective(displayName) +
       playerKnown +
       lookNote +
-      agencyHint +
       emotionTone +
       (driveReaction ? `\n\n${driveReaction}` : '') +
       engineFacts +
@@ -909,12 +931,15 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         void upsertNpcState(req.user!.id, characterId, { knowledge: knowledgePatch }).catch((e) => console.warn('[chat] perception update failed:', e));
       }
 
-      // Disruption bookkeeping: mark it fired and persist any residue so the
-      // world remembers the beat (the mystery text exists now).
+      // Disruption / chaos bookkeeping: mark fired events and persist residue beats.
       if (firedDisruption) {
         void markDisruptionFired(req.user!.id, characterId, firedDisruption.id).catch(() => {});
-        const residue = disruptionResidue(firedDisruption, displayName, characterId);
-        if (residue) recordStoryBeat(req.user!.id, characterId, { summary: residue, source: 'disruption' });
+      }
+      if (firedNpcChaosKey) {
+        void markNpcChaosFired(req.user!.id, characterId, firedNpcChaosKey).catch(() => {});
+      }
+      for (const residue of chaosResidues) {
+        recordStoryBeat(req.user!.id, characterId, { summary: residue, source: 'disruption' });
       }
     }
 
