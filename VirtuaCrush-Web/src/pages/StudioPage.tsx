@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { Wand2, Play, Trash2, Loader2, BookPlus, UserPlus, MessageCircle, ImagePlus, Sparkles, Upload, Dices, Pencil, X } from "lucide-react";
+import { Wand2, Play, Trash2, Loader2, BookPlus, UserPlus, MessageCircle, ImagePlus, Dices, Pencil, X } from "lucide-react";
+import { customAvatar } from "../lib/customCharacter";
 import VoiceTagPicker from "../components/VoiceTagPicker";
 import StudioNpcEditor from "../components/StudioNpcEditor";
 import { studioNpcInputsFromDrafts, type StudioNpcDraft } from "../lib/studioNpc";
@@ -9,6 +10,7 @@ import { arcFormFromStory } from "../lib/studioLoad";
 import { CHARACTERS } from "../types/character";
 import AdventureBuilder from "../components/AdventureBuilder";
 import PublishControl from "../components/PublishControl";
+import AvatarImageStudio from "../components/AvatarImageStudio";
 import { StudioGuide, StudioField, StudioFieldHint, StudioOptionalSection } from "../components/StudioGuide";
 import {
   studioLabelClass,
@@ -277,7 +279,7 @@ export default function StudioPage() {
 
   // Avatar images (upload / generate / remove)
   const [imgBusyId, setImgBusyId] = useState<string | null>(null);
-  const [imgError, setImgError] = useState<string | null>(null);
+  const [imgError, setImgError] = useState<{ id: string; message: string } | null>(null);
   const [imgPrompt, setImgPrompt] = useState<Record<string, string>>({});
   const handleUploadImage = async (c: StudioCharacter, file: File) => {
     setImgError(null); setImgBusyId(c.id);
@@ -286,7 +288,7 @@ export default function StudioPage() {
       await uploadStudioCharacterImage(c.id, dataUrl);
       refreshChars();
     } catch {
-      setImgError("Couldn't upload that image. Use a PNG/JPG/WEBP under 6MB.");
+      setImgError({ id: c.id, message: "Couldn't upload that image. Use a PNG/JPG/WEBP under 6MB." });
     } finally { setImgBusyId(null); }
   };
   const handleGenerateImage = async (c: StudioCharacter) => {
@@ -295,10 +297,10 @@ export default function StudioPage() {
       await generateStudioCharacterImage(c.id, { appearance: (imgPrompt[c.id] || "").trim() || undefined });
       refreshChars();
     } catch (e) {
-      if (e instanceof ApiError && e.status === 403) setImgError("AI avatar generation is a Pro feature.");
-      else if (e instanceof ApiError && e.body?.error === "storage_failed") setImgError("Image storage rejected the upload — the R2 API token likely needs Object Read & Write permission.");
-      else if (e instanceof ApiError && e.body?.detail) setImgError(String(e.body.detail).slice(0, 220));
-      else setImgError("Couldn't generate an image. Please try again.");
+      if (e instanceof ApiError && e.status === 403) setImgError({ id: c.id, message: "AI avatar generation is a Pro feature." });
+      else if (e instanceof ApiError && e.body?.error === "storage_failed") setImgError({ id: c.id, message: "Image storage rejected the upload — the R2 API token likely needs Object Read & Write permission." });
+      else if (e instanceof ApiError && e.body?.detail) setImgError({ id: c.id, message: String(e.body.detail).slice(0, 220) });
+      else setImgError({ id: c.id, message: "Couldn't generate an image. Please try again." });
     } finally { setImgBusyId(null); }
   };
   const handleRemoveImage = async (c: StudioCharacter) => {
@@ -658,7 +660,7 @@ export default function StudioPage() {
           <li><span className="font-medium text-stone-800 dark:text-stone-100">Chat</span> freely, or pick them as the star in Stories or Adventures.</li>
         </ol>
       </StudioGuide>
-      <div className={`grid gap-8 lg:grid-cols-[1fr_360px] ${studioFormWrapperClass}`}>
+      <div className={`grid gap-8 lg:grid-cols-[1fr_min(520px,42%)] ${studioFormWrapperClass}`}>
         {/* Character builder */}
         <div className="card-gradient rounded-3xl p-6">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -721,7 +723,7 @@ export default function StudioPage() {
             {charSaving ? "Saving…" : "Save companion"}
           </button>
           <p className="mt-3 flex items-center gap-1.5 text-xs text-stone-500">
-            <ImagePlus size={13} className="text-accent" /> After saving, upload or AI-generate an avatar from the companion's card on the right.
+            <ImagePlus size={13} className="text-accent" /> After saving, set an avatar on your companion&apos;s card — upload a photo or describe one for AI to generate (<span className="text-stone-400">AI is Pro</span>).
           </p>
         </div>
 
@@ -743,57 +745,26 @@ export default function StudioPage() {
                   animate={{ opacity: 1, y: 0 }}
                   className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] p-4"
                 >
-                  <div className="flex items-start gap-3">
-                    {c.imageKey ? (
-                      <img src={assetUrl(c.imageKey)} alt={c.displayName} className="h-14 w-14 shrink-0 rounded-xl object-cover" />
-                    ) : (
-                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-brand-sapphire text-xl font-bold text-white">
-                        {(c.displayName.trim()[0] || "?").toUpperCase()}
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-stone-900 dark:text-stone-50">{c.displayName}</p>
-                      <p className="mt-1 line-clamp-2 text-xs italic text-stone-500">{c.core}</p>
+                  <p className="text-sm font-semibold text-stone-900 dark:text-stone-50">{c.displayName}</p>
+                  <p className="mt-1 line-clamp-3 text-xs italic text-stone-500">{c.core}</p>
 
-                      <textarea
-                        className="mt-2 w-full rounded-lg border border-stone-300/80 bg-white px-2.5 py-1.5 text-xs text-stone-900 outline-none placeholder:text-stone-400 focus:border-accent/50 dark:border-stone-500 dark:bg-stone-100 dark:text-stone-900"
-                        rows={2}
-                        value={imgPrompt[c.id] ?? ""}
-                        onChange={(e) => setImgPrompt((p) => ({ ...p, [c.id]: e.target.value }))}
-                        placeholder="Describe the avatar for AI generation — e.g. weathered sea captain, silver beard, navy coat, warm grin, soft harbor light, painterly"
-                      />
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-black/10 dark:border-white/10 px-2 py-1 text-[11px] font-medium text-stone-600 transition-colors hover:bg-black/[0.05] dark:text-stone-300">
-                          {imgBusyId === c.id ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />} Upload
-                          <input
-                            type="file"
-                            accept="image/png,image/jpeg,image/webp"
-                            className="hidden"
-                            disabled={imgBusyId === c.id}
-                            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUploadImage(c, f); e.target.value = ""; }}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => handleGenerateImage(c)}
-                          disabled={imgBusyId === c.id}
-                          className="inline-flex items-center gap-1 rounded-lg border border-black/10 dark:border-white/10 px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"
-                        >
-                          {imgBusyId === c.id ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />} Generate
-                        </button>
-                        {c.imageKey && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveImage(c)}
-                            disabled={imgBusyId === c.id}
-                            className="inline-flex items-center gap-1 rounded-lg border border-black/10 dark:border-white/10 px-2 py-1 text-[11px] font-medium text-stone-400 transition-colors hover:text-red-500 disabled:opacity-50"
-                          >
-                            <ImagePlus size={11} /> Remove
-                          </button>
-                        )}
-                      </div>
-                      {imgError && imgBusyId === null && <p className="mt-1 text-[11px] text-red-500">{imgError}</p>}
-                    </div>
+                  <div className="mt-4">
+                    <AvatarImageStudio
+                      imageSrc={c.imageKey ? assetUrl(c.imageKey) : customAvatar(c.displayName)}
+                      alt={c.displayName}
+                      prompt={imgPrompt[c.id] ?? ""}
+                      onPromptChange={(value) => setImgPrompt((p) => ({ ...p, [c.id]: value }))}
+                      onUpload={(f) => void handleUploadImage(c, f)}
+                      onGenerate={() => void handleGenerateImage(c)}
+                      onRemove={() => void handleRemoveImage(c)}
+                      busy={imgBusyId === c.id}
+                      error={imgError?.id === c.id ? imgError.message : null}
+                      hasCustomImage={Boolean(c.imageKey)}
+                      promptLabel="Describe this companion's avatar"
+                      promptPlaceholder="Weathered sea captain, silver beard, navy coat, warm grin, soft harbor light, painterly portrait…"
+                      promptHint="Describe their look, outfit, mood, and art style. Leave blank to infer from their personality."
+                      generateLabel="Generate avatar"
+                    />
                   </div>
 
                   <div className="mt-3 flex gap-2">

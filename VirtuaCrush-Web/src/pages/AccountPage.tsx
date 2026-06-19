@@ -6,10 +6,9 @@ import {
   Receipt,
   Bell,
   LogOut,
-  Upload,
-  Sparkles,
   Loader2,
 } from "lucide-react";
+import AvatarImageStudio from "../components/AvatarImageStudio";
 import { useSession, signOut } from "../lib/auth-client";
 import {
   ApiError,
@@ -162,16 +161,26 @@ export default function AccountPage() {
     }
   };
 
+  const handleRemoveAvatar = async () => {
+    setAvatarError(null);
+    setAvatarBusy(true);
+    try {
+      await profileApi.deleteProfileAvatar();
+      setAvatarKey(null);
+    } catch {
+      setAvatarError("Couldn't remove that photo. Please try again.");
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
   const avatarSrc = avatarKey ? assetUrl(avatarKey) : customAvatar(displayName || session?.user?.email || "?");
   const renewalLabel = formatRenewalDate(subscription?.currentPeriodEnd ?? null);
 
   return (
     <main className="relative px-6 pb-24 pt-4 md:px-12">
       <div className="mx-auto max-w-3xl">
-        <div className="mb-10 flex flex-wrap items-start gap-5">
-          <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border border-black/10 dark:border-white/10 shadow-lg">
-            <img src={avatarSrc} alt="" className="h-full w-full object-cover object-top" />
-          </div>
+        <div className="mb-10 flex flex-wrap items-start justify-between gap-5">
           <div className="min-w-0 flex-1">
             <h1 className="font-serif text-3xl font-bold text-stone-900 dark:text-stone-50 md:text-4xl">Account</h1>
             <p className="mt-1 text-stone-600 dark:text-white">
@@ -179,37 +188,6 @@ export default function AccountPage() {
                 ? `Signed in as ${session.user.email}`
                 : "Manage your profile, notifications, and billing."}
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-black/10 px-3 py-2 text-xs font-semibold text-stone-700 transition-colors hover:border-brand-aqua/40 hover:text-brand-aqua dark:border-white/10 dark:text-white dark:hover:text-brand-aqua">
-                {avatarBusy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                Upload photo
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  className="hidden"
-                  disabled={avatarBusy}
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) void handleUploadAvatar(f);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => void handleGenerateAvatar()}
-                disabled={avatarBusy || !isPro}
-                title={isPro ? "Generate with AI" : "Pro subscribers only"}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-2 text-xs font-semibold text-accent transition-colors hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10"
-              >
-                {avatarBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                AI generate{isPro ? "" : " (Pro)"}
-              </button>
-            </div>
-            {!isPro ? (
-              <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">Upgrade to Pro to generate a profile photo with AI.</p>
-            ) : null}
-            {avatarError ? <p className="mt-2 text-xs text-red-500">{avatarError}</p> : null}
           </div>
           <button
             type="button"
@@ -221,6 +199,29 @@ export default function AccountPage() {
         </div>
 
         <div className="space-y-6">
+          <SectionCard
+            title="Profile photo"
+            icon={User}
+            description="Upload your own picture or describe how you'd like AI to portray you."
+          >
+            <AvatarImageStudio
+              imageSrc={avatarSrc}
+              alt={displayName || "Your profile photo"}
+              prompt={avatarPrompt}
+              onPromptChange={setAvatarPrompt}
+              onUpload={(f) => void handleUploadAvatar(f)}
+              onGenerate={() => void handleGenerateAvatar()}
+              onRemove={() => void handleRemoveAvatar()}
+              busy={avatarBusy}
+              error={avatarError}
+              isPro={isPro}
+              hasCustomImage={Boolean(avatarKey)}
+              promptLabel="Describe your profile photo"
+              promptPlaceholder="Confident smile, warm golden-hour light, casual denim jacket, painterly portrait, friendly eyes…"
+              promptHint="Describe your look, mood, clothing, and art style. Leave blank to fall back on your saved profile details."
+            />
+          </SectionCard>
+
           <SectionCard
             title="Notifications"
             icon={Bell}
