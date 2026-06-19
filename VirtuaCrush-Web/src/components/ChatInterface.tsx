@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
-import { fetchGreeting, fetchCharacterState, fetchAffinity, fetchDevResetEnabled, devResetCharacter, respondToDesire, fetchChatHistory, fetchChatHistoryDay, type CharacterState, type ChatHistoryDay } from "../lib/api";
+import { fetchGreeting, fetchCharacterState, fetchAffinity, fetchDevResetEnabled, devResetCharacter, respondToDesire, fetchChatHistory, fetchChatHistoryDay, assetUrl, type CharacterState, type ChatHistoryDay } from "../lib/api";
 import { splitNarration } from "../lib/narration";
 import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw } from "lucide-react";
+import { Send, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw } from "lucide-react";
+import ChatAvatar from "./ChatAvatar";
 import { Character } from "../types/character";
 import type { UserTier } from "../types/subscription";
+import { fetchProfile } from "../lib/profile";
+import { customAvatar, isCustomCharacterId } from "../lib/customCharacter";
 import SocialFeed from "./SocialFeed";
 import UpgradeToast from "./UpgradeToast";
 import SecretCard from "./SecretCard";
@@ -18,7 +21,6 @@ import ChoiceButtons from "./ChoiceButtons";
 import { getActivePackSession, greetPackSession, abandonPackSession, fetchPackStories, fetchPackTranscript, type PackSession, type PackChoice, type PackStory } from "../lib/api";
 import NoticeToast from "./NoticeToast";
 import AchievementToast, { type AchievementToastData } from "./AchievementToast";
-import { isCustomCharacterId } from "../lib/customCharacter";
 
 function formatHistoryDate(day: string): string {
   // day is YYYY-MM-DD; anchor at noon to avoid timezone date shifts.
@@ -35,6 +37,7 @@ interface Props {
 
 export default function ChatInterface({ character, onBack, onAffinityChange, userTier }: Props) {
   const [affinity, setAffinity] = useState(character.currentAffinity);
+  const [userAvatarSrc, setUserAvatarSrc] = useState(() => customAvatar("You"));
   const [quotaToast, setQuotaToast] = useState(false);
   const [quotaLimit, setQuotaLimit] = useState<number | null>(null);
   const { messages, setMessages, send: sendMessage, streaming: isLoading, replyChoices, clearReplyChoices } = useChat({
@@ -115,6 +118,15 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [devResetEnabled, setDevResetEnabled] = useState(false);
   const [devResetting, setDevResetting] = useState(false);
   const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    fetchProfile()
+      .then((p) => {
+        const name = p.profile.displayName?.trim() || "You";
+        setUserAvatarSrc(p.avatarKey ? assetUrl(p.avatarKey) : customAvatar(name));
+      })
+      .catch(() => { /* non-fatal — keep fallback avatar */ });
+  }, []);
 
   // Restore an in-progress story when the chat is (re)opened so the Story tab
   // survives navigating away and coming back. Only ACTIVE sessions are
@@ -1046,9 +1058,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                   className="flex w-full justify-end"
                 >
                   <div className="flex max-w-[88%] flex-row-reverse gap-2.5 md:max-w-[72%]">
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-brand-sapphire text-xs font-semibold text-white shadow-md shadow-accent/25">
-                      <User size={16} />
-                    </div>
+                    <ChatAvatar src={userAvatarSrc} alt="You" variant="user" />
                     <div className="flex min-w-0 flex-col items-end space-y-1">
                       <div className="max-w-full rounded-2xl rounded-tr-sm bg-gradient-to-br from-accent to-brand-indigo px-4 py-3 text-[15px] leading-relaxed text-white shadow-sm">
                         {splitNarration(msg.content).map((seg, i) => (
@@ -1099,16 +1109,11 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                   className="flex w-full justify-start"
                 >
                   <div className="flex max-w-[88%] flex-row gap-2.5 md:max-w-[72%]">
-                    <div
-                      className={
-                        "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold " +
-                        (isNpc
-                          ? "border border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300"
-                          : "border border-black/10 bg-stone-100 text-stone-700 dark:border-white/10 dark:bg-stone-800 dark:text-stone-200")
-                      }
-                    >
-                      <span className="text-[11px]">{(isNpc ? bub.name : character.name).charAt(0)}</span>
-                    </div>
+                    {isNpc ? (
+                      <ChatAvatar alt={bub.name} variant="npc" fallbackInitial={bub.name} />
+                    ) : (
+                      <ChatAvatar src={character.image} alt={character.name} variant="companion" />
+                    )}
                     <div className="flex min-w-0 flex-col items-start space-y-1">
                       {isNpc && (
                         <span className="pl-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-400">
@@ -1145,8 +1150,9 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             <motion.div
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex justify-start pl-1"
+                className="flex justify-start gap-2.5 pl-1"
             >
+               <ChatAvatar src={character.image} alt={character.name} variant="companion" />
                <div className="inline-flex items-center gap-2 rounded-2xl rounded-tl-sm border border-brand-sapphire/25 bg-gradient-to-br from-brand-indigo to-brand-sapphire px-4 py-3 shadow-sm backdrop-blur-sm">
                     <span className="flex gap-1" aria-hidden>
                         <span className="h-2 w-2 animate-bounce rounded-full bg-white/80 [animation-duration:0.55s]" />
