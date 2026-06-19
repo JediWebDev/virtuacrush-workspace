@@ -26,8 +26,21 @@ import {
   retrieveRelevantMemories,
   formatMemoryBlock,
   extractAndStoreFacts,
-  storeSignificantEvent,
 } from '../db/memory';
+import {
+  getCharacterStoryBeats,
+  formatCharacterStoryBlock,
+  recordStoryBeat,
+} from '../db/story_memory';
+import {
+  readSceneSnapshot,
+  writeSceneSnapshot,
+  buildInitialSceneSnapshot,
+  buildFreeRoamSceneSnapshot,
+  formatSceneSnapshotBlock,
+  applySceneContinuityUpdate,
+  type SceneSnapshot,
+} from '../inworld/scene_snapshot';
 import { getCharacter, type CharacterId } from '../inworld/characters';
 import { getLocation } from '../inworld/locations';
 import {
@@ -294,6 +307,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     userId: req.user!.id,
     queryText: message,
   });
+  const storyBeatsPromise = getCharacterStoryBeats(req.user!.id, characterId);
   // Current situation = daily story state + dating scene (on a date or at home).
   // Lazily generated if it's a new day; never throws.
   const situationPromise = getSituation(req.user!.id, characterId);
@@ -302,9 +316,10 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   const completedArcIdsPromise = getCompletedArcIds(req.user!.id, characterId);
 
   // Gate the prompt on these before streaming.
-  const [situation, memories, affinity, arcStateResult, completedArcIds] = await Promise.all([
+  const [situation, memories, storyBeats, affinity, arcStateResult, completedArcIds] = await Promise.all([
     situationPromise,
     memoriesPromise,
+    storyBeatsPromise,
     affinityPromise,
     arcStatePromise,
     completedArcIdsPromise,
@@ -384,6 +399,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
   let directorPrompt: string | undefined;
   let priorSceneStateForValidation = '';
+  let priorSceneSnapshot: SceneSnapshot | null = null;
+  let sceneSnapshotSeed: SceneSnapshot | null = null;
   let sceneValidationInput: SceneDirectiveInput | null = null;
   let world: WorldState | undefined;
   let companionEntity: NpcEntity | undefined;
@@ -399,6 +416,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     // engine consequences are known (warnings, responders stay causal).
     world = await assembleWorld(req.user!.id, characterId);
     companionEntity = world.npcs[characterId];
+    priorSceneSnapshot = readSceneSnapshot(companionEntity?.knowledge as unknown as Record<string, unknown> | undefined);
     const authority = 'the authorities';
 
     const npcs: Actor[] = [];
@@ -571,7 +589,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       emotionTone +
       (driveReaction ? `\n\n${driveReaction}` : '') +
       engineFacts +
-      formatMemoryBlock(memories);
+      formatMemoryBlock(memories) +
+      formatCharacterStoryBlock(displayName, storyBeats);
 
     if (activeArc?.sceneAnchor) {
       sceneValidationInput = sceneDirectiveFromAnchor(
@@ -580,13 +599,28 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         sceneCast.map((m) => ({ name: m.name, description: `${m.role} — ${m.vibe}` })),
       );
     }
-    priorSceneStateForValidation = (() => {
-      let prior = (companionEntity?.knowledge.sceneState as string | undefined) ?? '';
-      if ((arcJustStarted || arcSceneInit) && activeArc?.sceneAnchor && !prior.trim()) {
-        prior = buildInitialSceneState(sceneValidationInput!);
-      }
-      return prior;
-    })();
+
+    if (sceneValidationInput && (arcJustStarted || arcSceneInit) && !priorSceneSnapshot) {
+      sceneSnapshotSeed = buildInitialSceneSnapshot(sceneValidationInput);
+      priorSceneSnapshot = sceneSnapshotSeed;
+    } else if (!priorSceneSnapshot && !activeArc?.sceneAnchor) {
+      priorSceneSnapshot = buildFreeRoamSceneSnapshot({
+        companionName: displayName,
+        location: situation.scene.location ?? null,
+        coPresent: !!situation.scene.location,
+        extraPresent: sceneCast.map((m) => m.name),
+      });
+    }
+
+    priorSceneStateForValidation = priorSceneSnapshot
+      ? formatSceneSnapshotBlock(priorSceneSnapshot).trim()
+      : (() => {
+          let prior = (companionEntity?.knowledge.sceneState as string | undefined) ?? '';
+          if ((arcJustStarted || arcSceneInit) && activeArc?.sceneAnchor && !prior.trim() && sceneValidationInput) {
+            prior = buildInitialSceneState(sceneValidationInput);
+          }
+          return prior;
+        })();
 
     directorPrompt = buildDirectorPrompt({
       companionSystem: getCharacter(characterId).systemPrompt,
@@ -637,16 +671,26 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         }
       }
 
+      const narratorTextsForScene = dirOut.turns
+        .filter((t) => t.speaker.toLowerCase() === 'narrator')
+        .map((t) => t.text);
+      let continuity = applySceneContinuityUpdate({
+        priorSnapshot: priorSceneSnapshot,
+        sceneSnapshotPatch: dirOut.sceneSnapshotPatch,
+        sceneStateProse: dirOut.sceneState,
+        narratorTexts: narratorTextsForScene,
+        requiredNames: sceneValidationInput ? requiredCastNames(sceneValidationInput) : [],
+        seedSnapshot: sceneSnapshotSeed,
+      });
+      dirOut.sceneState = continuity.sceneState;
+
       // Scene-state validation for structured stories (active arc with scene anchor).
       if (sceneValidationInput && dirOut.sceneState) {
-        const narratorTexts = dirOut.turns
-          .filter((t) => t.speaker.toLowerCase() === 'narrator')
-          .map((t) => t.text);
         let check = validateSceneStateUpdate({
           priorSceneState: priorSceneStateForValidation,
           nextSceneState: dirOut.sceneState,
           requiredNames: requiredCastNames(sceneValidationInput),
-          narratorTexts,
+          narratorTexts: narratorTextsForScene,
         });
         if (!check.ok) {
           const rawFix = await completePrompt(
@@ -654,13 +698,24 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
             { json: true },
           );
           dirOut = parseDirectorOutput(rawFix, displayName);
+          const fixNarrator = dirOut.turns
+            .filter((t) => t.speaker.toLowerCase() === 'narrator')
+            .map((t) => t.text);
+          const fixContinuity = applySceneContinuityUpdate({
+            priorSnapshot: priorSceneSnapshot,
+            sceneSnapshotPatch: dirOut.sceneSnapshotPatch,
+            sceneStateProse: dirOut.sceneState,
+            narratorTexts: fixNarrator,
+            requiredNames: requiredCastNames(sceneValidationInput),
+            seedSnapshot: sceneSnapshotSeed,
+          });
+          dirOut.sceneState = fixContinuity.sceneState;
+          continuity = fixContinuity;
           check = validateSceneStateUpdate({
             priorSceneState: priorSceneStateForValidation,
             nextSceneState: dirOut.sceneState,
             requiredNames: requiredCastNames(sceneValidationInput),
-            narratorTexts: dirOut.turns
-              .filter((t) => t.speaker.toLowerCase() === 'narrator')
-              .map((t) => t.text),
+            narratorTexts: fixNarrator,
           });
           if (!check.ok && check.droppedCharacters?.length) {
             dirOut.sceneState = repairSceneStateCast(
@@ -675,8 +730,9 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       let dturns = dirOut.turns.some((t) => looksDegenerate(t.text)) ? [] : dirOut.turns;
       const arcResult = arcContext ? dirOut.arc : null;
       replyChoices = dirOut.choices ?? [];
-      // A genuinely durable beat — embed it for cross-session recall.
-      if (dirOut.memorable) void storeSignificantEvent(req.user!.id, characterId, dirOut.memorable);
+      if (dirOut.memorable) {
+        recordStoryBeat(req.user!.id, characterId, { summary: dirOut.memorable, source: 'memorable' });
+      }
 
       const plan = effectPlan!;
       const intent = effIntent!;
@@ -739,13 +795,15 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           emotionsUpdatedAt: new Date().toISOString(),
           pendingDriveEvent: newPendingEvent ?? companionEntity.knowledge.pendingDriveEvent ?? null,
           pendingDriveReaction: null,
-          // Rolling scene state for continuity beyond the recent-history window.
-          // Keep the prior snapshot if the model didn't emit a new one this turn.
-          sceneState: dirOut.sceneState || (companionEntity.knowledge.sceneState ?? ''),
+          sceneState: continuity.sceneState,
+          sceneSnapshot: writeSceneSnapshot(continuity.snapshot),
         };
         if (revealSecretNow) {
           knowledgePatch.secretDiscovered = true;
-          void storeSignificantEvent(req.user!.id, characterId, `Player uncovered ${displayName}'s secret: ${getLore(characterId).secret.label}.`);
+          recordStoryBeat(req.user!.id, characterId, {
+            summary: `Player uncovered ${displayName}'s secret: ${getLore(characterId).secret.label}.`,
+            source: 'secret',
+          });
         }
         void upsertNpcState(req.user!.id, characterId, { knowledge: knowledgePatch }).catch((e) => console.warn('[chat] perception update failed:', e));
       }
@@ -755,7 +813,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       if (firedDisruption) {
         void markDisruptionFired(req.user!.id, characterId, firedDisruption.id).catch(() => {});
         const residue = disruptionResidue(firedDisruption, displayName, characterId);
-        if (residue) void storeSignificantEvent(req.user!.id, characterId, residue);
+        if (residue) recordStoryBeat(req.user!.id, characterId, { summary: residue, source: 'disruption' });
       }
     }
 

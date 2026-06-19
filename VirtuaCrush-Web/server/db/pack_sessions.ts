@@ -1,5 +1,6 @@
 // DB layer for story pack sessions.
 import { pool } from './pool';
+import { readSceneSnapshot, writeSceneSnapshot, type SceneSnapshot } from '../inworld/scene_snapshot';
 
 export interface PackSessionRow {
   id: number;
@@ -12,6 +13,7 @@ export interface PackSessionRow {
   completedAt: Date | null;
   /** Rolling "scene so far" snapshot for continuity beyond the recent window. */
   sceneState: string;
+  sceneSnapshot: SceneSnapshot | null;
 }
 
 export async function createPackSession(
@@ -180,7 +182,13 @@ function rowToSession(r: {
   id: number; user_id: string; character_id: string; pack_id: string;
   current_node: string; status: string; started_at: Date; completed_at: Date | null;
   scene_state?: string;
+  scene_snapshot?: unknown;
 }): PackSessionRow {
+  const snapRaw = r.scene_snapshot;
+  const sceneSnapshot =
+    snapRaw && typeof snapRaw === 'object' && Object.keys(snapRaw as object).length
+      ? readSceneSnapshot({ sceneSnapshot: snapRaw })
+      : null;
   return {
     id: r.id,
     userId: r.user_id,
@@ -191,6 +199,7 @@ function rowToSession(r: {
     startedAt: r.started_at,
     completedAt: r.completed_at,
     sceneState: r.scene_state ?? '',
+    sceneSnapshot,
   };
 }
 
@@ -198,5 +207,16 @@ export async function updatePackSceneState(sessionId: number, sceneState: string
   await pool.query(
     `UPDATE pack_sessions SET scene_state = $1 WHERE id = $2`,
     [sceneState.slice(0, 1200), sessionId],
+  );
+}
+
+export async function updatePackSceneContinuity(
+  sessionId: number,
+  snapshot: SceneSnapshot,
+  sceneState: string,
+): Promise<void> {
+  await pool.query(
+    `UPDATE pack_sessions SET scene_state = $1, scene_snapshot = $2::jsonb WHERE id = $3`,
+    [sceneState.slice(0, 1200), JSON.stringify(writeSceneSnapshot(snapshot)), sessionId],
   );
 }

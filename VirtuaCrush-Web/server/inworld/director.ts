@@ -10,6 +10,7 @@ import type { ChatMessage } from './chat';
 import { validateIntent, type PlayerIntent } from '../sim/intent';
 import { NARRATOR_BRIEF } from './characters';
 import { formatStoryActDirective, type StoryAct } from './story_structure';
+import { parseSceneSnapshotPatch, type SceneSnapshotPatch } from './scene_snapshot';
 
 export type ActorKind = 'companion' | 'narrator' | 'npc';
 export interface Actor { tag: string; name: string; kind: ActorKind; brief?: string }
@@ -71,6 +72,8 @@ export interface DirectorOutput {
   choices: ReplyChoice[];
   /** Updated rolling "scene so far" snapshot to persist for the next turn. '' if absent. */
   sceneState: string;
+  /** Structured scene delta for engine merge (preferred over prose-only sceneState). */
+  sceneSnapshotPatch: SceneSnapshotPatch | null;
   /** A durable beat worth remembering across sessions, or null for most turns. */
   memorable: string | null;
 }
@@ -181,18 +184,31 @@ PACING: Hold "ongoing" across multiple turns. Use "climax" to mark the emotional
     ? `\n\n=== SCENE SO FAR (authoritative continuity — honor this; it persists beyond the recent messages) ===\n${stage.priorSceneState}`
     : '';
 
+const SCENE_SNAPSHOT_SCHEMA = `
+  "sceneSnapshot": {
+    "location": "<optional location update>",
+    "present": ["<names physically here>"],
+    "departed": ["<names who left this turn>"],
+    "playerMobility": "free" | "restrained" | "incapacitated",
+    "playerVoice": "free" | "gagged" | "muted",
+    "playerNotes": "<optional player condition detail>",
+    "companionNotes": "<optional companion state>",
+    "addThreads": ["<new open plot thread, max 1-2>"]
+  },`;
+
   const outputSchema = stage.arcContext
     ? `Reply as a JSON object:
 {
   "lines": [ { "speaker": "<name>", "text": "<their words or *action*>" } ],
   "choices": [ { "label": "<short button: a move the PLAYER could make next>", "userMessage": "<what the player says/does if they tap it>" } ],
-  "sceneState": "<Location: … Present: … (who is here), player's physical state, key facts>",
+  "sceneState": "<short prose fallback of current scene>",
+  ${SCENE_SNAPSHOT_SCHEMA}
   "memorable": "<a durable one-line beat worth remembering in future sessions, or null>",
   "arcStatus": "ongoing" | "climax" | "completed" | "abandoned",
   "earnedBadge": { "title": "<2-4 word title>", "description": "<1-sentence recap>" } or null
 }
 Set earnedBadge only when arcStatus is "completed"; otherwise null.`
-    : `Reply as a JSON object: { "lines": [ { "speaker": "<name>", "text": "<their words or *action*>" } ], "choices": [ { "label": "<short player move>", "userMessage": "<what the player says/does if tapped>" } ], "sceneState": "<Location: … Present: …>", "memorable": "<a durable beat to remember, or null>" }`;
+    : `Reply as a JSON object: { "lines": [ { "speaker": "<name>", "text": "<their words or *action*>" } ], "choices": [ { "label": "<short player move>", "userMessage": "<what the player says/does if tapped>" } ], "sceneState": "<short prose fallback>", ${SCENE_SNAPSHOT_SCHEMA} "memorable": "<a durable beat to remember, or null>" }`;
 
   return (
 `${stage.companionSystem}${stage.directives}${arcBlock}${sceneSoFar}
@@ -204,7 +220,7 @@ ${speakerLines}
 
 Guidance: ALWAYS include at least one "${stage.companionName}" line with their spoken reply so the player gets an answer. Put ANY physical action, reaction, expression, or scene beat in a "narrator" line — characters NEVER narrate themselves, so most turns also include a "narrator" line. (Only a pure, wordless reaction may be a "narrator" line alone.) Keep it short. Never write a line for the player. ADDRESS THE PLAYER AS "you" (second person) — never call them "the user" or "the player".
 SUGGESTED MOVES: In "choices", offer 2-3 short, DISTINCT next moves the PLAYER could make right now — written as the literal, ready-to-send words or *action* in the player's own voice (e.g. a question, a flirt, a playful action), true to where the conversation is. ${stage.playerName ? `The player's name is "${stage.playerName}" — if a move has them give their name, write "${stage.playerName}" verbatim.` : `If a move would have them give their name, phrase it without one (e.g. "introduce yourself").`} NEVER use placeholders, brackets, or template tokens of any kind (no "[Name]", "[your name]", "{name}", etc.) — every choice must be real text the player could send as-is. Do NOT suggest moves that repeat something already done or established earlier in the conversation — e.g. re-introducing themselves, re-stating their name, or re-asking something already answered; if names have already been exchanged, never offer an introduction again. Every choice must move the conversation FORWARD. CRUCIAL — fit the player's CURRENT situation and POV: choices may only be things THIS player could actually attempt right now from where they are. If the player is NOT with ${stage.companionName} (separated, captive, elsewhere) or is restrained/gagged/hurt, the choices are the player's OWN physical actions in their predicament (e.g. try to wriggle your wrists loose, look around the room, try to make noise so someone hears, search for a way out) — NOT lines spoken to ${stage.companionName} and NOT instructions for ${stage.companionName} to follow. Never offer a choice that requires an ability the player doesn't currently have (e.g. calmly chatting with ${stage.companionName} while gagged and held across town). These are optional suggestions the player may tap or ignore; never put your own dialogue in them, and never assume the player has chosen one.
-SCENE CONTINUITY: Always return "sceneState" — a short, rewritten snapshot of the CURRENT scene that carries forward everything STILL TRUE: who is physically present and what they already know, the location, the player's physical condition (e.g. gagged, bound, free, injured), and the key developments so far. Update it with what changed this turn; never drop a character who is still in the room, never re-introduce someone already present, and never forget the player's condition. (This snapshot — not the recent messages — is your source of truth for continuity.) Set "memorable" only when something genuinely durable happened that's worth recalling in a FUTURE conversation (a confession, a milestone, a vivid shared event); otherwise null.
+SCENE CONTINUITY: Always return "sceneSnapshot" with the CURRENT authoritative state. Player mobility/voice persist until you explicitly change them or narration clears them — never drop "restrained" or "gagged" silently. Update "present" and "departed" when cast changes. Also return "sceneState" as a short prose summary. Set "memorable" only when something genuinely durable happened that's worth recalling in a FUTURE conversation (a confession, a milestone, a kidnapping, a rescue); otherwise null.
 Output ONLY the JSON object — no preamble, no code fences, no commentary.
 
 ${turns ? turns + '\n' : ''}User: ${stage.userMessage}
@@ -277,6 +293,7 @@ export function parseDirectorOutput(raw: string, companionName: string): Directo
   let arc: ArcResult | null = null;
   let choices: ReplyChoice[] = [];
   let sceneState = '';
+  let sceneSnapshotPatch: SceneSnapshotPatch | null = null;
   let memorable: string | null = null;
 
   const start = text.indexOf('{');
@@ -292,6 +309,7 @@ export function parseDirectorOutput(raw: string, companionName: string): Directo
         }
         if (Array.isArray(obj.choices)) choices = mapReplyChoices(obj.choices);
         if ('sceneState' in obj) sceneState = cleanField(obj.sceneState).slice(0, 1200);
+        if ('sceneSnapshot' in obj) sceneSnapshotPatch = parseSceneSnapshotPatch(obj.sceneSnapshot);
         if ('memorable' in obj) { const m = cleanField(obj.memorable); memorable = m ? m.slice(0, 300) : null; }
         const status = typeof obj.arcStatus === 'string' ? obj.arcStatus : null;
         if (status && VALID_ARC_STATUSES.has(status)) {
@@ -311,7 +329,7 @@ export function parseDirectorOutput(raw: string, companionName: string): Directo
   }
 
   if (turns.length === 0) turns = parseDirectorTurns(text, companionName);
-  return { turns, arc, choices, sceneState, memorable };
+  return { turns, arc, choices, sceneState, sceneSnapshotPatch, memorable };
 }
 
 /** Renders ordered turns into the canonical tagged transcript the UI reads. */
@@ -345,6 +363,7 @@ export interface PackSceneResult {
   arcStatus: 'ongoing' | 'climax' | 'completed' | null;
   /** Updated rolling "scene so far" snapshot to persist for the next turn. '' if absent. */
   sceneState: string;
+  sceneSnapshotPatch: SceneSnapshotPatch | null;
   /** A durable beat worth remembering across sessions, or null. */
   memorable: string | null;
 }
@@ -375,6 +394,7 @@ export function parsePackScene(raw: string, companionName: string): PackSceneRes
   let choices: PackSceneChoice[] = [];
   let arcStatus: PackSceneResult['arcStatus'] = null;
   let sceneState = '';
+  let sceneSnapshotPatch: SceneSnapshotPatch | null = null;
   let memorable: string | null = null;
 
   const start = text.indexOf('{');
@@ -391,6 +411,7 @@ export function parsePackScene(raw: string, companionName: string): PackSceneRes
         if (Array.isArray(obj.choices)) choices = mapPackChoices(obj.choices as unknown[]);
         if (typeof obj.advance === 'string' && obj.advance.trim()) advance = obj.advance.trim();
         if ('sceneState' in obj) sceneState = cleanField(obj.sceneState).slice(0, 1200);
+        if ('sceneSnapshot' in obj) sceneSnapshotPatch = parseSceneSnapshotPatch(obj.sceneSnapshot);
         if ('memorable' in obj) { const m = cleanField(obj.memorable); memorable = m ? m.slice(0, 300) : null; }
         const st = typeof obj.arcStatus === 'string' ? obj.arcStatus : null;
         if (st && VALID_ARC_STATUSES.has(st)) arcStatus = st as PackSceneResult['arcStatus'];
@@ -399,7 +420,7 @@ export function parsePackScene(raw: string, companionName: string): PackSceneRes
     }
   }
   if (turns.length === 0) turns = parseDirectorTurns(text, companionName);
-  return { advance, turns, choices, arcStatus, sceneState, memorable };
+  return { advance, turns, choices, arcStatus, sceneState, sceneSnapshotPatch, memorable };
 }
 
 // === MERGED single-call scene (referee + director in one round) ==============

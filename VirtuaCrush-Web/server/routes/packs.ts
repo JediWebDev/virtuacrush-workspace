@@ -38,8 +38,18 @@ import {
   persistPackTurn,
   getCompletedPackSessions,
   updatePackSceneState,
+  updatePackSceneContinuity,
 } from '../db/pack_sessions';
-import { storeSignificantEvent } from '../db/memory';
+import {
+  getCharacterStoryBeats,
+  formatCharacterStoryBlock,
+  recordStoryBeat,
+} from '../db/story_memory';
+import {
+  buildInitialSceneSnapshot,
+  formatSceneSnapshotBlock,
+  applySceneContinuityUpdate,
+} from '../inworld/scene_snapshot';
 import { getUserStory, listUserStories } from '../db/user_stories';
 import { userStoryToPack } from '../inworld/user_pack';
 import { ensureUserCharacterLoaded } from '../db/user_characters';
@@ -149,7 +159,8 @@ function buildPackDirectorPrompt(
   node: PackNode,
   nodeId: string,
   characterId: string,
-  priorSceneState = '',
+  priorSceneBlock = '',
+  storyMemoryBlock = '',
 ): string {
   let character;
   try { character = getCharacter(characterId as Parameters<typeof getCharacter>[0]); }
@@ -174,10 +185,8 @@ function buildPackDirectorPrompt(
       )
     : '';
 
-  // Rolling "scene so far" — authoritative continuity that persists beyond the
-  // recent-history window (who's present, location, the player's physical state).
-  const sceneSoFar = priorSceneState
-    ? `\n\n=== SCENE SO FAR (authoritative continuity — honor this; it persists beyond the recent messages) ===\n${priorSceneState}`
+  const sceneSoFar = priorSceneBlock
+    ? priorSceneBlock
     : '';
 
   const npcBlock = formatSceneNpcBlock(packNpcsResolved);
@@ -203,7 +212,8 @@ function buildPackDirectorPrompt(
     `  "lines": [ { "speaker": "narrator" | "${name}"${npcSpeakerExample}, "text": "spoken words — or an *action* for the narrator" } ],\n` +
     `  "advance": "stay" | "end" | "<a beat id below>",\n` +
     `  "choices": [ { "label": "short button text", "userMessage": "first-person line/action if the player picks it", "next": "<beat id> | dynamic | end" } ],\n` +
-    `  "sceneState": "<short snapshot: Location: … Present: … (who is here), player's physical state, key facts>",\n` +
+    `  "sceneState": "<short prose fallback of current scene>",\n` +
+    `  "sceneSnapshot": { "location": "...", "present": ["..."], "departed": ["..."], "playerMobility": "free"|"restrained"|"incapacitated", "playerVoice": "free"|"gagged"|"muted", "playerNotes": "...", "companionNotes": "...", "addThreads": ["..."] },\n` +
     `  "memorable": "<a durable one-line beat worth remembering in future sessions, or null>",\n` +
     `  "arcStatus": "ongoing" | "climax" | "completed"\n` +
     `}\n\n` +
@@ -215,7 +225,7 @@ function buildPackDirectorPrompt(
     `- Leave "choices" EMPTY ([]) to reuse the story's authored buttons for the resulting beat. This is the DEFAULT — do it almost every turn.\n` +
     `- ONLY when the player clearly pulls the scene away from ALL the authored choices, return 2–3 NEW choices that fit the new direction (each "next":"dynamic", or a beat id if it rejoins the story) and steer back toward an ENDING.\n\n` +
     `NARRATION: characters speak ONLY dialogue; "narrator" owns ALL action and reaction. Include at least one "${name}" line whenever ${name} speaks. Respond ONLY in English. Never write the player's words or actions.\n\n` +
-    `SCENE CONTINUITY: Honor the SCENE DIRECTIVE block and SCENE SO FAR snapshot. Always return "sceneState": a short rewritten snapshot carrying forward everything STILL TRUE — who is physically present and what they already know, the location, the player's physical condition (gagged, bound, free, hurt), and key developments. Never drop a character still in the room, never re-introduce someone already present, never forget the player's condition. Set "memorable" only for a genuinely durable beat worth recalling in a FUTURE conversation; otherwise null.\n\n` +
+    `SCENE CONTINUITY: Honor the SCENE DIRECTIVE block and SCENE SNAPSHOT. Always return "sceneSnapshot" with authoritative location, present cast, and player mobility/voice (they persist until explicitly cleared). Also return "sceneState" as short prose. Set "memorable" only for a genuinely durable beat worth recalling in a FUTURE conversation; otherwise null.\n\n` +
     `KEEP IT MOVING toward an ENDING — never loop the same beat. When the scene has resolved, set "advance":"end" and "arcStatus":"completed".\n\n` +
     `SPEAKERS (use the exact name in "speaker"):\n${speakerList}\n\n` +
     `THIS BEAT'S CHOICES (the player's options right now):\n${authoredChoices}\n\n` +
@@ -229,6 +239,7 @@ function buildPackDirectorPrompt(
     sceneDirective +
     npcBlock +
     sceneSoFar +
+    storyMemoryBlock +
     formatCharacterFactsBlock(lore) +
     formatPersonaTraitsBlock(lore, { discovered: false, revealNow: false }) +
     ROLEPLAY_INPUT_DIRECTIVE +
@@ -295,14 +306,16 @@ router.post('/:id/start', requireAuth, async (req: Request, res: Response) => {
         await ensurePackCharacter(pack.characterId, req.user!.id);
         companionName = getCharacter(pack.characterId as Parameters<typeof getCharacter>[0]).displayName ?? pack.characterId;
       } catch { /* keep id */ }
-      const seed = buildInitialSceneState(
-        sceneDirectiveFromAnchor(
+      const anchorInput = sceneDirectiveFromAnchor(
           pack.sceneAnchor,
           companionName,
           (pack.npcs ?? []).map((n) => ({ name: n.name, description: n.description })),
-        ),
-      );
-      try { await updatePackSceneState(session.id, seed); } catch (e) { console.warn('[packs] scene seed failed:', e); }
+        );
+      const seedSnap = buildInitialSceneSnapshot(anchorInput);
+      const seed = buildInitialSceneState(anchorInput);
+      try {
+        await updatePackSceneContinuity(session.id, seedSnap, seed);
+      } catch (e) { console.warn('[packs] scene seed failed:', e); }
     }
 
     return res.json({
@@ -460,8 +473,7 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
   catch { /* keep id */ }
 
   const history = await loadPackMessages(sessionId, 30);
-  const priorSceneState = session.sceneState;
-  const directorPrompt = buildPackDirectorPrompt(pack, node, currentNode, session.characterId, priorSceneState);
+  const storyBeats = await getCharacterStoryBeats(req.user!.id, session.characterId);
   const sceneValidationInput = pack.sceneAnchor
     ? sceneDirectiveFromAnchor(
         pack.sceneAnchor,
@@ -469,20 +481,59 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
         (pack.npcs ?? []).map((n) => ({ name: n.name, description: n.description })),
       )
     : null;
+  let priorSnapshot = session.sceneSnapshot;
+  let sceneSnapshotSeed = null;
+  if (sceneValidationInput && !priorSnapshot) {
+    sceneSnapshotSeed = buildInitialSceneSnapshot(sceneValidationInput);
+    priorSnapshot = sceneSnapshotSeed;
+  }
+  const priorSceneBlock = priorSnapshot
+    ? formatSceneSnapshotBlock(priorSnapshot)
+    : session.sceneState
+      ? `\n\n=== SCENE SO FAR (authoritative continuity — honor this; it persists beyond the recent messages) ===\n${session.sceneState}`
+      : '';
+  const priorSceneState = priorSceneBlock;
+  const directorPrompt = buildPackDirectorPrompt(
+    pack,
+    node,
+    currentNode,
+    session.characterId,
+    priorSceneBlock,
+    formatCharacterStoryBlock(companionName, storyBeats),
+  );
   const turnsStr = history
     .map((m) => (m.role === 'user' ? `Player: ${m.content}` : m.content))
     .join('\n');
   const fullPrompt = `${directorPrompt}\n\n${turnsStr ? turnsStr + '\n' : ''}Player: ${message}\n\nJSON:`;
 
   let result;
+  let continuity = applySceneContinuityUpdate({
+    priorSnapshot,
+    sceneSnapshotPatch: null,
+    sceneStateProse: session.sceneState,
+    narratorTexts: [],
+    requiredNames: sceneValidationInput ? requiredCastNames(sceneValidationInput) : [],
+    seedSnapshot: sceneSnapshotSeed,
+  });
   try {
     const raw = await completePrompt(fullPrompt, { json: true });
     result = parsePackScene(raw, companionName);
 
+    const narratorTextsForScene = result.turns
+      .filter((t) => t.speaker.toLowerCase() === 'narrator')
+      .map((t) => t.text);
+    continuity = applySceneContinuityUpdate({
+      priorSnapshot,
+      sceneSnapshotPatch: result.sceneSnapshotPatch,
+      sceneStateProse: result.sceneState,
+      narratorTexts: narratorTextsForScene,
+      requiredNames: sceneValidationInput ? requiredCastNames(sceneValidationInput) : [],
+      seedSnapshot: sceneSnapshotSeed,
+    });
+    result.sceneState = continuity.sceneState;
+
     if (sceneValidationInput && result.sceneState) {
-      const narratorTexts = result.turns
-        .filter((t) => t.speaker.toLowerCase() === 'narrator')
-        .map((t) => t.text);
+      const narratorTexts = narratorTextsForScene;
       let check = validateSceneStateUpdate({
         priorSceneState,
         nextSceneState: result.sceneState,
@@ -492,13 +543,23 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
       if (!check.ok) {
         const rawFix = await completePrompt(fullPrompt + formatSceneValidationRetryHint(check), { json: true });
         result = parsePackScene(rawFix, companionName);
+        const fixNarrator = result.turns
+          .filter((t) => t.speaker.toLowerCase() === 'narrator')
+          .map((t) => t.text);
+        continuity = applySceneContinuityUpdate({
+          priorSnapshot,
+          sceneSnapshotPatch: result.sceneSnapshotPatch,
+          sceneStateProse: result.sceneState,
+          narratorTexts: fixNarrator,
+          requiredNames: requiredCastNames(sceneValidationInput),
+          seedSnapshot: sceneSnapshotSeed,
+        });
+        result.sceneState = continuity.sceneState;
         check = validateSceneStateUpdate({
           priorSceneState,
           nextSceneState: result.sceneState,
           requiredNames: requiredCastNames(sceneValidationInput),
-          narratorTexts: result.turns
-            .filter((t) => t.speaker.toLowerCase() === 'narrator')
-            .map((t) => t.text),
+          narratorTexts: fixNarrator,
         });
         if (!check.ok && check.droppedCharacters?.length) {
           result.sceneState = repairSceneStateCast(
@@ -514,12 +575,13 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
     return res.status(502).json({ error: 'generation_failed' });
   }
 
-  // Persist rolling scene state (kept if the model omitted one) + embed any
-  // durable beat for cross-session recall.
-  if (result.sceneState) {
-    try { await updatePackSceneState(sessionId, result.sceneState); } catch (e) { console.warn('[packs] scene state persist failed:', e); }
+  // Persist rolling scene continuity + any durable story beat.
+  try {
+    await updatePackSceneContinuity(sessionId, continuity.snapshot, continuity.sceneState);
+  } catch (e) { console.warn('[packs] scene state persist failed:', e); }
+  if (result.memorable) {
+    recordStoryBeat(req.user!.id, session.characterId, { summary: result.memorable, source: 'memorable' });
   }
-  if (result.memorable) void storeSignificantEvent(req.user!.id, session.characterId, result.memorable);
 
   // Resolve where the story goes next.
   //  - explicit authored choice → already advanced above.

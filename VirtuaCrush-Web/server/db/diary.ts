@@ -6,6 +6,7 @@ import { pool } from './pool';
 import { completePrompt } from '../llm';
 import { getCharacter } from '../inworld/characters';
 import { parseFacts } from './memory_util';
+import { appendCharacterStoryBeat, inferDiaryBeatWeight } from './story_memory';
 
 export interface DiaryEntry {
   id: string;
@@ -81,6 +82,11 @@ async function summarizeOne(userId: string, characterId: string, since: string |
       `INSERT INTO chat_diary (user_id, character_id, beat) VALUES ($1, $2, $3)`,
       [userId, characterId, beat.slice(0, 240)],
     );
+    void appendCharacterStoryBeat(userId, characterId, {
+      summary: beat,
+      weight: inferDiaryBeatWeight(beat),
+      source: 'diary',
+    });
   }
   if (beats.length) {
     console.log(`[diary] wrote ${beats.length} beat(s) for user=${userId} character=${characterId}`);
