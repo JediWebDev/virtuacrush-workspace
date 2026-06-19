@@ -1,212 +1,416 @@
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import {
   User,
   KeyRound,
-  CreditCard,
   Receipt,
   Bell,
   LogOut,
-  type LucideIcon,
+  Upload,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import { useSession, signOut } from "../lib/auth-client";
+import {
+  ApiError,
+  api,
+  assetUrl,
+  cancelSubscription,
+  fetchSubscription,
+  pauseSubscription,
+  resumeSubscription,
+  type SubscriptionInfo,
+} from "../lib/api";
+import * as profileApi from "../lib/profile";
+import { customAvatar } from "../lib/customCharacter";
 
-type Section = {
-  id: string;
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("read_failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatRenewalDate(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
+}
+
+function SectionCard({
+  title,
+  icon: Icon,
+  description,
+  children,
+}: {
   title: string;
-  icon: LucideIcon;
+  icon: typeof User;
   description: string;
-  fields?: { label: string; type: string; placeholder: string }[];
-  toggles?: { label: string; description: string; checked: boolean }[];
-  action?: string;
-  emptyText?: string;
-};
-
-const sections: Section[] = [
-  {
-    id: "personal",
-    title: "Personal Info",
-    icon: User,
-    description: "Update your name and email used across VirtuaCrush.",
-    fields: [
-      { label: "Full name", type: "text", placeholder: "Your name" },
-      { label: "Email", type: "email", placeholder: "you@email.com" },
-    ],
-  },
-  {
-    id: "notifications",
-    title: "Notifications",
-    icon: Bell,
-    description: "Manage how characters can contact you when you're away.",
-    fields: [
-      { label: "Phone number for SMS", type: "tel", placeholder: "+1 (555) 000-0000" },
-    ],
-    toggles: [
-      {
-        label: "Email Notifications",
-        description: "Receive unread messages and media via email.",
-        checked: true,
-      },
-      {
-        label: "SMS Notifications",
-        description: "Receive text messages when a character misses you.",
-        checked: false,
-      },
-    ],
-  },
-  {
-    id: "login",
-    title: "Login Help",
-    icon: KeyRound,
-    description: "Reset your password or recover account access.",
-    fields: [{ label: "Email for reset link", type: "email", placeholder: "you@email.com" }],
-    action: "Send reset link",
-  },
-  {
-    id: "payment",
-    title: "Payment Methods",
-    icon: CreditCard,
-    description: "Manage cards and billing details for subscriptions.",
-    emptyText: "No payment methods on file. Add a card when you subscribe.",
-  },
-  {
-    id: "subscription",
-    title: "Subscription & Billing",
-    icon: Receipt,
-    description: "View your plan, renewal date, and invoices.",
-    emptyText: "You are on the Free plan. Upgrade anytime from our pricing page.",
-  },
-];
-
-function SectionCard({ section }: { section: Section }) {
-  const Icon = section.icon;
-  const [toggleOn, setToggleOn] = useState<boolean[]>(() => section.toggles?.map((t) => t.checked) ?? []);
-
-  const hasFields = Boolean(section.fields?.length);
-  const hasToggles = Boolean(section.toggles?.length);
-  const hasBody = hasFields || hasToggles;
-
+  children: ReactNode;
+}) {
   return (
-    <section
-      id={section.id}
-      className="card-gradient-subtle rounded-2xl p-6 backdrop-blur-xl"
-    >
+    <section className="card-gradient-subtle rounded-2xl p-6 backdrop-blur-xl">
       <div className="mb-4 flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
           <Icon size={20} />
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-50">{section.title}</h2>
-          <p className="mt-0.5 text-sm text-stone-600 dark:text-stone-400">{section.description}</p>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-50">{title}</h2>
+          <p className="mt-0.5 text-sm text-stone-600 dark:text-white">{description}</p>
         </div>
       </div>
-      {hasBody ? (
-        <div className="space-y-4">
-          {hasFields ? (
-            <div className="space-y-4">
-              {section.fields!.map((field) => (
-                <label key={field.label} className="block">
-                  <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-stone-900 dark:text-stone-500">
-                    {field.label}
-                  </span>
-                  <input
-                    type={field.type}
-                    placeholder={field.placeholder}
-                    className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.04] dark:bg-white/[0.04] px-4 py-3 text-stone-800 dark:text-stone-100 outline-none transition-colors placeholder:text-stone-600 focus:border-accent/35 focus:ring-2 focus:ring-accent/10"
-                  />
-                </label>
-              ))}
-            </div>
-          ) : null}
-
-          {hasToggles ? (
-            <ul className="space-y-3 pt-1">
-              {section.toggles!.map((toggle, index) => {
-                const isOn = toggleOn[index] ?? false;
-                return (
-                  <li
-                    key={toggle.label}
-                    className="flex items-center justify-between gap-4 rounded-xl border border-black/[0.06] dark:border-white/[0.06] bg-black/[0.02] dark:bg-white/[0.02] px-4 py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-stone-800 dark:text-stone-100">{toggle.label}</p>
-                      <p className="mt-0.5 text-xs text-stone-900 dark:text-stone-500">{toggle.description}</p>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={isOn}
-                      aria-label={toggle.label}
-                      onClick={() =>
-                        setToggleOn((prev) => {
-                          const next = [...prev];
-                          next[index] = !next[index];
-                          return next;
-                        })
-                      }
-                      className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${
-                        isOn ? "bg-accent" : "bg-stone-600/45"
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow-md transition-transform duration-200 ease-out ${
-                          isOn ? "translate-x-5" : "translate-x-0"
-                        }`}
-                      />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
-
-          {section.action ? (
-            <button
-              type="button"
-              className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-deep"
-            >
-              {section.action}
-            </button>
-          ) : null}
-        </div>
-      ) : (
-        <p className="text-sm text-stone-900 dark:text-stone-500">{section.emptyText}</p>
-      )}
+      {children}
     </section>
   );
 }
 
 export default function AccountPage() {
   const { data: session } = useSession();
+  const [avatarKey, setAvatarKey] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState("");
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [avatarPrompt, setAvatarPrompt] = useState("");
+
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
+  const [subLoading, setSubLoading] = useState(true);
+  const [subBusy, setSubBusy] = useState(false);
+  const [subError, setSubError] = useState<string | null>(null);
+
+  const [emailNotifs, setEmailNotifs] = useState(true);
+  const [smsNotifs, setSmsNotifs] = useState(false);
+
+  const isPro = subscription?.subscribed ?? false;
+
+  useEffect(() => {
+    profileApi
+      .fetchProfile()
+      .then((p) => {
+        setAvatarKey(p.avatarKey ?? null);
+        setDisplayName(p.profile.displayName || session?.user?.name || "");
+      })
+      .catch(() => {});
+  }, [session?.user?.name]);
+
+  useEffect(() => {
+    setSubLoading(true);
+    fetchSubscription()
+      .then(setSubscription)
+      .catch(() => setSubscription(null))
+      .finally(() => setSubLoading(false));
+  }, []);
+
+  const handleUploadAvatar = async (file: File) => {
+    setAvatarError(null);
+    setAvatarBusy(true);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const { avatarKey: key } = await profileApi.uploadProfileAvatar(dataUrl);
+      setAvatarKey(key);
+    } catch {
+      setAvatarError("Couldn't upload that image. Use a PNG, JPG, or WEBP under 6MB.");
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
+  const handleGenerateAvatar = async () => {
+    setAvatarError(null);
+    setAvatarBusy(true);
+    try {
+      const { avatarKey: key } = await profileApi.generateProfileAvatar(avatarPrompt.trim() || undefined);
+      setAvatarKey(key);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 403) {
+        setAvatarError("AI avatar generation is a Pro feature.");
+      } else {
+        setAvatarError("Couldn't generate an image. Please try again.");
+      }
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
+  const handleCheckout = async () => {
+    setSubError(null);
+    setSubBusy(true);
+    try {
+      const { url } = await api<{ url: string }>("/api/stripe/checkout", { method: "POST" });
+      window.location.href = url;
+    } catch {
+      setSubError("Couldn't open checkout. Please try again.");
+      setSubBusy(false);
+    }
+  };
+
+  const runSubAction = async (action: () => Promise<SubscriptionInfo>) => {
+    setSubError(null);
+    setSubBusy(true);
+    try {
+      setSubscription(await action());
+    } catch (e) {
+      if (e instanceof ApiError && e.body?.error === "no_stripe_subscription") {
+        setSubError("This plan was granted manually and can't be changed here.");
+      } else {
+        setSubError("That billing action failed. Please try again.");
+      }
+    } finally {
+      setSubBusy(false);
+    }
+  };
+
+  const avatarSrc = avatarKey ? assetUrl(avatarKey) : customAvatar(displayName || session?.user?.email || "?");
+  const renewalLabel = formatRenewalDate(subscription?.currentPeriodEnd ?? null);
 
   return (
     <main className="relative px-6 pb-24 pt-4 md:px-12">
       <div className="mx-auto max-w-3xl">
-        <div className="mb-10 flex flex-wrap items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/15 text-accent">
-            <User size={28} />
+        <div className="mb-10 flex flex-wrap items-start gap-5">
+          <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border border-black/10 dark:border-white/10 shadow-lg">
+            <img src={avatarSrc} alt="" className="h-full w-full object-cover object-top" />
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="font-serif text-3xl font-bold text-stone-900 dark:text-stone-50 md:text-4xl">Account</h1>
-            <p className="mt-1 text-stone-600 dark:text-stone-400">
+            <p className="mt-1 text-stone-600 dark:text-white">
               {session?.user?.email
                 ? `Signed in as ${session.user.email}`
-                : "Manage your profile, security, and billing."}
+                : "Manage your profile, notifications, and billing."}
             </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-black/10 px-3 py-2 text-xs font-semibold text-stone-700 transition-colors hover:border-brand-aqua/40 hover:text-brand-aqua dark:border-white/10 dark:text-white dark:hover:text-brand-aqua">
+                {avatarBusy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                Upload photo
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  disabled={avatarBusy}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void handleUploadAvatar(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => void handleGenerateAvatar()}
+                disabled={avatarBusy || !isPro}
+                title={isPro ? "Generate with AI" : "Pro subscribers only"}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-2 text-xs font-semibold text-accent transition-colors hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10"
+              >
+                {avatarBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                AI generate{isPro ? "" : " (Pro)"}
+              </button>
+            </div>
+            {!isPro ? (
+              <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">Upgrade to Pro to generate a profile photo with AI.</p>
+            ) : null}
+            {avatarError ? <p className="mt-2 text-xs text-red-500">{avatarError}</p> : null}
           </div>
           <button
             type="button"
             onClick={() => signOut()}
-            className="flex items-center gap-2 rounded-xl border border-black/10 bg-black/[0.04] px-4 py-2.5 text-sm font-semibold text-stone-700 transition-colors hover:bg-black/[0.08] dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-200 dark:hover:bg-white/[0.08]"
+            className="flex items-center gap-2 rounded-xl border border-black/10 bg-black/[0.04] px-4 py-2.5 text-sm font-semibold text-stone-700 transition-colors hover:border-brand-aqua/40 hover:text-brand-aqua dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:hover:text-brand-aqua"
           >
             <LogOut size={16} /> Sign out
           </button>
         </div>
+
         <div className="space-y-6">
-          {sections.map((s) => (
-            <SectionCard key={s.id} section={s} />
-          ))}
+          <SectionCard
+            title="Notifications"
+            icon={Bell}
+            description="Manage your notifications from Virtua Crush and your character companions who may wish to message you."
+          >
+            <div className="space-y-4">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-stone-900 dark:text-stone-400">
+                  Phone number for SMS
+                </span>
+                <input
+                  type="tel"
+                  placeholder="+1 (555) 000-0000"
+                  className="w-full rounded-xl border border-black/10 bg-black/[0.04] px-4 py-3 text-stone-800 outline-none transition-colors placeholder:text-stone-500 focus:border-accent/35 focus:ring-2 focus:ring-accent/10 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-100"
+                />
+              </label>
+              <ul className="space-y-3">
+                {[
+                  {
+                    label: "Email Notifications",
+                    description: "Receive unread messages and media via email.",
+                    on: emailNotifs,
+                    set: setEmailNotifs,
+                  },
+                  {
+                    label: "SMS Notifications",
+                    description: "Receive text messages when a character misses you.",
+                    on: smsNotifs,
+                    set: setSmsNotifs,
+                  },
+                ].map((toggle) => (
+                  <li
+                    key={toggle.label}
+                    className="flex items-center justify-between gap-4 rounded-xl border border-black/[0.06] bg-black/[0.02] px-4 py-3 dark:border-white/[0.06] dark:bg-white/[0.02]"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-stone-800 dark:text-stone-100">{toggle.label}</p>
+                      <p className="mt-0.5 text-xs text-stone-600 dark:text-stone-400">{toggle.description}</p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={toggle.on}
+                      aria-label={toggle.label}
+                      onClick={() => toggle.set(!toggle.on)}
+                      className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
+                        toggle.on ? "bg-accent" : "bg-stone-600/45"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow-md transition-transform duration-200 ease-out ${
+                          toggle.on ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            title="Login Help"
+            icon={KeyRound}
+            description="Reset your password or recover account access."
+          >
+            <div className="space-y-4">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-stone-900 dark:text-stone-400">
+                  Email for reset link
+                </span>
+                <input
+                  type="email"
+                  placeholder="you@email.com"
+                  defaultValue={session?.user?.email ?? ""}
+                  className="w-full rounded-xl border border-black/10 bg-black/[0.04] px-4 py-3 text-stone-800 outline-none transition-colors placeholder:text-stone-500 focus:border-accent/35 focus:ring-2 focus:ring-accent/10 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-100"
+                />
+              </label>
+              <button
+                type="button"
+                className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-deep"
+              >
+                Send reset link
+              </button>
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            title="Subscription & Billing"
+            icon={Receipt}
+            description="View your plan, renewal date, and manage billing."
+          >
+            {subLoading ? (
+              <p className="flex items-center gap-2 text-sm text-stone-600 dark:text-white">
+                <Loader2 size={16} className="animate-spin" /> Loading subscription…
+              </p>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-black/[0.06] bg-black/[0.02] px-4 py-3 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                  <p className="text-sm font-semibold text-stone-900 dark:text-stone-50">
+                    Current plan:{" "}
+                    <span className="text-accent">{subscription?.plan === "pro" ? "Pro" : "Free"}</span>
+                  </p>
+                  {subscription?.status ? (
+                    <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
+                      Status: {subscription.status.replace(/_/g, " ")}
+                      {subscription.paused ? " · Paused" : ""}
+                      {subscription.cancelAtPeriodEnd ? " · Cancels at period end" : ""}
+                    </p>
+                  ) : null}
+                  {subscription?.subscribed && renewalLabel ? (
+                    <p className="mt-2 text-sm text-stone-700 dark:text-white">
+                      {subscription.cancelAtPeriodEnd
+                        ? `Your subscription ends on ${renewalLabel}.`
+                        : subscription.paused
+                          ? `Billing is paused. Access continues until ${renewalLabel}.`
+                          : `Your subscription renews on ${renewalLabel}.`}
+                    </p>
+                  ) : !subscription?.subscribed ? (
+                    <p className="mt-2 text-sm text-stone-700 dark:text-white">
+                      You are on the Free plan. Upgrade for unlimited chats, enhanced memory, and all characters.
+                    </p>
+                  ) : null}
+                </div>
+
+                {subError ? <p className="text-sm text-red-500">{subError}</p> : null}
+
+                <div className="flex flex-wrap gap-2">
+                  {!subscription?.subscribed ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleCheckout()}
+                      disabled={subBusy}
+                      className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-deep disabled:opacity-50"
+                    >
+                      Upgrade to Pro
+                    </button>
+                  ) : null}
+
+                  {subscription?.subscribed && subscription.stripeManaged ? (
+                    <>
+                      {subscription.paused || subscription.cancelAtPeriodEnd ? (
+                        <button
+                          type="button"
+                          disabled={subBusy}
+                          onClick={() => void runSubAction(resumeSubscription)}
+                          className="rounded-xl border border-black/10 px-5 py-2.5 text-sm font-semibold text-stone-800 transition-colors hover:border-brand-aqua/40 hover:text-brand-aqua dark:border-white/10 dark:text-white dark:hover:text-brand-aqua disabled:opacity-50"
+                        >
+                          Resume subscription
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            disabled={subBusy}
+                            onClick={() => void runSubAction(pauseSubscription)}
+                            className="rounded-xl border border-black/10 px-5 py-2.5 text-sm font-semibold text-stone-800 transition-colors hover:border-brand-aqua/40 hover:text-brand-aqua dark:border-white/10 dark:text-white dark:hover:text-brand-aqua disabled:opacity-50"
+                          >
+                            Pause subscription
+                          </button>
+                          <button
+                            type="button"
+                            disabled={subBusy}
+                            onClick={() => void runSubAction(cancelSubscription)}
+                            className="rounded-xl border border-red-500/30 px-5 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 disabled:opacity-50"
+                          >
+                            Cancel subscription
+                          </button>
+                        </>
+                      )}
+                    </>
+                  ) : subscription?.subscribed && !subscription.stripeManaged ? (
+                    <p className="text-xs text-stone-600 dark:text-stone-400">
+                      Your Pro access was granted outside Stripe billing. Contact support to change your plan.
+                    </p>
+                  ) : null}
+
+                  <Link
+                    to="/how-it-works"
+                    className="rounded-xl border border-black/10 px-5 py-2.5 text-sm font-semibold text-stone-700 transition-colors hover:border-brand-aqua/40 hover:text-brand-aqua dark:border-white/10 dark:text-white dark:hover:text-brand-aqua"
+                  >
+                    View plans
+                  </Link>
+                </div>
+              </div>
+            )}
+          </SectionCard>
         </div>
-        <p className="mt-8 text-center text-xs text-stone-900 dark:text-stone-500">
+
+        <p className="mt-8 text-center text-xs text-stone-600 dark:text-stone-400">
           Need help?{" "}
           <a href="mailto:help@virtuacrush.com" className="text-accent hover:underline">
             help@virtuacrush.com

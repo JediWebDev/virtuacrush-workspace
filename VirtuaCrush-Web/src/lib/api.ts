@@ -171,6 +171,32 @@ export interface UsageInfo {
 export function fetchUsage(): Promise<UsageInfo> {
   return api<UsageInfo>('/api/usage');
 }
+
+export interface SubscriptionInfo {
+  subscribed: boolean;
+  plan: 'free' | 'pro';
+  status: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  paused: boolean;
+  stripeManaged: boolean;
+}
+
+export function fetchSubscription(): Promise<SubscriptionInfo> {
+  return api<SubscriptionInfo>('/api/stripe/subscription');
+}
+
+export function cancelSubscription(): Promise<SubscriptionInfo> {
+  return api<SubscriptionInfo>('/api/stripe/subscription/cancel', { method: 'POST' });
+}
+
+export function pauseSubscription(): Promise<SubscriptionInfo> {
+  return api<SubscriptionInfo>('/api/stripe/subscription/pause', { method: 'POST' });
+}
+
+export function resumeSubscription(): Promise<SubscriptionInfo> {
+  return api<SubscriptionInfo>('/api/stripe/subscription/resume', { method: 'POST' });
+}
 // ============================================================================
 // Story Packs
 // ============================================================================

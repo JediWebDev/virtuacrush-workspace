@@ -3,6 +3,18 @@ import { pool } from './pool';
 export interface SubscriptionRow {
   status: string;
   current_period_end: Date | null;
+  stripe_subscription_id: string | null;
+  stripe_customer_id: string | null;
+}
+
+export interface SubscriptionDetails {
+  subscribed: boolean;
+  plan: 'free' | 'pro';
+  status: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  paused: boolean;
+  stripeManaged: boolean;
 }
 
 /**
@@ -11,7 +23,7 @@ export interface SubscriptionRow {
  */
 export async function isSubscribed(userId: string): Promise<boolean> {
   const { rows } = await pool.query<SubscriptionRow>(
-    `SELECT status, current_period_end FROM subscriptions WHERE user_id = $1`,
+    `SELECT status, current_period_end, stripe_subscription_id, stripe_customer_id FROM subscriptions WHERE user_id = $1`,
     [userId],
   );
   const sub = rows[0];
@@ -20,9 +32,17 @@ export async function isSubscribed(userId: string): Promise<boolean> {
   const activeStatuses = new Set(['active', 'trialing']);
   if (!activeStatuses.has(sub.status)) return false;
 
-  // Stripe sets current_period_end; treat null as not-paid to fail closed.
-  if (!sub.current_period_end) return false;
+  // Admin/manual grants may omit period end; Stripe subs always set it.
+  if (!sub.current_period_end) return true;
   return sub.current_period_end.getTime() > Date.now();
+}
+
+export async function getSubscriptionRow(userId: string): Promise<SubscriptionRow | null> {
+  const { rows } = await pool.query<SubscriptionRow>(
+    `SELECT status, current_period_end, stripe_subscription_id, stripe_customer_id FROM subscriptions WHERE user_id = $1`,
+    [userId],
+  );
+  return rows[0] ?? null;
 }
 
 export async function upsertSubscription(row: {

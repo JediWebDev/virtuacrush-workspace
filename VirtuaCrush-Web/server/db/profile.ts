@@ -13,6 +13,7 @@ export interface FullProfile {
   presentation: PresentationState;
   inventory: InventoryItem[];
   presets: OutfitPreset[];
+  avatarKey: string | null;
 }
 
 const ITEM_CATEGORIES = new Set<ItemCategory>(['top', 'bottom', 'outerwear', 'dress', 'shoes', 'accessory', 'other']);
@@ -45,13 +46,13 @@ async function listItems(userId: string): Promise<InventoryItem[]> {
 export async function getFullProfile(userId: string): Promise<FullProfile> {
   const { rows } = await pool.query<{
     display_name: string; appearance: unknown; biography: unknown; grooming: unknown;
-    worn_item_ids: unknown; presets: unknown;
-  }>(`SELECT display_name, appearance, biography, grooming, worn_item_ids, presets
+    worn_item_ids: unknown; presets: unknown; avatar_key: string | null;
+  }>(`SELECT display_name, appearance, biography, grooming, worn_item_ids, presets, avatar_key
       FROM player_profiles WHERE user_id = $1`, [userId]);
   const inventory = await listItems(userId);
 
   if (!rows[0]) {
-    return { profile: emptyProfile(''), presentation: { wornItemIds: [], grooming: {} }, inventory, presets: [] };
+    return { profile: emptyProfile(''), presentation: { wornItemIds: [], grooming: {} }, inventory, presets: [], avatarKey: null };
   }
   const r = rows[0];
   const presets = Array.isArray(r.presets)
@@ -69,6 +70,7 @@ export async function getFullProfile(userId: string): Promise<FullProfile> {
     presentation: { wornItemIds: asArr(r.worn_item_ids), grooming: (r.grooming ?? {}) as PresentationState['grooming'] },
     inventory,
     presets,
+    avatarKey: r.avatar_key ?? null,
   };
 }
 
@@ -126,4 +128,13 @@ export async function deleteItem(userId: string, id: string): Promise<boolean> {
     [id, userId],
   );
   return (rowCount ?? 0) > 0;
+}
+
+export async function setAvatarKey(userId: string, avatarKey: string | null): Promise<void> {
+  await pool.query(
+    `INSERT INTO player_profiles (user_id, avatar_key, updated_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (user_id) DO UPDATE SET avatar_key = EXCLUDED.avatar_key, updated_at = NOW()`,
+    [userId, avatarKey],
+  );
 }

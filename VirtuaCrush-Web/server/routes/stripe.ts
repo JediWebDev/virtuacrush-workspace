@@ -17,6 +17,9 @@ import { requireAuth } from '../middleware/auth';
 import {
     upsertSubscription,
     getUserIdByStripeCustomer,
+    getSubscriptionRow,
+    isSubscribed,
+    type SubscriptionDetails,
 } from '../db/subscriptions';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -24,6 +27,106 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 });
 
 const router = Router();
+
+async function buildSubscriptionDetails(userId: string): Promise<SubscriptionDetails> {
+    const row = await getSubscriptionRow(userId);
+    const subscribed = await isSubscribed(userId);
+
+    if (!row) {
+        return {
+            subscribed: false,
+            plan: 'free',
+            status: null,
+            currentPeriodEnd: null,
+            cancelAtPeriodEnd: false,
+            paused: false,
+            stripeManaged: false,
+        };
+    }
+
+    let cancelAtPeriodEnd = false;
+    let paused = false;
+    let currentPeriodEnd = row.current_period_end?.toISOString() ?? null;
+
+    if (row.stripe_subscription_id) {
+        try {
+            const sub = await stripe.subscriptions.retrieve(row.stripe_subscription_id);
+            cancelAtPeriodEnd = sub.cancel_at_period_end;
+            paused = sub.pause_collection != null;
+            const periodEnd = sub.items.data[0]?.current_period_end;
+            if (periodEnd) currentPeriodEnd = new Date(periodEnd * 1000).toISOString();
+        } catch (err) {
+            console.warn('[stripe] subscription retrieve failed:', err);
+        }
+    }
+
+    return {
+        subscribed,
+        plan: subscribed ? 'pro' : 'free',
+        status: row.status,
+        currentPeriodEnd,
+        cancelAtPeriodEnd,
+        paused,
+        stripeManaged: Boolean(row.stripe_subscription_id),
+    };
+}
+
+// --- Subscription status (account page) --------------------------------------
+router.get('/subscription', requireAuth, async (req, res) => {
+    try {
+        res.json(await buildSubscriptionDetails(req.user!.id));
+    } catch (err) {
+        console.error('[stripe] subscription status failed:', err);
+        res.status(500).json({ error: 'subscription_status_failed' });
+    }
+});
+
+router.post('/subscription/cancel', requireAuth, async (req, res) => {
+    const row = await getSubscriptionRow(req.user!.id);
+    if (!row?.stripe_subscription_id) {
+        return res.status(400).json({ error: 'no_stripe_subscription' });
+    }
+    try {
+        await stripe.subscriptions.update(row.stripe_subscription_id, { cancel_at_period_end: true });
+        res.json(await buildSubscriptionDetails(req.user!.id));
+    } catch (err) {
+        console.error('[stripe] cancel failed:', err);
+        res.status(500).json({ error: 'cancel_failed' });
+    }
+});
+
+router.post('/subscription/pause', requireAuth, async (req, res) => {
+    const row = await getSubscriptionRow(req.user!.id);
+    if (!row?.stripe_subscription_id) {
+        return res.status(400).json({ error: 'no_stripe_subscription' });
+    }
+    try {
+        await stripe.subscriptions.update(row.stripe_subscription_id, {
+            pause_collection: { behavior: 'mark_uncollectible' },
+        });
+        res.json(await buildSubscriptionDetails(req.user!.id));
+    } catch (err) {
+        console.error('[stripe] pause failed:', err);
+        res.status(500).json({ error: 'pause_failed' });
+    }
+});
+
+router.post('/subscription/resume', requireAuth, async (req, res) => {
+    const row = await getSubscriptionRow(req.user!.id);
+    if (!row?.stripe_subscription_id) {
+        return res.status(400).json({ error: 'no_stripe_subscription' });
+    }
+    try {
+        await stripe.subscriptions.update(row.stripe_subscription_id, {
+            pause_collection: '',
+            cancel_at_period_end: false,
+        });
+        res.json(await buildSubscriptionDetails(req.user!.id));
+    } catch (err) {
+        console.error('[stripe] resume failed:', err);
+        res.status(500).json({ error: 'resume_failed' });
+    }
+});
 
 // --- Create Checkout Session -------------------------------------------------
 router.post('/checkout', requireAuth, async (req, res) => {
