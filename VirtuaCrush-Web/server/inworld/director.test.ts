@@ -128,6 +128,20 @@ test('parseDirectorOutput: drops companion dialogue and narrator-style choices',
   assert.equal(out.choices[0]?.userMessage, 'What happened back there?');
 });
 
+test('sanitizeReplyChoices: filters third-person action narration', () => {
+  const kept = sanitizeReplyChoices(
+    [
+      { label: 'Give her my number', userMessage: 'I give Becca my phone number and add hers to my contacts.' },
+      { label: "Here's my number", userMessage: "Here's my number — text me anytime." },
+      { label: 'Hand her my phone', userMessage: '*hand her my phone so she can add her contact*' },
+    ],
+    'Becca',
+    [],
+  );
+  assert.equal(kept.length, 2);
+  assert.equal(kept[0]?.userMessage, "Here's my number — text me anytime.");
+});
+
 test('sanitizeReplyChoices: filters second-person and companion-prefixed lines', () => {
   const kept = sanitizeReplyChoices(
     [

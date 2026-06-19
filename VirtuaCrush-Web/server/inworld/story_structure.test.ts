@@ -16,8 +16,10 @@ test('resolveArcAct: early turns are beginning', () => {
   assert.equal(resolveArcAct({ userTurnsSinceStart: 2, arcStatus: 'ongoing' }), 'beginning');
 });
 
-test('resolveArcAct: climax maps to end', () => {
-  assert.equal(resolveArcAct({ userTurnsSinceStart: 5, arcStatus: 'climax' }), 'end');
+test('resolveArcAct: meet arcs enter end act sooner', () => {
+  assert.equal(resolveArcAct({ userTurnsSinceStart: 1, isMeetArc: true }), 'beginning');
+  assert.equal(resolveArcAct({ userTurnsSinceStart: 3, isMeetArc: true }), 'middle');
+  assert.equal(resolveArcAct({ userTurnsSinceStart: 6, isMeetArc: true }), 'end');
 });
 
 test('resolvePackNodeAct: start is beginning, terminal is end', () => {

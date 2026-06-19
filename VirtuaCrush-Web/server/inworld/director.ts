@@ -10,6 +10,7 @@ import type { ChatMessage } from './chat';
 import { validateIntent, type PlayerIntent } from '../sim/intent';
 import { NARRATOR_BRIEF } from './characters';
 import { formatStoryActDirective, type StoryAct } from './story_structure';
+import { formatMeetArcPacingBlock } from './meet_arc';
 import { parseSceneSnapshotPatch, type SceneSnapshotPatch } from './scene_snapshot';
 
 export type ActorKind = 'companion' | 'narrator' | 'npc';
@@ -23,6 +24,8 @@ export interface ArcContext {
   completionCriteria: string;
   /** Concrete examples grounding the LLM's completion evaluation. */
   completionExamples: string[];
+  /** First-meet arc — shorter pacing and stricter completion rules. */
+  isMeetArc?: boolean;
   /** Three-act phase for structured arc pacing (not used in plain free roam). */
   storyAct?: StoryAct;
   /** Engine-owned scene/cast block — must not be contradicted without a transition. */
@@ -176,9 +179,12 @@ ${stage.arcContext.sceneDirective ?? ''}
 
 ARC COMPLETION CRITERIA: ${stage.arcContext.completionCriteria}
 Examples of completion: ${stage.arcContext.completionExamples.map((e, i) => `(${i + 1}) ${e}`).join(' ')}
+${stage.arcContext.isMeetArc ? formatMeetArcPacingBlock() : ''}
 
 USER FREEDOM — ABSURDITY IS NOT ABANDONMENT: If the player responds with something chaotic, unhinged, or unorthodox, they are still engaging — keep arcStatus "ongoing" or "climax". Only emit "abandoned" if the player has persistently changed the subject over multiple turns or explicitly exited the conversation.
-PACING: Hold "ongoing" across multiple turns. Use "climax" to mark the emotional breaking point immediately before resolution. Only emit "completed" after a genuine climax beat.` : '';
+PACING: ${stage.arcContext.isMeetArc
+    ? 'Meet-cute only — complete as soon as criteria are met (see MEET-CUTE PACING). Do not drag past a natural landing.'
+    : 'Hold "ongoing" across multiple turns. Use "climax" to mark the emotional breaking point immediately before resolution. Only emit "completed" after a genuine climax beat.'}` : '';
 
   const sceneSoFar = stage.priorSceneState
     ? `\n\n=== SCENE SO FAR (authoritative continuity — honor this; it persists beyond the recent messages) ===\n${stage.priorSceneState}`
@@ -220,7 +226,7 @@ ${speakerLines}
 
 Guidance for "lines": ALWAYS include at least one "${stage.companionName}" line with their spoken reply so the player gets an answer. Put ANY physical action, reaction, expression, or scene beat in a "narrator" line — characters NEVER narrate themselves, so most turns also include a "narrator" line. (Only a pure, wordless reaction may be a "narrator" line alone.) Keep it short. Never write a line for the player in "lines". When ${stage.companionName} speaks TO the player in a "lines" entry, address them as "you" (second person) — never call them "the user" or "the player".
 SUGGESTED MOVES ("choices" field ONLY — separate from "lines"): Offer 2–3 short, DISTINCT tap-to-send messages FROM THE PLAYER (the human), not from ${stage.companionName}. These become the player's next chat message if tapped — so they must read as the player speaking or acting, never as ${stage.companionName}'s reply.
-- Speech: first person toward ${stage.companionName} (e.g. "I've been thinking about you", "What happened back there?"). Do NOT write ${stage.companionName}'s dialogue, reactions, or reassurances (wrong: "Don't worry, I've got you", "I'm so glad you're here" when ${stage.companionName} would say that).
+- Speech: first person toward ${stage.companionName} (e.g. "I've been thinking about you", "What happened back there?", "Here's my number"). Do NOT write story narration (wrong: "I give ${stage.companionName} my phone number" — right: "Here's my number" or *hand her my phone*).
 - Actions: *asterisk-wrapped* player actions (e.g. *take her hand*, *look around the room*).
 - NEVER use second-person "You …" to describe the player (wrong: "You ask her about her day" — that is narrator voice, not a sendable player message).
 ${stage.playerName ? `The player's name is "${stage.playerName}" — if a move has them give their name, write "${stage.playerName}" verbatim.` : `If a move would have them give their name, phrase it without one (e.g. "introduce yourself").`} NEVER use placeholders, brackets, or template tokens of any kind (no "[Name]", "[your name]", "{name}", etc.) — every choice must be real text the player could send as-is. Do NOT suggest moves that repeat something already done or established earlier in the conversation — e.g. re-introducing themselves, re-stating their name, or re-asking something already answered; if names have already been exchanged, never offer an introduction again. Every choice must move the conversation FORWARD. CRUCIAL — fit the player's CURRENT situation: choices may only be things THIS player could actually attempt right now from where they are. If the player is NOT with ${stage.companionName} (separated, captive, elsewhere) or is restrained/gagged/hurt, offer the player's OWN actions in first person or *actions* (e.g. *try to wriggle wrists loose*, "Can anyone hear me?" if they can speak) — NOT lines ${stage.companionName} would say, NOT instructions for ${stage.companionName} to follow, and NOT casual chat with ${stage.companionName} if they cannot reach them. Never offer a choice that requires an ability the player doesn't currently have. These are optional; never assume the player has chosen one.
@@ -277,6 +283,23 @@ function looksLikeSecondPersonPlayerDesc(text: string): boolean {
   return /^you\b/i.test(text.trim()) && !/^\*[^*]+\*$/.test(text.trim());
 }
 
+/** True when text reads like third-person action narration, not a sendable line. */
+function looksLikeThirdPersonActionNarration(text: string, companionName: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  const name = companionName.trim();
+  if (name && new RegExp(`^I (give|hand|tell|ask|offer|pass|show|text) ${escapeCompanionName(name)}\\b`, 'i').test(t)) {
+    return true;
+  }
+  if (/^I give [A-Z][a-z]+ my\b/i.test(t)) return true;
+  if (/^I (hand|pass|offer|show) (her|him|them) my\b/i.test(t)) return true;
+  return false;
+}
+
+function escapeCompanionName(name: string): string {
+  return name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /** Drop choices that duplicate companion dialogue or use narrator "You …" voice. */
 export function sanitizeReplyChoices(
   choices: ReplyChoice[],
@@ -295,6 +318,9 @@ export function sanitizeReplyChoices(
     if (companionNorm.has(msgNorm) || companionNorm.has(label.toLowerCase())) return false;
     if (tag && (msgNorm.startsWith(`${tag},`) || msgNorm.startsWith(`${tag}:`))) return false;
     if (looksLikeSecondPersonPlayerDesc(msg) || looksLikeSecondPersonPlayerDesc(label)) return false;
+    if (looksLikeThirdPersonActionNarration(msg, companionName) || looksLikeThirdPersonActionNarration(label, companionName)) {
+      return false;
+    }
     return true;
   });
 }

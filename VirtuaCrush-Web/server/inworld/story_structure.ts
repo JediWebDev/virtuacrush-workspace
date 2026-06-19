@@ -134,8 +134,15 @@ export function formatStoryActDirective(act: StoryAct, mode: 'arc' | 'pack'): st
 export function resolveArcAct(opts: {
   arcStatus?: 'ongoing' | 'climax' | 'completed' | 'abandoned';
   userTurnsSinceStart: number;
+  /** Meet-cute arcs resolve faster — enter the end act after a few turns. */
+  isMeetArc?: boolean;
 }): StoryAct {
   if (opts.arcStatus === 'climax' || opts.arcStatus === 'completed') return 'end';
+  if (opts.isMeetArc) {
+    if (opts.userTurnsSinceStart <= 1) return 'beginning';
+    if (opts.userTurnsSinceStart <= 4) return 'middle';
+    return 'end';
+  }
   if (opts.userTurnsSinceStart <= 2) return 'beginning';
   return 'middle';
 }

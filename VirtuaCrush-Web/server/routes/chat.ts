@@ -14,7 +14,7 @@ import { selectArc, getArc, type SceneAnchor, type StoryArc } from '../inworld/a
 import { getUserStory } from '../db/user_stories';
 import { userStoryToArc } from '../inworld/user_arc';
 import { resolveActiveStoryArc, arcOpeningLine } from '../inworld/active_arc';
-import { hasCompletedMeetArc, MEET_AFFINITY_REWARD, resolveMeetCompletionBadge } from '../inworld/meet_arc';
+import { hasCompletedMeetArc, MEET_AFFINITY_REWARD, meetArcReadyToComplete, resolveMeetCompletionBadge } from '../inworld/meet_arc';
 import { resolveFreeRoamWindow, freeRoamWindowClause, type FreeRoamWindow } from '../db/chat_window';
 import { sanitizeRoleplayTranscript } from '../inworld/transcript_sanitize';
 import { ensureUserCharacterLoaded } from '../db/user_characters';
@@ -366,7 +366,9 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       await setArcActive(req.user!.id, characterId, candidate.id);
       activeArc = candidate;
       arcJustStarted = true;
-      arcIntroNarrative = candidate.introNarrative;
+      if (!candidate.isMeetArc && candidate.introNarrative?.trim()) {
+        arcIntroNarrative = candidate.introNarrative;
+      }
     }
   }
   if (activeArc) {
@@ -374,6 +376,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       npcInstruction: activeArc.npcInstruction,
       completionCriteria: activeArc.completionCriteria,
       completionExamples: activeArc.completionExamples,
+      isMeetArc: !!activeArc.isMeetArc,
     };
     // Studio / user arcs: prepend intro on the first user turn unless Play already seeded it.
     if (currentArcId?.startsWith('user:') && activeArc.introNarrative?.trim()) {
@@ -566,6 +569,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       );
       arcContext.storyAct = resolveArcAct({
         userTurnsSinceStart: Number(arcTurnRows[0]?.n ?? 0),
+        isMeetArc: !!activeArc.isMeetArc,
       });
       arcContext.npcInstruction = resolveArcNpcInstruction(
         activeArc.npcInstruction,
@@ -764,26 +768,44 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
       // --- Arc evaluation ---
       if (arcResult && activeArc) {
-        const { arcStatus } = arcResult;
+        const startedAt = arcStateResult.activeArcStartedAt ?? new Date(0);
+        const { rows: tcRows } = await pool.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM chat_messages
+           WHERE user_id = $1 AND character_id = $2 AND role = 'user' AND created_at > $3`,
+          [req.user!.id, characterId, startedAt],
+        );
+        const userTurnsSinceStart = Number(tcRows[0]?.n ?? 0) + 1;
+
+        let arcStatus = arcResult.arcStatus;
+        if (
+          activeArc.isMeetArc &&
+          !arcJustStarted &&
+          arcStatus !== 'completed' &&
+          meetArcReadyToComplete({
+            userTurnsSinceStart,
+            playerDisplayName: world?.user.profile.displayName ?? '',
+            companionName: displayName,
+            recentText: [...turns, { role: 'user' as const, content: message }]
+              .slice(-14)
+              .map((m) => m.content)
+              .join('\n'),
+            currentUserMessage: message,
+          })
+        ) {
+          arcStatus = 'completed';
+        }
+
         const completionBadge = activeArc.isMeetArc
           ? resolveMeetCompletionBadge(activeArc, arcResult.earnedBadge)
           : arcResult.earnedBadge;
         if (arcStatus === 'completed' && !arcJustStarted && completionBadge) {
-          // Minimum-turn guard: only accept completion after at least 3 player
-          // turns since the arc started (prevents LLM false positives on turn 1).
-          const startedAt = arcStateResult.activeArcStartedAt ?? new Date(0);
-          const { rows: tcRows } = await pool.query<{ n: number }>(
-            `SELECT count(*)::int AS n FROM chat_messages
-             WHERE user_id = $1 AND character_id = $2 AND role = 'user' AND created_at > $3`,
-            [req.user!.id, characterId, startedAt],
-          );
-          const turnsSinceStart = Number(tcRows[0]?.n ?? 0);
-          if (turnsSinceStart >= 2) {
+          if (userTurnsSinceStart >= 2) {
             earnedBadge = completionBadge;
             void saveCompletedArc(req.user!.id, characterId, activeArc, earnedBadge).catch(() => {});
             void clearArcState(req.user!.id, characterId).catch(() => {});
             if (activeArc.isMeetArc) {
               affinityAwarded = MEET_AFFINITY_REWARD;
+              replyChoices = [];
             }
           }
         } else if (arcStatus === 'abandoned') {
