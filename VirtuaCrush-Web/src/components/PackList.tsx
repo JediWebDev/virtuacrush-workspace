@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { BookOpen, Clock, Zap, Lock } from "lucide-react";
 import { listPacks, startPack, ApiError, type PackMeta, type PackSession } from "../lib/api";
+import { BRAND } from "../lib/brand";
+
+const PACK_COVER_GRADIENT = `linear-gradient(135deg, ${BRAND.indigoBloom}, ${BRAND.electricSapphire})`;
 
 const MOOD_LABELS: Record<string, string> = {
   romantic: "Romance",
@@ -92,7 +95,6 @@ export default function PackList({ characterId, meetArcComplete = true, activeSe
           const hasOtherActive = !!activeSession && !isActive;
           const meetLocked = meetArcComplete === false;
           const isStarting = starting === pack.id;
-          const [from, to] = pack.coverGradient;
 
           return (
             <div
@@ -106,7 +108,7 @@ export default function PackList({ characterId, meetArcComplete = true, activeSe
               {/* Gradient cover strip */}
               <div
                 className="h-16 w-full"
-                style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
+                style={{ background: PACK_COVER_GRADIENT }}
               >
                 {/* Overlay text on cover */}
                 <div className="flex h-full flex-col justify-end p-3">
@@ -154,8 +156,7 @@ export default function PackList({ characterId, meetArcComplete = true, activeSe
                       <button
                         type="button"
                         onClick={() => onResume?.()}
-                        className="flex-1 rounded-xl py-2 text-xs font-semibold text-white transition-opacity"
-                        style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
+                        className="flex-1 rounded-xl bg-gradient-to-br from-brand-indigo to-brand-sapphire py-2 text-xs font-semibold text-white transition-opacity"
                       >
                         Resume story
                       </button>
@@ -184,8 +185,7 @@ export default function PackList({ characterId, meetArcComplete = true, activeSe
                     type="button"
                     onClick={() => handleStart(pack)}
                     disabled={!!isStarting}
-                    className="w-full rounded-xl py-2 text-xs font-semibold text-white transition-opacity disabled:opacity-50"
-                    style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
+                    className="w-full rounded-xl bg-gradient-to-br from-brand-indigo to-brand-sapphire py-2 text-xs font-semibold text-white transition-opacity disabled:opacity-50"
                   >
                     {isStarting ? "Starting…" : "Play"}
                   </button>
