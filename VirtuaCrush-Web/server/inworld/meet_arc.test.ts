@@ -46,7 +46,7 @@ test('resolveMeetCompletionBadge falls back to authored meet badge', () => {
 });
 
 test('MEET_AFFINITY_REWARD is a modest bump', () => {
-  assert.ok(MEET_AFFINITY_REWARD >= 5 && MEET_AFFINITY_REWARD <= 15);
+  assert.ok(MEET_AFFINITY_REWARD >= 2 && MEET_AFFINITY_REWARD <= 6);
 });
 
 test('meetArcReadyToComplete: Becca-style transcript lands the meet', () => {

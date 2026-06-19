@@ -67,8 +67,7 @@ import {
   requiredCastNames,
 } from '../inworld/story_structure';
 
-/** Affinity awarded for finishing a story when the pack doesn't specify its own. */
-const DEFAULT_AFFINITY_REWARD = 10;
+import { DEFAULT_PACK_AFFINITY_REWARD } from '../progression';
 
 const router = Router();
 
@@ -659,7 +658,7 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
   let affinity: number | undefined;
   if (sessionCompleted) {
     choices = null;
-    affinityAwarded = pack.affinityReward ?? DEFAULT_AFFINITY_REWARD;
+    affinityAwarded = pack.affinityReward ?? DEFAULT_PACK_AFFINITY_REWARD;
     try {
       affinity = await incrementAffinity(req.user!.id, session.characterId, affinityAwarded);
     } catch (e) {

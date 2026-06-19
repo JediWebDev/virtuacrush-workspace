@@ -3,7 +3,9 @@ import type { ArcPhaseInstructions, StoryArc } from './arcs';
 import { getArc } from './arcs';
 
 /** Affinity granted when the player completes a character's meet-cute arc. */
-export const MEET_AFFINITY_REWARD = 8;
+import { MEET_AFFINITY_REWARD } from '../progression';
+
+export { MEET_AFFINITY_REWARD };
 
 export function meetArcIdFor(characterId: string): string {
   return `${characterId}_meet`;

@@ -66,7 +66,7 @@ test('conflict insult drops affinity; threaten also warns', () => {
 });
 
 test('romance/social consequences', () => {
-  assert.ok(consequencesFor({ type: 'romance', subtype: 'confession' }, world()).some((c) => c.type === 'affinity' && c.delta > 1));
+  assert.ok(consequencesFor({ type: 'romance', subtype: 'confession' }, world()).some((c) => c.type === 'affinity' && c.delta > 0.4));
   assert.ok(consequencesFor({ type: 'social', subtype: 'compliment' }, world()).some((c) => c.type === 'affinity' && c.delta > 0));
 });
 

@@ -10,7 +10,7 @@ import { getAffinity } from '../db/affinity';
 import { getCompletedArcIds } from '../db/arc_state';
 import { hasCompletedMeetArc } from '../inworld/meet_arc';
 import { initEmotions, topEmotions, pendingEventFromEmotions, type EmotionState } from '../sim/emotions';
-import { SECRET_REVEAL_AFFINITY } from '../sim/traits';
+import { SECRET_REVEAL_AFFINITY, secretTrustProgress } from '../progression';
 import { getCharacter } from '../inworld/characters';
 import { ensureUserCharacterLoaded } from '../db/user_characters';
 
@@ -44,7 +44,7 @@ router.get('/:characterId', requireAuth, async (req: Request, res: Response) => 
     const pendingEvent = pendingEventFromEmotions(emotions, characterId, displayName);
 
     const secretDiscovered = affinity >= SECRET_REVEAL_AFFINITY;
-    const secretProgress = Math.min(100, Math.round((affinity / SECRET_REVEAL_AFFINITY) * 100));
+    const secretProgress = secretTrustProgress(affinity);
 
     res.json({
       characterId,

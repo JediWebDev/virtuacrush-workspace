@@ -79,7 +79,7 @@ export async function maybeAutonomousPost(p: {
   }
 }
 
-const AFFINITY_MILESTONES = [25, 50, 75] as const;
+const AFFINITY_MILESTONES = [35, 55, 80] as const;
 const CONTACT_OR_PLANS =
   /\b(number|digits|phone)\b|\btext me\b|\bhit me up\b|\bcall me\b|\bsee you (again|around|soon|next|later)\b|\bnext time\b|\bhang ?out\b|\bget together\b|\bmeet ?up\b|\bagain sometime\b|\bcome over\b|\byour place\b/i;
 

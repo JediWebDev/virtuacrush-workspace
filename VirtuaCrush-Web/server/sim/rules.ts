@@ -1,6 +1,7 @@
 // Layer 2: the engine. Maps a classified+normalized intent to CONSEQUENCES,
 // switching on the closed category then the (canonical) subtype, with a safe
 // default per category. Sole authority over what actions mean. Pure + testable.
+import { CHAT_AFFINITY_SCALE } from '../progression';
 import type { PlayerIntent } from './intent';
 import type { WorldState } from './world';
 
@@ -25,12 +26,18 @@ const CONFLICT: Record<string, { delta: number; warn: boolean }> = {
   argue: { delta: -1, warn: false }, threaten: { delta: -2, warn: true }, intimidate: { delta: -2, warn: true },
 };
 
+function scaleAffinityDelta(delta: number): number {
+  if (delta <= 0) return delta;
+  return Math.round(delta * CHAT_AFFINITY_SCALE * 100) / 100;
+}
+
 function affinityDelta(
   target: string,
   delta: number,
   reason: string,
 ): Consequence[] {
-  return delta !== 0 ? [{ type: 'affinity', npc: target, delta, reason }] : [];
+  const scaled = scaleAffinityDelta(delta);
+  return scaled !== 0 ? [{ type: 'affinity', npc: target, delta: scaled, reason }] : [];
 }
 
 export function consequencesFor(intent: PlayerIntent, world: WorldState): Consequence[] {
@@ -53,9 +60,9 @@ export function consequencesFor(intent: PlayerIntent, world: WorldState): Conseq
 
     case 'transaction': {
       if (intent.subtype === 'gift') {
-        return [{ type: 'affinity', npc: target, delta: 1.5, reason: 'gift' }];
+        return [{ type: 'affinity', npc: target, delta: scaleAffinityDelta(1.5), reason: 'gift' }];
       }
-      if (intent.subtype === 'tip') return [{ type: 'affinity', npc: target, delta: 0.3, reason: 'tip' }];
+      if (intent.subtype === 'tip') return [{ type: 'affinity', npc: target, delta: scaleAffinityDelta(0.3), reason: 'tip' }];
       return [];
     }
 

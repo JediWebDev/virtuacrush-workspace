@@ -27,7 +27,7 @@ export interface CityLocation {
   zone: 'player' | 'arts' | 'downtown' | 'residential_n' | 'residential_s';
 }
 
-export const AFFINITY_HOME_GATE = 25;
+export const AFFINITY_HOME_GATE = 35;
 
 export const LOCATIONS: CityLocation[] = [
   // ── Player home ────────────────────────────────────────────────────────────

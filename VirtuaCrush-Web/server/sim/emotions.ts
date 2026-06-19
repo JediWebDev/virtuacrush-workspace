@@ -4,6 +4,10 @@
 // matches the gauges the user sees. Event cards (encourage/redirect/decline)
 // fire from emotion thresholds. Pure + testable.
 import type { PlayerIntent } from './intent';
+import {
+  DESIRE_DECLINE_AFFINITY,
+  DESIRE_ENCOURAGE_AFFINITY,
+} from '../progression';
 
 export const EMOTIONS = [
   'aroused',
@@ -274,7 +278,7 @@ export function applyEmotionChoice(
   switch (choice) {
     case 'encourage':
       next[emoKey] = clamp(v - 45);
-      affinityDelta = 3;
+      affinityDelta = DESIRE_ENCOURAGE_AFFINITY;
       moodHint = 'flushed';
       reaction = `The player welcomed it warmly — ${name} is delighted and a little breathless; lean into the moment, tasteful and warm.`;
       break;
@@ -285,7 +289,7 @@ export function applyEmotionChoice(
       break;
     case 'decline':
       next[emoKey] = clamp(v - 30);
-      affinityDelta = -2;
+      affinityDelta = DESIRE_DECLINE_AFFINITY;
       moodHint = 'sheepish';
       reaction = `The player passed — ${name} plays it off but is a touch deflated; recover gracefully, no guilt-tripping.`;
       break;

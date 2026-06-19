@@ -14,6 +14,7 @@
 //     terminal/ending beat.
 import type { StoryPack, PackNode, PackChoice, PackMood, PackNpc } from './pack_types';
 import type { UserStory } from '../db/user_stories';
+import { DEFAULT_PACK_AFFINITY_REWARD } from '../progression';
 import { PACK_MOODS, isPackMood } from '../studio/schema';
 import { parseSceneNpcRefs, type SceneNpcRef } from './npc_schema';
 
@@ -185,7 +186,7 @@ export function userStoryToPack(story: UserStory): StoryPack | null {
     tags: [],
     mood: (MOODS.includes(s.mood as PackMood) ? s.mood : 'dramatic') as PackMood,
     estimatedMinutes: 10,
-    affinityReward: 10,
+    affinityReward: DEFAULT_PACK_AFFINITY_REWARD,
     coverGradient: ['#c9717d', '#8b5cf6'],
     systemInstruction: s.systemInstruction || '',
     sceneAnchor: {

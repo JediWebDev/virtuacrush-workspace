@@ -2,9 +2,9 @@
 // blocks, the hybrid secret-discovery gate, mood-proneness bias, and desire
 // nudges for the off-screen world tick. No IO — easy to unit test.
 import type { CharacterLore } from '../inworld/lore';
+import { SECRET_REVEAL_AFFINITY } from '../progression';
 
-/** Affinity needed before a probing player can unlock a secret. */
-export const SECRET_REVEAL_AFFINITY = 40;
+export { SECRET_REVEAL_AFFINITY };
 
 /** Heuristic: is the player digging at who the character really is / their secret? */
 export function isProbing(message: string): boolean {
