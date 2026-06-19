@@ -14,6 +14,7 @@ import { selectArc, getArc, type SceneAnchor, type StoryArc } from '../inworld/a
 import { getUserStory } from '../db/user_stories';
 import { userStoryToArc } from '../inworld/user_arc';
 import { resolveActiveStoryArc, arcOpeningLine } from '../inworld/active_arc';
+import { hasCompletedMeetArc, MEET_AFFINITY_REWARD, resolveMeetCompletionBadge } from '../inworld/meet_arc';
 import { resolveFreeRoamWindow, freeRoamWindowClause, type FreeRoamWindow } from '../db/chat_window';
 import { sanitizeRoleplayTranscript } from '../inworld/transcript_sanitize';
 import { ensureUserCharacterLoaded } from '../db/user_characters';
@@ -21,7 +22,7 @@ import { getArcState, setArcActive, clearArc as clearArcState, incrementAbandonm
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
 import { pool } from '../db/pool';
-import { getAffinity } from '../db/affinity';
+import { getAffinity, incrementAffinity } from '../db/affinity';
 import {
   retrieveRelevantMemories,
   formatMemoryBlock,
@@ -149,6 +150,8 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
     const freeRoamWindow = await resolveFreeRoamWindow(userId, characterId);
+    const completedArcIds = await getCompletedArcIds(userId, characterId);
+    const meetArcComplete = hasCompletedMeetArc(characterId, completedArcIds);
     const { arc: activeArc } = await resolveActiveStoryArc(userId, characterId);
 
     // Opening scene: use the active story arc when one is running; otherwise free-roam compose.
@@ -184,12 +187,12 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
 
     if (rows.length > 0) {
       const history = await loadHistory(userId, characterId, freeRoamWindow);
-      return res.json({ hasHistory: true, history, sceneHeader, activeStoryArc, arcActive: !!activeArc?.sceneAnchor });
+      return res.json({ hasHistory: true, history, sceneHeader, activeStoryArc, arcActive: !!activeArc?.sceneAnchor, meetArcComplete });
     }
 
     // First contact with no history: skip the meet-cute greeting when a Studio arc is active.
     if (activeArc?.sceneAnchor) {
-      return res.json({ hasHistory: false, sceneHeader, activeStoryArc, arcActive: true });
+      return res.json({ hasHistory: false, sceneHeader, activeStoryArc, arcActive: true, meetArcComplete });
     }
 
     const character = getCharacter(characterId);
@@ -201,7 +204,7 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
       [userId, characterId, greetingText],
     );
 
-    return res.json({ hasHistory: false, greeting: greetingText, sceneHeader, activeStoryArc });
+    return res.json({ hasHistory: false, greeting: greetingText, sceneHeader, activeStoryArc, meetArcComplete });
   } catch (err) {
     console.error('[chat] greet error:', err);
     return res.status(500).json({ error: 'greet_failed' });
@@ -330,6 +333,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let arcSceneInit = false;
   let arcIntroNarrative: string | undefined;
   let earnedBadge: { title: string; description: string } | null = null;
+  let affinityAwarded = 0;
 
   // --- Arc selection / continuation ---
   // If one is active, load it (a "user:<id>" ref is a player-authored Studio
@@ -340,14 +344,18 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let onUserArc = false;
   if (currentArcId?.startsWith('user:')) {
     onUserArc = true;
-    try {
-      const story = await getUserStory(currentArcId.slice('user:'.length));
-      if (story && story.ownerUserId === req.user!.id) activeArc = userStoryToArc(story);
-    } catch (e) { console.warn('[chat] user arc load failed:', e); }
-    if (!activeArc) {
-      // Stale/invalid Studio arc — clear it so auto-selection can resume.
+    if (!hasCompletedMeetArc(characterId, completedArcIds)) {
       await clearArcState(req.user!.id, characterId).catch(() => {});
       onUserArc = false;
+    } else {
+      try {
+        const story = await getUserStory(currentArcId.slice('user:'.length));
+        if (story && story.ownerUserId === req.user!.id) activeArc = userStoryToArc(story);
+      } catch (e) { console.warn('[chat] user arc load failed:', e); }
+      if (!activeArc) {
+        await clearArcState(req.user!.id, characterId).catch(() => {});
+        onUserArc = false;
+      }
     }
   } else if (currentArcId) {
     activeArc = getArc(currentArcId);
@@ -757,7 +765,10 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       // --- Arc evaluation ---
       if (arcResult && activeArc) {
         const { arcStatus } = arcResult;
-        if (arcStatus === 'completed' && !arcJustStarted && arcResult.earnedBadge) {
+        const completionBadge = activeArc.isMeetArc
+          ? resolveMeetCompletionBadge(activeArc, arcResult.earnedBadge)
+          : arcResult.earnedBadge;
+        if (arcStatus === 'completed' && !arcJustStarted && completionBadge) {
           // Minimum-turn guard: only accept completion after at least 3 player
           // turns since the arc started (prevents LLM false positives on turn 1).
           const startedAt = arcStateResult.activeArcStartedAt ?? new Date(0);
@@ -768,9 +779,12 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           );
           const turnsSinceStart = Number(tcRows[0]?.n ?? 0);
           if (turnsSinceStart >= 2) {
-            earnedBadge = arcResult.earnedBadge;
+            earnedBadge = completionBadge;
             void saveCompletedArc(req.user!.id, characterId, activeArc, earnedBadge).catch(() => {});
             void clearArcState(req.user!.id, characterId).catch(() => {});
+            if (activeArc.isMeetArc) {
+              affinityAwarded = MEET_AFFINITY_REWARD;
+            }
           }
         } else if (arcStatus === 'abandoned') {
           const newStrikes = await incrementAbandonmentStrikes(req.user!.id, characterId);
@@ -834,8 +848,16 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       assistantMessage: assistantFull,
     });
 
-    // Affinity is driven by the engine (consequencesFor -> applyEffects).
-    const newAffinityScore: number = appliedAffinity ?? affinity;
+    // Affinity is driven by the engine (consequencesFor -> applyEffects), plus meet-arc completion bonus.
+    let newAffinityScore: number = appliedAffinity ?? affinity;
+    if (affinityAwarded > 0) {
+      try {
+        newAffinityScore = await incrementAffinity(req.user!.id, characterId, affinityAwarded);
+      } catch (e) {
+        console.warn('[chat] meet affinity award failed:', e);
+        affinityAwarded = 0;
+      }
+    }
 
     // Autonomous social post: if this turn hit a meaningful beat (first-meeting
     // completed, plans/contact swapped, an affinity milestone, or a real
@@ -866,7 +888,15 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       remaining = Math.max(0, FREE_TIER_DAILY_LIMIT - used);
     }
 
-    send('done', { remaining, affinityScore: newAffinityScore, earnedBadge, choices: replyChoices, posted });
+    send('done', {
+      remaining,
+      affinityScore: newAffinityScore,
+      affinityAwarded,
+      earnedBadge,
+      meetArcComplete: earnedBadge && activeArc?.isMeetArc ? true : undefined,
+      choices: replyChoices,
+      posted,
+    });
 
     res.end();
   } catch (err) {

@@ -7,6 +7,8 @@ import { getSituation } from '../db/state';
 import { getLore } from '../inworld/lore';
 import { getNpcStates } from '../db/npc_state';
 import { getAffinity } from '../db/affinity';
+import { getCompletedArcIds } from '../db/arc_state';
+import { hasCompletedMeetArc } from '../inworld/meet_arc';
 import { initEmotions, topEmotions, pendingEventFromEmotions, type EmotionState } from '../sim/emotions';
 import { SECRET_REVEAL_AFFINITY } from '../sim/traits';
 import { getCharacter } from '../inworld/characters';
@@ -23,9 +25,10 @@ router.get('/:characterId', requireAuth, async (req: Request, res: Response) => 
       const ok = await ensureUserCharacterLoaded(characterId, req.user!.id);
       if (!ok) return res.status(404).json({ error: 'unknown_character' });
     }
-    const [{ state, scene }, affinity] = await Promise.all([
+    const [{ state, scene }, affinity, completedArcIds] = await Promise.all([
       getSituation(req.user!.id, characterId),
       getAffinity(req.user!.id, characterId),
+      getCompletedArcIds(req.user!.id, characterId),
     ]);
     const lore = getLore(characterId);
 
@@ -61,6 +64,7 @@ router.get('/:characterId', requireAuth, async (req: Request, res: Response) => 
       drives,
       pendingEvent,
       sceneLocation: scene.location ?? null,
+      meetArcComplete: hasCompletedMeetArc(characterId, completedArcIds),
     });
   } catch (err) {
     console.error('[state] get failed:', err);

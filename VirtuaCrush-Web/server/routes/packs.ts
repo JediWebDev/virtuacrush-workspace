@@ -25,6 +25,8 @@ import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
 import { formatPersonaTraitsBlock } from '../sim/traits';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
 import { incrementAffinity } from '../db/affinity';
+import { getCompletedArcIds } from '../db/arc_state';
+import { hasCompletedMeetArc } from '../inworld/meet_arc';
 import type { StoryPack, PackMeta, PackNode, PackChoice } from '../inworld/pack_types';
 import {
   createPackSession,
@@ -277,6 +279,14 @@ router.post('/:id/start', requireAuth, async (req: Request, res: Response) => {
   if (!pack) return res.status(404).json({ error: 'pack_not_found' });
 
   try {
+    const completed = await getCompletedArcIds(req.user!.id, pack.characterId);
+    if (!hasCompletedMeetArc(pack.characterId, completed)) {
+      return res.status(403).json({
+        error: 'meet_arc_required',
+        message: 'Finish your first meeting with this character before starting a story pack.',
+      });
+    }
+
     // Guardrail: only one active story per (user, character) at a time.
     // If a story is already in progress, refuse and return it so the client
     // can offer to resume or abandon it.

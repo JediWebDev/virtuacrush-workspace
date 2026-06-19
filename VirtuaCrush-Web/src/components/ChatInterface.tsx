@@ -17,6 +17,8 @@ import PackList from "./PackList";
 import ChoiceButtons from "./ChoiceButtons";
 import { getActivePackSession, greetPackSession, abandonPackSession, fetchPackStories, fetchPackTranscript, type PackSession, type PackChoice, type PackStory } from "../lib/api";
 import NoticeToast from "./NoticeToast";
+import AchievementToast, { type AchievementToastData } from "./AchievementToast";
+import { isCustomCharacterId } from "../lib/customCharacter";
 
 function formatHistoryDate(day: string): string {
   // day is YYYY-MM-DD; anchor at noon to avoid timezone date shifts.
@@ -43,10 +45,25 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
       onAffinityChange?.(character.id, score);
     },
     onQuotaExceeded: (info) => { setQuotaLimit(info?.limit ?? null); setQuotaToast(true); },
-    onDone: () => {
-      // Refresh the status strip after each reply.
+    onDone: (info) => {
+      if (info.earnedBadge?.title) {
+        setAchievementToast({ open: true, badge: info.earnedBadge });
+      }
+      if (info.affinityAwarded && info.affinityAwarded > 0) {
+        if (typeof info.affinityScore === 'number') {
+          setAffinity(info.affinityScore);
+          onAffinityChange?.(character.id, info.affinityScore);
+        }
+        setAffinityToast({ open: true, amount: info.affinityAwarded });
+      }
+      if (info.meetArcComplete) {
+        setMeetArcComplete(true);
+      }
       fetchCharacterState(character.id)
-        .then((st) => setStoryState(st))
+        .then((st) => {
+          setStoryState(st);
+          if (typeof st.meetArcComplete === 'boolean') setMeetArcComplete(st.meetArcComplete);
+        })
         .catch(() => { /* non-fatal */ });
     },
     onCharacterPosted: () => {
@@ -90,6 +107,11 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   // and a timer that auto-closes the finished story tab.
   const [affinityToast, setAffinityToast] = useState<{ open: boolean; amount: number }>({ open: false, amount: 0 });
   const [historyToast, setHistoryToast] = useState<{ open: boolean; title: string }>({ open: false, title: '' });
+  const [achievementToast, setAchievementToast] = useState<{ open: boolean; badge: AchievementToastData | null }>({
+    open: false,
+    badge: null,
+  });
+  const [meetArcComplete, setMeetArcComplete] = useState(() => isCustomCharacterId(character.id));
   const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Restore an in-progress story when the chat is (re)opened so the Story tab
@@ -110,6 +132,8 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     setReadingMessages([]);
     setAffinityToast({ open: false, amount: 0 });
     setHistoryToast({ open: false, title: '' });
+    setAchievementToast({ open: false, badge: null });
+    setMeetArcComplete(isCustomCharacterId(character.id));
 
     (async () => {
       try {
@@ -178,6 +202,9 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
         } else {
           setActiveStoryArc(null);
         }
+        if (typeof result.meetArcComplete === 'boolean') {
+          setMeetArcComplete(result.meetArcComplete);
+        }
 
         // Scene header only when there is no transcript yet (Play seeds intro into history).
         const sceneMsgs =
@@ -236,7 +263,10 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     setStoryState(null);
     fetchCharacterState(character.id)
       .then((s) => {
-        if (!cancelled) setStoryState(s);
+        if (!cancelled) {
+          setStoryState(s);
+          if (typeof s.meetArcComplete === 'boolean') setMeetArcComplete(s.meetArcComplete);
+        }
       })
       .catch((err) => console.error('[state] fetch failed:', err));
     return () => { cancelled = true; };
@@ -491,6 +521,9 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
       } else {
         setActiveStoryArc(null);
       }
+      if (typeof result.meetArcComplete === 'boolean') {
+        setMeetArcComplete(result.meetArcComplete);
+      }
       const sceneMsgs =
         !result.hasHistory && result.sceneHeader
           ? [{ id: 'scene-header', role: 'assistant' as const, content: `[NARRATOR] ${result.sceneHeader}` }]
@@ -574,6 +607,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   });
 
   const showArcBanner = activeThread === 'freeRoam' && !archiveDay && !!activeStoryArc;
+  const showMeetBanner = activeThread === 'freeRoam' && !archiveDay && !meetArcComplete && !activeStoryArc && !isCustomCharacterId(character.id);
 
   const displayedMessages =
     activeThread === 'reading' ? readingMessages :
@@ -601,10 +635,16 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
         onClose={() => setQuotaToast(false)}
         onUpgrade={() => { setQuotaToast(false); navigate("/how-it-works"); }}
       />
+      <AchievementToast
+        open={achievementToast.open}
+        badge={achievementToast.badge}
+        onClose={() => setAchievementToast((t) => ({ ...t, open: false }))}
+        offsetRem={14}
+      />
       <NoticeToast
         open={affinityToast.open}
         title={`+${affinityToast.amount} affinity with ${character.name}`}
-        detail="Your bond grew stronger by finishing this story."
+        detail={achievementToast.open ? "You made a real first impression." : "Your bond grew stronger."}
         icon={<Heart size={18} className="fill-accent" />}
         onClose={() => setAffinityToast((t) => ({ ...t, open: false }))}
         offsetRem={6}
@@ -658,6 +698,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           
           <PackList
             characterId={character.id}
+            meetArcComplete={meetArcComplete}
             activeSession={packCompleted ? null : activePackSession}
             onSessionStart={handlePackStart}
             onResume={handlePackResume}
@@ -874,6 +915,15 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               >
                 Back to today&apos;s chat
               </button>
+            </div>
+          )}
+          {showMeetBanner && (
+            <div className="mx-auto max-w-lg rounded-2xl border border-amber-400/35 bg-gradient-to-br from-amber-100/80 via-white/60 to-transparent px-4 py-3 text-center shadow-sm dark:from-amber-950/40 dark:via-stone-900/40">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">First meeting</p>
+              <p className="mt-1 font-serif text-lg font-semibold text-stone-900 dark:text-stone-50">Get to know {character.name}</p>
+              <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+                Finish this meet-cute before story packs and other arcs unlock.
+              </p>
             </div>
           )}
           {showArcBanner && (

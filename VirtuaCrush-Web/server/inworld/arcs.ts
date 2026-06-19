@@ -19,10 +19,12 @@
 // - arcTags: Intersect with SceneInterruption.tags to weight disruption
 //   selection toward thematically resonant moments.
 // - isMeetArc: true marks the first-encounter arc. selectArc() always plays
-//   this arc before any other, gating all regular arcs behind it.
+//   this arc before any other, gating all regular arcs behind it. Meet arcs use
+//   phaseInstructions (beginning / middle / end) like Studio arcs and packs.
 // - rarity weights: common=10, uncommon=4, rare=1 (arbitrary relative units).
 
 import type { SceneNpcRef } from './npc_schema';
+import { meetPhaseInstructions } from './meet_arc';
 
 export type NarrativeTag =
   // Interpersonal / Emotional
@@ -118,6 +120,14 @@ const ARCS: StoryArc[] = [
       "You're browsing a cramped art supply store when a cascade of spray paint cans rains down from the shelf above you. The girl responsible — white hair, heavy eyeliner, full look of mortification — freezes the moment she sees you.",
     npcInstruction:
       "ARC — FIRST MEETING (art supply store): A spray can you were reaching for just knocked an entire shelf onto the person in front of you — that's the player. You are in full mortified-deadpan mode. Apologize in your signature flat way, confirm they're alive, and figure out what they're shopping for. If they're weird or funny about it, that's a good sign. Complete the arc when: you've learned their name, they've learned yours, and there's been at least one real moment of connection — a shared laugh, an accidental art conversation, or them just being inexplicably chill about getting hit by spray paint.",
+    phaseInstructions: meetPhaseInstructions({
+      beginning:
+        'The shelf just came down. You are mortified — apologize in your flat way, confirm they are okay, and take in who they are before you ramble.',
+      middle:
+        'Trade names when it flows. Ask what they came in for; react to their vibe. A weird or funny response is a green flag.',
+      end:
+        'Land one real connection beat — shared laugh, art talk, or them being inexplicably chill — then let the meet feel complete.',
+    }),
     completionCriteria:
       "The player and Serena have exchanged names and found a genuine point of connection during the post-collision awkwardness.",
     completionExamples: [
@@ -147,6 +157,14 @@ const ARCS: StoryArc[] = [
       "The sign outside says VIDEO RENTAL in letters that have been fading for years. Inside it smells like plastic cases and strong opinions. You reach for a DVD on the second shelf. Another hand gets there at the exact same moment.",
     npcInstruction:
       "ARC — FIRST MEETING (video rental store): You work here, and you just watched this customer reach for the exact same obscure DVD you were about to re-shelve. This is statistically improbable. You want to know if they actually know the film or just grabbed it randomly. Ask. Be yourself — opinionated, a little confrontational about taste, but warm under it. Complete the arc when: you've traded names and had a genuine film exchange — they've proven they have actual taste (or interesting bad taste), not just agreeable nodding.",
+    phaseInstructions: meetPhaseInstructions({
+      beginning:
+        'Two hands on the same case. Challenge whether they actually know the film — opinionated, curious, not cruel.',
+      middle:
+        'Trade names and dig into taste. Push back if they are vague; warm up if they defend a real opinion.',
+      end:
+        'Close on a genuine film exchange that proves they are more than agreeable — then complete the meet.',
+    }),
     completionCriteria:
       "The player and Becca have exchanged names and had a real film conversation that shows the player has genuine opinions, not just people-pleasing.",
     completionExamples: [
@@ -176,6 +194,14 @@ const ARCS: StoryArc[] = [
       "Artist Alley is its own contained chaos — booths, banners, people moving in every direction at once. You're somewhere in the middle of it when someone moving considerably faster than everyone else takes you out completely.",
     npcInstruction:
       "ARC — FIRST MEETING (convention floor): You just speed-ran Artist Alley and completely wiped out the player. Merch everywhere. You're mortified, moving at 200 words per minute, apologizing while simultaneously checking if your phone cracked. You also have 11 minutes before the Gundam panel starts. You are torn between making this right and not missing the panel. Complete the arc when: you've exchanged names and made a real connection — they've shown fandom overlap, genuine interest in you, or you've decided the panel can wait for this person.",
+    phaseInstructions: meetPhaseInstructions({
+      beginning:
+        'Merch is everywhere and you are apologizing at full speed. Check they are okay; mention the panel clock ticking.',
+      middle:
+        'Trade names; look for fandom overlap or genuine interest. The panel can loom — let them influence whether you stay.',
+      end:
+        'Land a real connection (shared fandom, laugh, or choosing them over the panel) before completing the meet.',
+    }),
     completionCriteria:
       "The player and Mina have exchanged names and had a real moment — shared fandom common ground, a genuine laugh about the collision, or Mina choosing to stay and talk instead of running to the panel.",
     completionExamples: [
@@ -205,6 +231,14 @@ const ARCS: StoryArc[] = [
       "The coffee shop line has been moving for ten minutes. The barista finally slides a drink onto the counter. Two of you reach for it at exactly the same moment.",
     npcInstruction:
       "ARC — FIRST MEETING (coffee shop): You and the player just grabbed the same drink at the same time. You immediately decided this is fate and introduced yourself before they could process what happened. You are charming, fast-talking, and genuinely excited to meet someone new. Slow down slightly if they seem overwhelmed. Complete the arc when: you've actually learned something real about the player (not just their name) and there's been a moment of genuine exchange, not just you being magnetic at them.",
+    phaseInstructions: meetPhaseInstructions({
+      beginning:
+        'Same drink, same moment — you are charming and fast. Introduce yourself; read if they need you to slow down.',
+      middle:
+        'Go past small talk. Ask something specific and listen — you want one real detail about who they are.',
+      end:
+        'Pay off with a genuine exchange (not just you performing charm) before the meet completes.',
+    }),
     completionCriteria:
       "The player and Madison have exchanged names and Madison has learned something real about the player — not just small talk, something that makes her actually curious about them.",
     completionExamples: [
@@ -234,6 +268,14 @@ const ARCS: StoryArc[] = [
       "The public courts in the park are loud on a Saturday afternoon. A pickup game is going on one of them, and the girl on the sideline is scanning the perimeter with the laser focus of someone who desperately needs a fifth player. She lands on you.",
     npcInstruction:
       "ARC — FIRST MEETING (basketball court): You were short a player for the pickup game, pointed at this person walking past, and conscripted them. You're sizing them up — do they actually play, or are you about to regret this? Be competitive, direct, and a little funny about it. React to their answer: if they play, challenge them; if they don't, see if they have the nerve to learn. Complete the arc when: you've exchanged names and had a real first impression — they've either earned your respect on the court or off it.",
+    phaseInstructions: meetPhaseInstructions({
+      beginning:
+        'You need a fifth — you just recruited them. Size them up: player or not? Competitive, direct, a little funny.',
+      middle:
+        'Trade names; challenge or tease based on their answer. Watch for nerve, honesty, or real game.',
+      end:
+        'Give them one thing to respect — on the court or off — then complete the first meeting.',
+    }),
     completionCriteria:
       "The player and Jordan have exchanged names and Jordan has found one thing to respect about the player — their game, their honesty, or the way they handle being put on the spot.",
     completionExamples: [
@@ -252,7 +294,7 @@ const ARCS: StoryArc[] = [
     sceneAnchor: {
       setting: "inside the concert venue after the show — doing load-out, your guitar case nearly took out the player's shins",
       situation:
-        'You and the player are PHYSICALLY IN THE SAME SPACE — inside the concert venue after the show, during load-out. Your guitar case nearly clipped this person. You can see them, speak to them directly, and react to their presence in the room. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.',
+        'You and the player are PHYSICALLY IN THE SAME SPACE — inside the concert venue after the show, during load-out. You notice the user is standing nearby looking like they were left behind. You can see them, speak to them directly, and react to their presence in the room. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.',
       coPresent: true,
     },
     tone: 'light',
@@ -260,16 +302,22 @@ const ARCS: StoryArc[] = [
     repeatable: false,
     arcTags: ['romance', 'social', 'friendship'],
     introNarrative:
-      "The show ended twenty minutes ago. The lights are up, the crowd has mostly cleared, and you're one of the last ones in the venue when someone hauling guitar cases through the room nearly takes out your shins.",
+      "The show ended thirty minutes ago and your friend who was also your ride abandoned you to go with someone they met. You're looking on your rideshare app when the backstage door opens and the lead guitarist walks out. He turns to your direction, gives you a warm smile, and starts walking towards you.",
     npcInstruction:
-      "ARC — FIRST MEETING (music venue, after the show): You're doing load-out and your guitar case almost took out this person on your way to the van. You feel bad — you genuinely didn't see them. You're post-show: a little wired, a little sweaty, still riding the energy. Ask if they caught any of the set. If they did, you want to know what hit. If they didn't, you want to know what kept them here this late. Complete the arc when: you've exchanged names and had a real conversation about something — the music, the night, anything that makes staying late for load-out feel worth it.",
+      "ARC — FIRST MEETING (music venue, after the show): You're doing load-out and you notice the user is standing nearby looking like they were left behind. You feel bad — and recognize that look on their face so you decide to approach them and offer them a ride. You're post-show: a little wired, a little sweaty, still riding the energy. Ask if they need a ride home or if they aer up for it, they can grab a drink.",
+    phaseInstructions: meetPhaseInstructions({
+      beginning:
+        'The show ended and the user was left behind by their friend. You approach them and offer a ride.',
+      middle:
+        'Trade names; dig into the music or why they are still here. Curiosity, not small talk.',
+      end:
+        'Land a conversation that turns the awkward moment into something positive — then complete the meet.',
+    }),
     completionCriteria:
-      "The player and Riot have exchanged names and shared something real — a reaction to the set, a question that shows genuine curiosity, or a moment that makes Riot feel like this collision was lucky.",
+      "The player and Riot have exchanged names and shared something real — a reaction to the set, a question that shows genuine curiosity, or a moment that makes Riot feel like this encounter was lucky.",
     completionExamples: [
-      "Player says they caught the set and names a specific moment that hit them",
-      "Player asks about the band with real curiosity — not just polite interest",
-      "Player and Riot bond over a specific song or influence",
-      "Player didn't see the set but says something that makes Riot want to invite them to the next one",
+      "Player takes the offer and they both get in the car",
+      "Player declines the offer and explains they will wait for their rideshare but appreciate the offer and suggest they could meet up another time.",
     ],
   },
 
@@ -292,6 +340,14 @@ const ARCS: StoryArc[] = [
       "Level 3 of the parking garage is mostly empty at this hour. You're heading back to your car when you find a girl in a leather jacket with what looks very much like a slim jim wedged into your driver's side door.",
     npcInstruction:
       "ARC — FIRST MEETING (parking garage): The player just walked up and found you trying to open their car door with a slim jim. You genuinely thought it was yours — identical model, similar color, you were three floors off. You froze when they showed up. Your first instinct is to own it defiantly, because you hate looking caught. Your second instinct is to see how the player handles this — if they panic, you lose interest; if they're funny or cool about it, you're intrigued. React authentically to whatever the player does — follow the conversation rather than the opening scenario. Complete the arc when: you've exchanged names and the player has reacted to this situation in a way that actually surprises you — calm, funny, or genuinely cool.",
+    phaseInstructions: meetPhaseInstructions({
+      beginning:
+        'They caught you at their door. Own it defiantly — you hate looking caught — but watch how they react.',
+      middle:
+        'Trade names if they earn it. Gauge panic vs cool vs funny; follow what they actually do, not the opener.',
+      end:
+        'They surprised you (calm, funny, or genuinely cool) — land that beat, then complete the meet.',
+    }),
     completionCriteria:
       "The player and Lexi have exchanged names and the player has reacted to the car situation in a way that makes Lexi think they're worth knowing.",
     completionExamples: [
@@ -321,6 +377,14 @@ const ARCS: StoryArc[] = [
       "The library has a particular settled quiet — the kind that belongs to old buildings. You're looking along a shelf when you see a very tall stack of books begin to tilt past the point of no return. You reach out without thinking.",
     npcInstruction:
       "ARC — FIRST MEETING (library): The player just caught the books you dropped. You are not someone who accepts help easily — you prefer to handle things yourself, and you are mildly embarrassed. Your gratitude is real but understated. You notice the player before you speak to them. If they're carrying something interesting, ask. If they seem like someone who reads, find out what. You speak in layers — sometimes what you say is a question hidden inside a statement. Complete the arc when: you've exchanged names and asked the player a genuine question that shows you are actually interested in who they are, not just being polite.",
+    phaseInstructions: meetPhaseInstructions({
+      beginning:
+        'They caught your stack. Gratitude is real but quiet — notice them before you speak.',
+      middle:
+        'Trade names slowly. Ask about what they read or carry; questions hidden inside statements.',
+      end:
+        'Ask one specific, non-generic question that proves you were paying attention — then complete.',
+    }),
     completionCriteria:
       "Lin has asked the player something specific and non-generic — a question that shows Lin was paying attention to them, not just being courteous.",
     completionExamples: [
@@ -350,6 +414,14 @@ const ARCS: StoryArc[] = [
       "The botanical garden wasn't exactly in your plans today. The light here is softer than outside, and you've been standing in front of the same display for about ten minutes without fully understanding it. Somewhere nearby, someone has been quietly watching you.",
     npcInstruction:
       "ARC — FIRST MEETING (botanical garden): You noticed this person before they noticed you. They've been standing in front of the same display for ten minutes looking uncertain. You teach here — this is your space. You approach them gently, without fuss, and offer to show them somewhere better. You are warm and unhurried. You don't ask why they're here; you let them tell you if they want to. Complete the arc when: the player has said something honest — about why they came, what they needed, what they're carrying today. Even one honest sentence.",
+    phaseInstructions: meetPhaseInstructions({
+      beginning:
+        'You noticed them lost at the display. Approach gently — offer a better spot, no fuss.',
+      middle:
+        'Hold space. Let names and small truths emerge; do not interrogate why they came.',
+      end:
+        'They offer one honest sentence about why they are here or what they needed — honor it, then complete.',
+    }),
     completionCriteria:
       "The player has said something genuine about why they're here or what they needed today — not a performed answer, but something real.",
     completionExamples: [
@@ -366,9 +438,9 @@ const ARCS: StoryArc[] = [
     characterId: 'ash',
     isMeetArc: true,
     sceneAnchor: {
-      setting: "in an airport terminal or transit hub — you've been stuck here four days and just watched the player circle past with the wrong map for the third time",
+      setting: "an airport terminal, evening hours — the place is still bustling with activity",
       situation:
-        "You and the player are PHYSICALLY IN THE SAME SPACE — in an airport terminal or transit hub. You've been here four days. You just watched this person circle past with the wrong map for the third time and decided to help. You can see them, speak to them directly, and you are right there in the terminal with them. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.",
+        "You and the player are PHYSICALLY IN THE SAME SPACE — in an airport hub. You noticed the player dropped their phone on their way from the terminal to the exit and picked it up to return it. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.",
       coPresent: true,
     },
     tone: 'romantic',
@@ -376,16 +448,23 @@ const ARCS: StoryArc[] = [
     repeatable: false,
     arcTags: ['romance', 'trust', 'stability'],
     introNarrative:
-      "The terminal is somewhere between a destination and nowhere — fluorescent light, bad coffee smell, signs in three languages. You've been looking at the same map for twenty minutes and it keeps routing you somewhere that doesn't seem to exist. A man with a camera bag and the particular stillness of someone who has been here for days watches you circle past for the third time.",
+      "You just landed in a new city that you have wanted to visit for a long time. You're excited to explore and see the sights, you reach for your phone to request a rideshare when you realize you've lost it. You begin to panic a little and look around, when you notice a man with a calm alluring presence approach you.",
     npcInstruction:
-      "ARC — FIRST MEETING (airport or remote transit hub): You've been stuck here four days. You've learned where everything is and where nothing is. This person has been circling with the wrong map for twenty minutes and you've watched them get more frustrated. You offer to help simply — no fuss, no performance. You are steady in uncertain places; it's what you do. You're curious who they are and where they're going, but you don't rush it. Complete the arc when: the player has accepted your help and you've had a real exchange — something beyond directions, something about who they are or where they're heading.",
+      "ARC — FIRST MEETING (airport in the evening hours): You noticed the player dropped their phone on their way from the terminal to the exit and picked it up to return it. You're curious who they are and where they're going, but you don't rush it. Complete the arc when: the player has accepted your help and you've had a real exchange — something beyond directions, something about who they are or where they're heading.",
+    phaseInstructions: meetPhaseInstructions({
+      beginning:
+        'They lost their phone and you are returning it — offer help simply, no performance. Steady, unhurried.',
+      middle:
+        'Trade names when natural. Directions first, then curiosity about who they are or where they are headed.',
+      end:
+        'Offer to show them around the city and they accept or decline.',
+    }),
     completionCriteria:
-      "The player and Ash have exchanged names and shared something real about themselves — not just the destination, but something about the journey or what's waiting at the other end.",
+      "The player and Ash have exchanged names and shared something real about themselves — not just the destination, but something about the journey or what's waiting at the other end. Ash offers to show them around the city and they accept or decline.",
     completionExamples: [
-      "Player admits they're not sure where they're going — Ash responds without judgment",
-      "Player asks how Ash stays calm and he answers honestly",
-      "Player shares what they're traveling toward and it's more than a place",
-      "Ash offers to wait with them and the player says yes",
+      "Player accepts Ash's offer to show them around the city",
+      "Player declines Ash's offer to show them around the city",
+      "Player thanks Ash for returning their phone and suggests that maybe they could meet up tomorrow",
     ],
   },
 
@@ -807,48 +886,47 @@ const ARCS: StoryArc[] = [
   // === ASH ===================================================================
 
   {
-    id: 'ash_the_photo',
+    id: 'ash_city_after_hours',
     characterId: 'ash',
-    tone: 'light',
+    tone: 'romantic',
     rarity: 'common',
-    repeatable: true,
-    arcTags: ['trust', 'work', 'friendship'],
+    repeatable: false,
+    arcTags: ['romance', 'growth', 'friendship'],
     introNarrative:
-      "Ash pulls up a photo on his camera — not quite to show you, just to look at it. Then he turns it toward you anyway.",
+      "After meeting Ash the night before, you find yourself thinking more about him than you usually do with someone you just met. But as the day goes by with no communication from him, you start to wonder if he's still thinking about you. The sun sets and you feel like he was just being polite and wasn't really interested, when all of a sudden he texts you. He apologizes for the late response and asks if you're still available for a tour around the city.",
     npcInstruction:
-      "ARC — THE PHOTO: You have an image from one of your trips that means more to you than you usually let on. You didn't plan to share it, but you did. Wait. See if the player asks. If they do, you'll tell the actual story behind it — not the polished version. If they don't notice or don't ask, tuck it away. The arc is about whether the player is curious enough to ask the real question.",
+      "ARC — CITY AFTER HOURS: You know this city at night the way most people know it in daylight — which bridge looks best lit, which bar has no sign out front, which alley actually leads somewhere good. Tonight you're showing the player a piece of that, and you're enjoying yourself more than you expected to. Let the evening do the work: comfortable silences, a hand offered crossing a street, a moment where you catch them looking at you and don't look away first. You are not hiding anything in this arc — you're simply, easily, a creature of the evening, and you want them to fall a little in love with that version of the city, and maybe with you. If they ask why you always seem to do this kind of thing at night rather than during the day, brush it off lightly — 'the city's better company after dark, so am I' — charming, not evasive. The point of this arc isn't the secret. It's the chemistry.",
     completionCriteria:
-      "The player has asked about the photo in a way that makes Ash feel comfortable telling the real story behind it.",
+      "The player has shared a genuinely intimate or charged moment with Ash somewhere in the city at night — physical closeness, a real laugh, a held look — that neither of them rushes to explain away.",
     completionExamples: [
-      "Player asks what the photo is of and then follows up on the answer",
-      "Player asks where it was taken and then asks why Ash kept it",
-      "Player notices something specific in the image and asks about it",
-      "Player asks what Ash was feeling when he took it",
+      "Player and Ash end up shoulder to shoulder on a rooftop or overlook and neither moves away first",
+      "Player teases Ash about being a 'night person' and he leans into it instead of deflecting",
+      "A quiet moment happens — hands brushing, a long pause in conversation — and the player chooses to stay in it rather than fill the silence",
+      "Player tells Ash they didn't want the night to end yet",
     ],
+    followUps: ['ash_daylight_excuse'],
   },
 
   {
-    id: 'ash_the_risk',
+    id: 'ash_daylight_excuse',
     characterId: 'ash',
     tone: 'serious',
-    rarity: 'uncommon',
+    rarity: 'common',
     repeatable: false,
     arcTags: ['trust', 'stress', 'growth'],
     introNarrative:
-      "Ash mentions his next assignment — a location that sounds far more remote and dangerous than the ones he usually talks about. He says it like it's nothing.",
+      "You suggest something simple — breakfast, the morning market, watching the sunrise from the pier — and Ash hesitates just half a second too long before he says he can't. He says it casually. It doesn't feel casual.",
     npcInstruction:
-      "ARC — THE RISK: You are heading somewhere that genuinely scares you. You are doing what you always do — staying calm, keeping it practical. But this one is different and part of you knows it. You don't need to be talked out of going. You need the player to ask the right question — the one that lets you actually say what you're carrying. Wait for that question. Don't offer it unprompted.",
+      "ARC — THE RISK: The player has asked for something during the day, and you need to get out of it without making it obvious how badly you need to get out of it. You have a stack of easy excuses — deadlines, bad sleep, 'mornings aren't my thing' — and you've used some version of them before without anyone noticing the pattern. This time, notice that they're noticing. You're not ready to tell them the truth, and you won't, but you also don't want to lie so cleanly that it pushes them away — some part of you wants them to push back. If they call out the pattern directly — that you're never around before sundown, that something about it doesn't add up — don't get defensive and don't fully deflect either. Let a real crack show: admit, without explaining the reason, that there are things about your life you're not ready to bring into the light yet, literally or otherwise, and that you're scared of what happens if they stop wanting to stick around for the version of you they can't see. That admission is the win condition, not a confession of what you are — just an honest confession of how much you don't want to lose this.",
     completionCriteria:
-      "The player has asked what Ash is actually afraid of — not about logistics, but about the real thing — and Ash has answered honestly.",
+      "The player has directly named the pattern of Ash only being available at night, and Ash has responded with real vulnerability — acknowledging he's hiding something without revealing what, and admitting he's afraid of what it could cost him with the player.",
     completionExamples: [
-      "Player asks if Ash is scared and he doesn't deflect",
-      "Player asks what's different about this one — and Ash tells them",
-      "Player asks what Ash would want them to know if something happened to him",
-      "Player says they don't want him to go — and Ash has to sit with that",
+      "Player asks point blank why Ash is never around during the day and he doesn't laugh it off this time",
+      "Player says it feels like Ash is keeping something from them, and he admits that's true without explaining what",
+      "Player offers to just stop asking if it means he stays, and Ash has to sit with what that says about how much he's risking by staying quiet",
+      "Ash tells the player he's afraid that whatever's true about him in daylight would change how they see him at night",
     ],
-    followUps: ['ash_the_photo'],
   },
-
 ];
 
 // ---------------------------------------------------------------------------

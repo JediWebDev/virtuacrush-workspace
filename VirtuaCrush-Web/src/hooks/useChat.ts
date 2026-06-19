@@ -26,10 +26,19 @@ export interface ReplyChoice {
   userMessage: string;
 }
 
+/** Fired when the server finishes a streamed reply (quota, affinity, arc badge, etc.). */
+export interface ChatDoneInfo {
+  remaining: number | null;
+  affinityScore?: number;
+  affinityAwarded?: number;
+  earnedBadge?: { title: string; description: string } | null;
+  meetArcComplete?: boolean;
+}
+
 interface UseChatOptions {
   characterId: string;
   initialMessages?: Message[];
-  onDone?: (remaining: number | null) => void;
+  onDone?: (info: ChatDoneInfo) => void;
   onQuotaExceeded?: (info?: { limit?: number; used?: number }) => void;
   onAffinityUpdate?: (score: number) => void;
   /** Called when the character autonomously posted to their feed this turn. */
@@ -162,10 +171,17 @@ export function useChat({
               prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + text } : m)),
             );
           } else if (evt.event === 'done') {
-            onDone?.(evt.data.remaining ?? null);
-            if (typeof evt.data.affinityScore === 'number') {
-              setAffinityScore(evt.data.affinityScore);
-              onAffinityUpdate?.(evt.data.affinityScore);
+            const d = evt.data ?? {};
+            onDone?.({
+              remaining: d.remaining ?? null,
+              affinityScore: typeof d.affinityScore === 'number' ? d.affinityScore : undefined,
+              affinityAwarded: typeof d.affinityAwarded === 'number' ? d.affinityAwarded : undefined,
+              earnedBadge: d.earnedBadge ?? null,
+              meetArcComplete: d.meetArcComplete === true,
+            });
+            if (typeof d.affinityScore === 'number') {
+              setAffinityScore(d.affinityScore);
+              onAffinityUpdate?.(d.affinityScore);
             }
             if (Array.isArray(evt.data.choices)) setReplyChoices(evt.data.choices as ReplyChoice[]);
             if (evt.data.posted) onCharacterPosted?.();

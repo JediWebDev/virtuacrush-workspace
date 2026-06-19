@@ -24,7 +24,8 @@ import {
 } from '../db/user_characters';
 import { validateArcSpec } from '../inworld/user_arc';
 import { validatePackSpec } from '../inworld/user_pack';
-import { setArcActive, clearArc } from '../db/arc_state';
+import { setArcActive, clearArc, getCompletedArcIds } from '../db/arc_state';
+import { hasCompletedMeetArc } from '../inworld/meet_arc';
 import { getSituation, resetSceneComposition } from '../db/state';
 import { pool } from '../db/pool';
 import { arcOpeningLine } from '../inworld/active_arc';
@@ -477,6 +478,15 @@ router.post('/stories/:id/play', requireAuth, async (req: Request, res: Response
     }
 
     await getSituation(userId, characterId);
+
+    const completed = await getCompletedArcIds(userId, characterId);
+    if (!hasCompletedMeetArc(characterId, completed)) {
+      return res.status(403).json({
+        error: 'meet_arc_required',
+        message: 'Finish your first meeting with this character before starting a story arc.',
+      });
+    }
+
     await setArcActive(userId, characterId, `user:${story.id}`);
     await resetSceneComposition(userId, characterId);
 

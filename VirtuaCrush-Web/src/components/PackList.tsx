@@ -16,6 +16,8 @@ const MOOD_LABELS: Record<string, string> = {
 
 interface PackListProps {
   characterId: string;
+  /** Story packs stay locked until the roster meet-cute arc is done. */
+  meetArcComplete?: boolean;
   activeSession: PackSession | null;
   onSessionStart: (session: PackSession & { introNarrative?: string | null }) => void;
   /** Switch to the already-active story's tab. */
@@ -24,7 +26,7 @@ interface PackListProps {
   onAbandon?: () => void;
 }
 
-export default function PackList({ characterId, activeSession, onSessionStart, onResume, onAbandon }: PackListProps) {
+export default function PackList({ characterId, meetArcComplete = true, activeSession, onSessionStart, onResume, onAbandon }: PackListProps) {
   const [packs, setPacks] = useState<PackMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState<string | null>(null);
@@ -50,6 +52,8 @@ export default function PackList({ characterId, activeSession, onSessionStart, o
       if (e instanceof ApiError && e.status === 409 && e.body?.error === 'story_in_progress') {
         const active = e.body.active as (PackSession & { introNarrative?: string | null }) | undefined;
         if (active) onSessionStart(active);
+      } else if (e instanceof ApiError && e.status === 403 && e.body?.error === 'meet_arc_required') {
+        /* gated until first meeting completes */
       }
     } finally {
       setStarting(null);
@@ -86,6 +90,7 @@ export default function PackList({ characterId, activeSession, onSessionStart, o
         {packs.map((pack) => {
           const isActive = activeSession?.packId === pack.id;
           const hasOtherActive = !!activeSession && !isActive;
+          const meetLocked = meetArcComplete === false;
           const isStarting = starting === pack.id;
           const [from, to] = pack.coverGradient;
 
@@ -168,6 +173,11 @@ export default function PackList({ characterId, activeSession, onSessionStart, o
                   <div className="flex items-center justify-center gap-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] py-2 text-xs font-medium text-stone-500 dark:text-stone-400">
                     <Lock size={11} />
                     Finish your active story first
+                  </div>
+                ) : meetLocked ? (
+                  <div className="flex items-center justify-center gap-1.5 rounded-xl border border-amber-400/25 bg-amber-50/80 py-2 text-xs font-medium text-amber-800 dark:border-amber-400/20 dark:bg-amber-950/30 dark:text-amber-200">
+                    <Lock size={11} />
+                    Finish your first meeting first
                   </div>
                 ) : (
                   <button

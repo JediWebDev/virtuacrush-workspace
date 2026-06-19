@@ -353,8 +353,12 @@ export default function StudioPage() {
     try {
       const { characterId, storyTitle } = await playStudioStory(s.id);
       navigate(`/chat/${characterId}`, { state: { studioArcTitle: storyTitle ?? s.title } });
-    } catch {
-      setError("Couldn't start that story.");
+    } catch (e: unknown) {
+      if (e && typeof e === 'object' && 'status' in e && (e as { status: number }).status === 403) {
+        setError("You must finish your first meeting with that character in chat before playing a Studio story.");
+      } else {
+        setError("Couldn't start that story.");
+      }
     } finally {
       setBusyId(null);
     }

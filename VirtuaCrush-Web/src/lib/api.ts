@@ -30,6 +30,7 @@ export async function fetchGreeting(
   sceneHeader?: string;
   activeStoryArc?: { id: string; title: string };
   arcActive?: boolean;
+  meetArcComplete?: boolean;
 }> {
   const res = await fetch('/api/chat/greet', {
     method: 'POST',
@@ -81,6 +82,8 @@ export interface CharacterState {
   pendingEvent?: { drive: string; prompt: string; options: { id: string; label: string }[] } | null;
   /** Current travel location slug (null = player is at home / remote chat). */
   sceneLocation?: string | null;
+  /** False until the roster character's built-in meet-cute arc is completed. */
+  meetArcComplete?: boolean;
 }
 
 // Current story-engine state (what the character is "doing" today) for the
