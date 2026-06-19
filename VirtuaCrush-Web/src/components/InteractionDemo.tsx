@@ -89,7 +89,7 @@ export const InteractionDemo = () => {
                                 exit={{ opacity: 0, scale: 0.96 }}
                                 className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-snug ${
                                     msg.startsWith("User:") 
-                                    ? "ml-auto rounded-tr-sm bg-gradient-to-br from-accent to-accent-deep text-white shadow-md" 
+                                    ? "ml-auto rounded-tr-sm bg-gradient-to-br from-accent to-brand-indigo text-white shadow-md" 
                                     : "rounded-tl-sm border border-black/[0.08] dark:border-white/[0.08] bg-stone-100 dark:bg-stone-900/75 text-stone-800 dark:text-stone-100 shadow-sm backdrop-blur-md"
                                 }`}
                             >

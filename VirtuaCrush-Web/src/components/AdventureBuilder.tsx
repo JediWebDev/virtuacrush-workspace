@@ -341,7 +341,7 @@ export default function AdventureBuilder({
       {/* Builder */}
       <div className="space-y-6">
         {/* Story basics */}
-        <div id="studio-adventure-form" className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
+        <div id="studio-adventure-form" className="card-gradient rounded-3xl p-6">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
@@ -399,7 +399,7 @@ export default function AdventureBuilder({
               </StudioField>
               <StudioField label="Co-presence" hint="Whether they share the scene with you.">
                 <label className="flex min-h-[2.625rem] items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
-                  <input type="checkbox" checked={coPresent} onChange={(e) => setCoPresent(e.target.checked)} className="h-4 w-4 shrink-0 rounded accent-[var(--accent,#c9717d)]" />
+                  <input type="checkbox" checked={coPresent} onChange={(e) => setCoPresent(e.target.checked)} className="h-4 w-4 shrink-0 rounded accent-accent" />
                   <span>{companionName(characterId)} is physically with you</span>
                 </label>
               </StudioField>
@@ -423,7 +423,7 @@ export default function AdventureBuilder({
         </div>
 
         {/* Story flow */}
-        <div className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
+        <div className="card-gradient rounded-3xl p-6">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
@@ -474,7 +474,7 @@ export default function AdventureBuilder({
                         act: e.target.checked ? "end" : n.act === "end" ? "auto" : n.act,
                       })
                     }
-                    className="h-4 w-4 rounded accent-[var(--accent,#c9717d)]"
+                    className="h-4 w-4 rounded accent-accent"
                   />
                   This beat ends the story
                 </label>
@@ -540,7 +540,7 @@ export default function AdventureBuilder({
         </div>
 
         {/* Validation + save */}
-        <div className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
+        <div className="card-gradient rounded-3xl p-6">
           {graphErrors.length > 0 ? (
             <div className="mb-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">Story flow needs a fix</p>

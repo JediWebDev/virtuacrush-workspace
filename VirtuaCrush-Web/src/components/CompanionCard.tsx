@@ -26,7 +26,7 @@ export default function CompanionCard({ character, onSelect, userTier }: Props) 
       whileHover={{ y: -6 }}
       className="group relative mx-auto w-full max-w-[360px]"
     >
-      <div className="overflow-hidden rounded-[1.75rem] border border-black/[0.08] dark:border-white/[0.08] bg-stone-100 dark:bg-stone-900/40 shadow-xl shadow-black/25 backdrop-blur-xl transition-all duration-300 hover:border-accent/25 hover:shadow-[0_20px_50px_rgba(201,113,125,0.12)]">
+      <div className="card-gradient overflow-hidden rounded-[1.75rem] shadow-xl shadow-black/20 backdrop-blur-xl transition-all duration-300 hover-glow">
         <div className="relative aspect-[4/5] w-full overflow-hidden">
           <img
             src={character.image}
@@ -44,7 +44,7 @@ export default function CompanionCard({ character, onSelect, userTier }: Props) 
           ) : null}
 
           <div className="absolute inset-x-0 bottom-0 p-5">
-            <div className="rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-stone-100 dark:bg-stone-950/60 p-4 shadow-lg backdrop-blur-xl">
+            <div className="card-gradient-subtle rounded-2xl p-4 shadow-lg backdrop-blur-xl">
               <h3 className="font-serif text-xl font-bold tracking-tight text-stone-900 dark:text-stone-50">
                 {character.name}
               </h3>
@@ -81,7 +81,7 @@ export default function CompanionCard({ character, onSelect, userTier }: Props) 
       <div
         className="pointer-events-none absolute inset-0 -z-10 rounded-[1.85rem] opacity-0 blur-xl transition-opacity duration-500 group-hover:opacity-100"
         style={{
-          background: "linear-gradient(135deg, rgba(201,113,125,0.25), rgba(157,122,158,0.2))",
+          background: "linear-gradient(135deg, rgba(247,37,133,0.28), rgba(67,97,238,0.22))",
         }}
       />
     </motion.div>

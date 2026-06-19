@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { Sparkles, Instagram, Youtube } from "lucide-react";
+import { Instagram, Youtube } from "lucide-react";
+import BrandLogo from "./BrandLogo";
 
 function TikTokIcon({ className }: { className?: string }) {
   return (
@@ -32,11 +33,8 @@ export default function Footer() {
       <div className="mx-auto max-w-5xl">
         <div className="flex flex-col gap-10 md:flex-row md:items-start md:justify-between">
           <div>
-            <div className="mb-4 flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent">
-                <Sparkles size={16} className="text-white" />
-              </div>
-              <span className="font-serif text-lg font-bold">Virtua Crush</span>
+            <div className="mb-4">
+              <BrandLogo size="sm" />
             </div>
             <p className="max-w-xs text-sm leading-relaxed text-stone-900 dark:text-stone-500">
               Premium AI companions with social profiles, personalized messages, and meaningful connection.

@@ -713,7 +713,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
         onClose={() => setHistoryToast((t) => ({ ...t, open: false }))}
         offsetRem={1.5}
       />
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(201,113,125,0.12),transparent)]" />
+      <div className="pointer-events-none absolute inset-0 -z-10 ambient-accent" />
 
       {/* Profile rail — dating / social profile feel */}
       <motion.div className="hidden w-full flex-col border-b border-black/[0.06] p-6 glass backdrop-blur-2xl lg:flex lg:h-full lg:overflow-y-auto lg:border-b-0 lg:border-r dark:border-white/[0.06]">
@@ -784,7 +784,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
       </motion.div>
 
       {/* Main chat */}
-      <motion.div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-stone-100/80 dark:bg-stone-950/40">
+      <motion.div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-stone-100/80 dark:bg-surface-elevated/55">
         <div className="z-10 flex shrink-0 items-center justify-between gap-2 border-b border-black/[0.06] dark:border-white/[0.06] bg-stone-50/70 px-4 py-3 backdrop-blur-xl dark:bg-surface/70 md:px-8 md:py-5">
             <div className="flex min-w-0 flex-1 items-center gap-2">
                 <button
@@ -1046,11 +1046,11 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                   className="flex w-full justify-end"
                 >
                   <div className="flex max-w-[88%] flex-row-reverse gap-2.5 md:max-w-[72%]">
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-violet-warm text-xs font-semibold text-white shadow-md shadow-accent/20">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-brand-sapphire text-xs font-semibold text-white shadow-md shadow-accent/25">
                       <User size={16} />
                     </div>
                     <div className="flex min-w-0 flex-col items-end space-y-1">
-                      <div className="max-w-full rounded-2xl rounded-tr-sm bg-gradient-to-br from-accent to-accent-deep px-4 py-3 text-[15px] leading-relaxed text-white shadow-sm">
+                      <div className="max-w-full rounded-2xl rounded-tr-sm bg-gradient-to-br from-accent to-brand-indigo px-4 py-3 text-[15px] leading-relaxed text-white shadow-sm">
                         {splitNarration(msg.content).map((seg, i) => (
                           <span key={i}>
                             {i > 0 ? " " : ""}
@@ -1120,7 +1120,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                           "max-w-full rounded-2xl rounded-tl-sm border px-4 py-3 text-[15px] leading-relaxed shadow-sm backdrop-blur-sm " +
                           (isNpc
                             ? "border-amber-500/25 bg-amber-500/10 text-stone-800 dark:text-stone-100"
-                            : "border-purple-400/25 bg-gradient-to-br from-purple-500 to-purple-300 text-white shadow-purple-500/15 dark:border-purple-400/20 dark:from-purple-600 dark:to-purple-400")
+                            : "border-brand-sapphire/30 bg-gradient-to-br from-brand-indigo to-brand-sapphire text-white shadow-brand-sapphire/20")
                         }
                       >
                         {segs.map((seg, j) => (
@@ -1134,7 +1134,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                           </span>
                         ))}
                       </div>
-                      <p className={"pl-1 text-left text-[10px] font-medium tabular-nums " + (isNpc ? "text-stone-900 dark:text-stone-500" : "text-purple-700 dark:text-stone-500")}>Just now</p>
+                      <p className={"pl-1 text-left text-[10px] font-medium tabular-nums " + (isNpc ? "text-stone-900 dark:text-stone-500" : "text-brand-indigo dark:text-stone-400")}>Just now</p>
                     </div>
                   </div>
                 </motion.div>
@@ -1147,7 +1147,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                 animate={{ opacity: 1, y: 0 }}
                 className="flex justify-start pl-1"
             >
-               <div className="inline-flex items-center gap-2 rounded-2xl rounded-tl-sm border border-purple-400/20 bg-gradient-to-br from-purple-500 to-purple-300 px-4 py-3 shadow-sm backdrop-blur-sm dark:border-white/[0.07] dark:from-purple-600 dark:to-purple-400">
+               <div className="inline-flex items-center gap-2 rounded-2xl rounded-tl-sm border border-brand-sapphire/25 bg-gradient-to-br from-brand-indigo to-brand-sapphire px-4 py-3 shadow-sm backdrop-blur-sm">
                     <span className="flex gap-1" aria-hidden>
                         <span className="h-2 w-2 animate-bounce rounded-full bg-white/80 [animation-duration:0.55s]" />
                         <span className="h-2 w-2 animate-bounce rounded-full bg-white/80 [animation-delay:0.12s] [animation-duration:0.55s]" />
@@ -1199,7 +1199,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           </div>
         )}
         {activeThread === 'reading' ? (
-          <div className="border-t border-purple-200/40 bg-gradient-to-t from-purple-200/90 via-purple-100/40 to-transparent p-4 dark:border-white/[0.05] dark:from-surface dark:via-surface/80 md:px-8 md:py-5">
+          <div className="composer-bar md:px-8 md:py-5">
             <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] px-4 py-3">
               <span className="text-xs text-stone-500 dark:text-stone-400">
                 You're reading a saved story. It can't be continued.
@@ -1214,7 +1214,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             </div>
           </div>
         ) : (
-        <div className="border-t border-purple-200/40 bg-gradient-to-t from-purple-200/90 via-purple-100/40 to-transparent p-4 dark:border-white/[0.05] dark:from-surface dark:via-surface/80 md:p-8 md:pt-6">
+        <div className="composer-bar">
           <div className="relative mx-auto max-w-3xl">
             <div className="relative flex items-center gap-2">
                 <input
@@ -1224,7 +1224,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
                 placeholder={composerLocked ? (archiveDay ? "Archived conversation — read only" : "This story has ended — switch to Free Roam to keep chatting") : displayedLoading ? "…" : `Message ${character.name}…`}
                 disabled={inputDisabled}
-                className="min-h-[52px] flex-1 rounded-[1.75rem] border border-purple-200/60 bg-white/90 py-3.5 pl-5 pr-14 text-[15px] text-stone-800 outline-none transition-all placeholder:text-purple-400/70 focus:border-purple-400/50 focus:ring-2 focus:ring-purple-300/25 dark:border-white/20 dark:bg-stone-600/75 dark:text-stone-50 dark:placeholder:text-stone-300 dark:focus:border-purple-300/40 dark:focus:ring-purple-400/20"
+                className="min-h-[52px] flex-1 rounded-[1.75rem] border border-brand-indigo/25 bg-white/95 py-3.5 pl-5 pr-14 text-[15px] text-stone-800 outline-none transition-all placeholder:text-brand-indigo/45 focus:border-brand-sapphire/50 focus:ring-2 focus:ring-brand-sapphire/20 dark:border-brand-sapphire/30 dark:bg-surface-elevated/80 dark:text-stone-50 dark:placeholder:text-stone-400 dark:focus:border-accent/40 dark:focus:ring-accent/20"
                 />
                 <button
                 type="button"

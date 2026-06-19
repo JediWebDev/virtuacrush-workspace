@@ -97,10 +97,10 @@ export default function PackList({ characterId, meetArcComplete = true, activeSe
           return (
             <div
               key={pack.id}
-              className={`group relative overflow-hidden rounded-2xl border transition-all duration-200 ${
+              className={`group relative overflow-hidden rounded-2xl transition-all duration-200 ${
                 isActive
-                  ? "border-accent/40 ring-1 ring-accent/20"
-                  : "border-black/10 dark:border-white/10 hover:border-black/20 dark:hover:border-white/20"
+                  ? "card-gradient ring-1 ring-accent/30"
+                  : "card-gradient-subtle hover-glow"
               }`}
             >
               {/* Gradient cover strip */}

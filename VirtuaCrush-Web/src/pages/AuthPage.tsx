@@ -5,6 +5,7 @@
 // 18+ and agreeing to the Terms of Use.
 import { useState, type FormEvent } from 'react';
 import { signIn, signUp } from '../lib/auth-client';
+import BrandLogo from '../components/BrandLogo';
 
 type Mode = 'signin' | 'signup';
 
@@ -73,11 +74,14 @@ export default function AuthPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-stone-50 px-4 dark:bg-surface">
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute -left-1/4 top-0 h-[800px] w-[800px] rounded-full bg-accent/10 blur-[120px]" />
-        <div className="absolute -right-1/4 bottom-0 h-[600px] w-[600px] rounded-full bg-violet-warm/10 blur-[100px]" />
+        <div className="absolute -left-1/4 top-0 h-[800px] w-[800px] rounded-full bg-accent/15 blur-[120px]" />
+        <div className="absolute -right-1/4 bottom-0 h-[600px] w-[600px] rounded-full bg-brand-sapphire/15 blur-[100px]" />
       </div>
 
-      <div className="w-full max-w-md rounded-3xl border border-black/10 glass p-8 shadow-2xl dark:border-white/10">
+      <div className="card-gradient w-full max-w-md rounded-3xl p-8 shadow-2xl">
+        <div className="mb-6 flex justify-center">
+          <BrandLogo size="lg" />
+        </div>
         <h1 className="mb-2 text-center font-serif text-3xl text-stone-900 dark:text-stone-50">
           {isSignup ? 'Create your account' : 'Welcome back'}
         </h1>
@@ -123,7 +127,7 @@ export default function AuthPage() {
                 type="checkbox"
                 checked={agree}
                 onChange={(e) => setAgree(e.target.checked)}
-                className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-accent,#c9717d)]"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
               />
               <span className="text-xs leading-relaxed text-stone-600 dark:text-stone-300">
                 I confirm that I am <strong>18 years of age or older</strong> and I agree to the{' '}

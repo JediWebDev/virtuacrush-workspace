@@ -95,7 +95,7 @@ function PostCard({ post, character, isLive }: { post: SocialPost; character: Ch
   }, [isLive, post.id]);
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.03] shadow-sm">
+    <article className="card-gradient-subtle overflow-hidden rounded-2xl shadow-sm">
       <div className="px-4 pt-4">
         <p className="text-[11px] font-medium text-stone-900 dark:text-stone-500">{timeLabel}</p>
         <p className="mt-2 text-sm leading-relaxed text-stone-700 dark:text-stone-200">{post.text}</p>
@@ -181,7 +181,7 @@ export default function SocialFeed({ character, className = "", isActive = true,
   const unlockedPosts = showPaywall ? [] : feedPosts.slice(1);
 
   return (
-    <aside className={`flex h-full flex-col border-black/[0.06] dark:border-white/[0.06] bg-stone-100 dark:bg-stone-950/30 ${className}`}>
+    <aside className={`flex h-full flex-col border-black/[0.06] dark:border-brand-sapphire/20 bg-stone-100 dark:bg-surface-elevated/50 ${className}`}>
       <header className="shrink-0 border-b border-black/[0.06] dark:border-white/[0.06] px-5 py-5">
         <h2 className="font-serif text-lg font-semibold text-stone-900 dark:text-stone-50">{name}&apos;s Feed</h2>
         <p className="mt-0.5 text-xs text-stone-900 dark:text-stone-500">Exclusive Updates</p>

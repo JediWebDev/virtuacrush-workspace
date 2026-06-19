@@ -143,7 +143,7 @@ export default function HomePage({ onSelect, userTier }: HomePageProps) {
             </div>
             <Link
               to="/characters"
-              className="text-sm font-semibold text-accent transition-colors hover:text-rose-200"
+              className="text-sm font-semibold text-accent transition-colors hover:text-brand-aqua"
             >
               View all characters →
             </Link>
@@ -171,10 +171,10 @@ export default function HomePage({ onSelect, userTier }: HomePageProps) {
             {PRICING_TIERS.map((tier) => (
               <div
                 key={tier.name}
-                className={`flex flex-col rounded-2xl border p-6 ${
+                className={`flex flex-col rounded-2xl p-6 ${
                   tier.highlight
-                    ? "border-accent/40 bg-accent/10 shadow-lg shadow-accent/10"
-                    : "border-black/[0.08] dark:border-white/[0.08] glass"
+                    ? "card-gradient shadow-lg shadow-accent/15 ring-1 ring-accent/25"
+                    : "card-gradient-subtle glass"
                 }`}
               >
                 <h3 className="text-lg font-semibold text-stone-900 dark:text-stone-50">{tier.name}</h3>

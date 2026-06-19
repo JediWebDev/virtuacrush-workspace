@@ -88,7 +88,7 @@ function SectionCard({ section }: { section: Section }) {
   return (
     <section
       id={section.id}
-      className="rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.03] dark:bg-white/[0.03] p-6 backdrop-blur-xl"
+      className="card-gradient-subtle rounded-2xl p-6 backdrop-blur-xl"
     >
       <div className="mb-4 flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">

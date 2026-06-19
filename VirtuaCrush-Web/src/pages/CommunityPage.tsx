@@ -22,7 +22,7 @@ import { parseCharacterTags } from "../lib/customCharacter";
 type Tab = "characters" | "adventures" | "arcs";
 
 const cardClass =
-  "rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] p-4 flex flex-col";
+  "card-gradient-subtle rounded-2xl p-4 flex flex-col";
 
 function Attribution({ name, copies }: { name: string | null; copies: number }) {
   return (

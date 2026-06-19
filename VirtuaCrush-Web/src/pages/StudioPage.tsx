@@ -426,7 +426,7 @@ export default function StudioPage() {
       </StudioGuide>
       <div className={`grid gap-8 lg:grid-cols-[1fr_360px] ${studioFormWrapperClass}`}>
         {/* Builder form */}
-        <div id="studio-arc-form" className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
+        <div id="studio-arc-form" className="card-gradient rounded-3xl p-6">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
@@ -514,7 +514,7 @@ export default function StudioPage() {
               </StudioField>
               <StudioField label="Co-presence" hint="Whether they share the scene with you.">
                 <label className="flex min-h-[2.625rem] items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
-                  <input type="checkbox" checked={form.coPresent} onChange={(e) => set("coPresent", e.target.checked)} className="h-4 w-4 shrink-0 rounded accent-[var(--accent,#c9717d)]" />
+                  <input type="checkbox" checked={form.coPresent} onChange={(e) => set("coPresent", e.target.checked)} className="h-4 w-4 shrink-0 rounded accent-accent" />
                   <span>{charName(form.characterId)} is physically with you</span>
                 </label>
               </StudioField>
@@ -660,7 +660,7 @@ export default function StudioPage() {
       </StudioGuide>
       <div className={`grid gap-8 lg:grid-cols-[1fr_360px] ${studioFormWrapperClass}`}>
         {/* Character builder */}
-        <div className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
+        <div className="card-gradient rounded-3xl p-6">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
               <UserPlus size={16} className="text-accent" /> New companion
@@ -747,7 +747,7 @@ export default function StudioPage() {
                     {c.imageKey ? (
                       <img src={assetUrl(c.imageKey)} alt={c.displayName} className="h-14 w-14 shrink-0 rounded-xl object-cover" />
                     ) : (
-                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-violet-warm text-xl font-bold text-white">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-brand-sapphire text-xl font-bold text-white">
                         {(c.displayName.trim()[0] || "?").toUpperCase()}
                       </div>
                     )}

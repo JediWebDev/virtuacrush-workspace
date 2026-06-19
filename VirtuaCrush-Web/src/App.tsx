@@ -111,8 +111,8 @@ export default function App() {
           {isPublicPage ? <Footer /> : null}
         </div>
         <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-          <div className="absolute -left-1/4 top-0 h-[800px] w-[800px] rounded-full bg-accent/10 blur-[120px]" />
-          <div className="absolute -right-1/4 bottom-0 h-[600px] w-[600px] rounded-full bg-violet-warm/10 blur-[100px]" />
+          <div className="absolute -left-1/4 top-0 h-[800px] w-[800px] rounded-full bg-accent/15 blur-[120px]" />
+          <div className="absolute -right-1/4 bottom-0 h-[600px] w-[600px] rounded-full bg-brand-sapphire/15 blur-[100px]" />
         </div>
       </div>
     );
@@ -242,7 +242,7 @@ export default function App() {
 
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute -left-1/4 top-0 h-[800px] w-[800px] rounded-full bg-accent/10 blur-[120px]" />
-        <div className="absolute -right-1/4 bottom-0 h-[600px] w-[600px] rounded-full bg-violet-warm/10 blur-[100px]" />
+        <div className="absolute -right-1/4 bottom-0 h-[600px] w-[600px] rounded-full bg-brand-sapphire/15 blur-[100px]" />
       </div>
     </div>
   );
@@ -251,7 +251,7 @@ export default function App() {
 // Landing pages for the Stripe checkout redirect targets.
 const BillingResult = ({ success = false }: { success?: boolean }) => (
   <section className="flex flex-1 items-center justify-center px-6 py-24">
-    <div className="max-w-md rounded-3xl border border-black/10 glass p-10 text-center dark:border-white/10">
+    <div className="card-gradient max-w-md rounded-3xl p-10 text-center">
       <h2 className="mb-3 font-serif text-3xl font-bold text-stone-900 dark:text-stone-50">
         {success ? "Welcome to PRO 💖" : "Checkout canceled"}
       </h2>

@@ -111,9 +111,7 @@ function SectionShell({
 
 function GlassPanel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div
-      className={`rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] p-6 backdrop-blur-xl md:p-8 ${className}`}
-    >
+    <div className={`card-gradient-subtle rounded-2xl p-6 backdrop-blur-xl md:p-8 ${className}`}>
       {children}
     </div>
   );
@@ -122,7 +120,7 @@ function GlassPanel({ children, className = "" }: { children: React.ReactNode; c
 export default function HowItWorksPage() {
   return (
     <main className="relative px-6 pb-24 pt-8 md:px-12 md:pt-12">
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_70%_40%_at_50%_0%,rgba(201,113,125,0.14),transparent)]" />
+      <div className="pointer-events-none absolute inset-0 -z-10 ambient-accent" />
 
       <div className="mx-auto max-w-5xl">
         <header className="mb-16 text-center md:mb-20">
@@ -152,7 +150,7 @@ export default function HowItWorksPage() {
                 </p>
               </div>
               <GlassPanel className="relative overflow-hidden">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(201,113,125,0.12),transparent_55%)]" />
+                <div className="absolute inset-0 ambient-accent opacity-80" />
                 <div className="relative flex min-h-[220px] items-center justify-center">
                   <div className="absolute h-28 w-28 rounded-full border border-accent/30 bg-accent/10" />
                   <div className="absolute h-44 w-44 rounded-full border border-dashed border-black/10 dark:border-white/10" />
@@ -162,7 +160,7 @@ export default function HowItWorksPage() {
                   <div className="absolute left-8 top-10 flex h-11 w-11 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-stone-100 dark:bg-stone-900/80 text-accent">
                     <Network size={20} />
                   </div>
-                  <div className="absolute right-8 top-14 flex h-11 w-11 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-stone-100 dark:bg-stone-900/80 text-rose-300">
+                  <div className="absolute right-8 top-14 flex h-11 w-11 items-center justify-center rounded-xl border border-black/10 dark:border-white/10 bg-stone-100 dark:bg-surface-elevated/80 text-brand-aqua">
                     <Heart size={20} />
                   </div>
                   <div className="absolute bottom-10 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-black/10 dark:border-white/10 bg-black/[0.04] dark:bg-white/[0.04] px-3 py-1.5 text-[11px] font-medium text-stone-600 dark:text-stone-400">
@@ -256,7 +254,7 @@ export default function HowItWorksPage() {
               {TIERS.map((tier) => (
                 <GlassPanel
                   key={tier.name}
-                  className={`flex flex-col ${tier.highlight ? "border-accent/35 ring-1 ring-accent/20" : ""}`}
+                  className={`flex flex-col ${tier.highlight ? "card-gradient ring-1 ring-accent/25" : ""}`}
                 >
                   {tier.highlight ? (
                     <span className="mb-3 inline-flex w-fit rounded-full bg-accent/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent">

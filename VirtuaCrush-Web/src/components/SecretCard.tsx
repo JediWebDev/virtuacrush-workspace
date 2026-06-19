@@ -15,7 +15,7 @@ export default function SecretCard({ secret, name }: SecretCardProps) {
   if (!secret.discovered) {
     const progress = Math.max(0, Math.min(99, Math.round(secret.progress ?? 0)));
     return (
-      <div className="mb-5 w-full rounded-2xl border border-black/10 bg-black/[0.03] p-4 text-left dark:border-white/10 dark:bg-white/[0.03]">
+      <div className="card-gradient-subtle mb-5 w-full rounded-2xl p-4 text-left">
         <div className="flex items-center gap-2">
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-stone-500/10 text-stone-500">
             <Lock size={15} />
@@ -30,7 +30,7 @@ export default function SecretCard({ secret, name }: SecretCardProps) {
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-amber-400/70 to-accent transition-[width] duration-700"
+              className="h-full rounded-full bg-gradient-to-r from-brand-indigo to-accent transition-[width] duration-700"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -48,7 +48,7 @@ export default function SecretCard({ secret, name }: SecretCardProps) {
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="mb-5 w-full overflow-hidden rounded-2xl border border-accent/30 bg-accent/[0.06] p-4 text-left"
+      className="card-gradient mb-5 w-full overflow-hidden rounded-2xl p-4 text-left"
     >
       <div className="flex items-center gap-2">
         <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent/15 text-accent">
