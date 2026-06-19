@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { Loader2, Plus, Trash2, MessageCircle, Sparkles, GitBranch, Flag } from "lucide-react";
+import { Loader2, Plus, Trash2, MessageCircle, Sparkles, GitBranch, Flag, Pencil, X } from "lucide-react";
 import { CHARACTERS } from "../types/character";
 import PublishControl from "./PublishControl";
 import { StudioGuide, StudioField, StudioFieldHint, StudioOptionalSection } from "./StudioGuide";
@@ -21,6 +21,7 @@ import {
 } from "./studioFormStyles";
 import {
   createStudioPack,
+  updateStudioPack,
   listStudioPacks,
   deleteStudioPack,
   listStudioCharacters,
@@ -32,7 +33,8 @@ import {
   type StudioStoryAct,
   type StudioVocabulary,
 } from "../lib/api";
-import { emptyStudioNpcDraft, studioNpcInputsFromDrafts, type StudioNpcDraft } from "../lib/studioNpc";
+import { studioNpcInputsFromDrafts, type StudioNpcDraft } from "../lib/studioNpc";
+import { packFormFromPack } from "../lib/studioLoad";
 
 const labelClass = studioLabelClass;
 const inputClass = studioInputClass;
@@ -175,6 +177,7 @@ export default function AdventureBuilder({
   const [systemInstruction, setSystemInstruction] = useState("");
   const [coPresent, setCoPresent] = useState(true);
   const [packNpcs, setPackNpcs] = useState<StudioNpcDraft[]>([]);
+  const [editingPackId, setEditingPackId] = useState<string | null>(null);
 
   // Node graph.
   const [nodes, setNodes] = useState<EditNode[]>(freshGraph);
@@ -241,8 +244,29 @@ export default function AdventureBuilder({
     setNodes((ns) => ns.map((n) => (n.id === nodeId ? { ...n, choices: n.choices.filter((_, i) => i !== idx) } : n)));
 
   const resetForm = () => {
+    setEditingPackId(null);
     setTitle(""); setBlurb(""); setSetting(""); setSituation(""); setSystemInstruction("");
     setMood("dramatic"); setCoPresent(true); setPackNpcs([]); setNodes(freshGraph()); setSeq(1);
+    setError(null);
+  };
+
+  const loadPackForEdit = (pack: StudioPack) => {
+    const loaded = packFormFromPack(pack);
+    setEditingPackId(pack.id);
+    setCharacterId(loaded.characterId);
+    setTitle(loaded.title);
+    setBlurb(loaded.blurb);
+    setMood(loaded.mood);
+    setSetting(loaded.setting);
+    setSituation(loaded.situation);
+    setSystemInstruction(loaded.systemInstruction);
+    setCoPresent(loaded.coPresent);
+    setPackNpcs(loaded.npcs);
+    setNodes(loaded.nodes.length ? loaded.nodes as EditNode[] : freshGraph());
+    setSeq(loaded.seq);
+    setError(null);
+    setSavedMsg(null);
+    document.getElementById("studio-adventure-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const handleSave = async () => {
@@ -270,7 +294,7 @@ export default function AdventureBuilder({
     setSaving(true);
     try {
       const npcInputs = studioNpcInputsFromDrafts(packNpcs);
-      await createStudioPack({
+      const payload = {
         characterId,
         title: title.trim(),
         blurb: blurb.trim() || undefined,
@@ -281,12 +305,18 @@ export default function AdventureBuilder({
         systemInstruction: systemInstruction.trim(),
         nodes: nodeMap as unknown as Record<string, { npcInstruction: string; choices: EditChoice[] | null }>,
         ...(npcInputs.length ? { npcs: npcInputs } : {}),
-      });
+      };
+      if (editingPackId) {
+        await updateStudioPack(editingPackId, payload);
+        setSavedMsg("Changes saved!");
+      } else {
+        await createStudioPack(payload);
+        setSavedMsg("Saved! It'll appear in the story list when you open this companion's chat.");
+      }
       resetForm();
-      setSavedMsg("Saved! It'll appear in the story list when you open this companion's chat.");
       refreshPacks();
     } catch {
-      setError("Couldn't save the adventure. Please try again.");
+      setError(editingPackId ? "Couldn't update the adventure. Please try again." : "Couldn't save the adventure. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -303,6 +333,7 @@ export default function AdventureBuilder({
         <li><span className="font-medium text-stone-800 dark:text-stone-100">Add beats</span> — each beat tells the character what to do; non-ending beats need at least one choice.</li>
         <li><span className="font-medium text-stone-800 dark:text-stone-100">Add scene NPCs</span> (optional) — rivals, friends, or staff who can speak in tagged lines.</li>
         <li><span className="font-medium text-stone-800 dark:text-stone-100">Wire choices</span> to the next beat, &quot;Continue story&quot; (stay on this beat), or &quot;End the story.&quot;</li>
+        <li><span className="font-medium text-stone-800 dark:text-stone-100">Edit later</span> — use the pencil on any saved adventure to load it back into the builder.</li>
       </ol>
       <p className="text-xs text-stone-500">For a single linear arc without branches, try the Stories tab instead.</p>
     </StudioGuide>
@@ -310,11 +341,23 @@ export default function AdventureBuilder({
       {/* Builder */}
       <div className="space-y-6">
         {/* Story basics */}
-        <div className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
-          <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
-            <Sparkles size={16} className="text-accent" /> Adventure basics
-          </h2>
-          <p className="mb-4 text-xs text-stone-600 dark:text-stone-400">Companion, title, situation, and story framing are required.</p>
+        <div id="studio-adventure-form" className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
+                {editingPackId ? <Pencil size={16} className="text-accent" /> : <Sparkles size={16} className="text-accent" />}
+                {editingPackId ? "Edit adventure" : "Adventure basics"}
+              </h2>
+              <p className="text-xs text-stone-600 dark:text-stone-400">
+                {editingPackId ? "Update fields below, then save changes." : "Companion, title, situation, and story framing are required."}
+              </p>
+            </div>
+            {editingPackId && (
+              <button type="button" onClick={resetForm} className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-2 text-xs font-semibold text-stone-600 transition-colors hover:bg-black/[0.04] dark:border-white/10 dark:text-stone-300">
+                <X size={14} /> Cancel
+              </button>
+            )}
+          </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             <StudioField label="Companion" hint="Who leads this adventure — built-in or your custom companions.">
@@ -526,8 +569,8 @@ export default function AdventureBuilder({
             disabled={saving}
             className="flex items-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-accent/25 transition-all hover:bg-accent-deep active:scale-95 disabled:opacity-50"
           >
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            {saving ? "Saving…" : "Save adventure"}
+            {saving ? <Loader2 size={16} className="animate-spin" /> : editingPackId ? <Pencil size={16} /> : <Sparkles size={16} />}
+            {saving ? "Saving…" : editingPackId ? "Save changes" : "Save adventure"}
           </button>
         </div>
       </div>
@@ -546,12 +589,17 @@ export default function AdventureBuilder({
             {packs.map((p) => {
               const nodeCount = p.spec?.nodes ? Object.keys(p.spec.nodes).length : 0;
               const npcCount = Array.isArray(p.spec?.npcs) ? p.spec.npcs.length : 0;
+              const isEditing = editingPackId === p.id;
               return (
                 <motion.li
                   key={p.id}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] p-4"
+                  className={`rounded-2xl border p-4 ${
+                    isEditing
+                      ? "border-accent/50 bg-accent/5 dark:bg-accent/10"
+                      : "border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03]"
+                  }`}
                 >
                   <p className="text-[11px] font-medium uppercase tracking-wide text-accent">
                     {companionName(p.characterId)} · {nodeCount} beats{npcCount ? ` · ${npcCount} NPC${npcCount === 1 ? "" : "s"}` : ""}
@@ -559,6 +607,15 @@ export default function AdventureBuilder({
                   <p className="mt-0.5 text-sm font-semibold text-stone-900 dark:text-stone-50">{p.title}</p>
                   {p.blurb && <p className="mt-1 line-clamp-2 text-xs italic text-stone-500">{p.blurb}</p>}
                   <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => loadPackForEdit(p)}
+                      disabled={busyId === p.id}
+                      className="flex items-center justify-center gap-1.5 rounded-xl border border-black/10 px-3 py-2 text-xs font-semibold text-stone-600 transition-colors hover:bg-black/[0.05] dark:border-white/10 dark:text-stone-300 disabled:opacity-50"
+                      aria-label="Edit adventure"
+                    >
+                      <Pencil size={13} />
+                    </button>
                     <button
                       type="button"
                       onClick={() => navigate(`/chat/${p.characterId}`)}
@@ -570,7 +627,11 @@ export default function AdventureBuilder({
                       type="button"
                       onClick={async () => {
                         setBusyId(p.id);
-                        try { await deleteStudioPack(p.id); setPacks((prev) => prev.filter((x) => x.id !== p.id)); }
+                        try {
+                          await deleteStudioPack(p.id);
+                          setPacks((prev) => prev.filter((x) => x.id !== p.id));
+                          if (editingPackId === p.id) resetForm();
+                        }
                         catch { /* non-fatal */ }
                         finally { setBusyId(null); }
                       }}

@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { Wand2, Play, Trash2, Loader2, BookPlus, UserPlus, MessageCircle, ImagePlus, Sparkles, Upload, Dices } from "lucide-react";
+import { Wand2, Play, Trash2, Loader2, BookPlus, UserPlus, MessageCircle, ImagePlus, Sparkles, Upload, Dices, Pencil, X } from "lucide-react";
 import VoiceTagPicker from "../components/VoiceTagPicker";
 import StudioNpcEditor from "../components/StudioNpcEditor";
-import { emptyStudioNpcDraft, studioNpcInputsFromDrafts, type StudioNpcDraft } from "../lib/studioNpc";
+import { studioNpcInputsFromDrafts, type StudioNpcDraft } from "../lib/studioNpc";
+import { arcFormFromStory } from "../lib/studioLoad";
 import { CHARACTERS } from "../types/character";
 import AdventureBuilder from "../components/AdventureBuilder";
 import PublishControl from "../components/PublishControl";
@@ -17,6 +18,7 @@ import {
 } from "../components/studioFormStyles";
 import {
   createStudioStory,
+  updateStudioStory,
   listStudioStories,
   deleteStudioStory,
   playStudioStory,
@@ -116,6 +118,9 @@ export default function StudioPage() {
   const [vocabulary, setVocabulary] = useState<StudioVocabulary | null>(null);
   const [randomBusy, setRandomBusy] = useState(false);
   const [arcNpcs, setArcNpcs] = useState<StudioNpcDraft[]>([]);
+  const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
+
+  const arcStories = useMemo(() => stories.filter((s) => s.format === "arc"), [stories]);
 
   const charName = (id: string) => CHARACTERS.find((c) => c.id === id)?.name ?? characters.find((c) => customCharacterRef(c.id) === id)?.displayName ?? id;
 
@@ -163,8 +168,26 @@ export default function StudioPage() {
     }
   };
 
+  const cancelArcEdit = () => {
+    setEditingStoryId(null);
+    setForm(emptyForm(CHARACTERS[0]?.id ?? ""));
+    setArcNpcs([]);
+    setError(null);
+  };
+
+  const loadArcForEdit = (story: StudioStory) => {
+    if (story.format !== "arc") return;
+    const { form: loaded, npcs } = arcFormFromStory(story);
+    setForm(loaded);
+    setArcNpcs(npcs);
+    setEditingStoryId(story.id);
+    setError(null);
+    document.getElementById("studio-arc-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const handleRandomArc = async (randomCompanion = false) => {
     setError(null);
+    setEditingStoryId(null);
     setRandomBusy(true);
     try {
       const draft = await fetchRandomArcDraft(randomCompanion ? undefined : form.characterId);
@@ -286,7 +309,7 @@ export default function StudioPage() {
   const set = <K extends keyof ReturnType<typeof emptyForm>>(k: K, v: ReturnType<typeof emptyForm>[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
-  const handleCreate = async () => {
+  const handleSaveStory = async () => {
     setError(null);
     if (!form.setting.trim() || !form.situation.trim() || !form.npcInstruction.trim() || !form.completionCriteria.trim()) {
       setError("Please fill in setting, situation, character behavior, and how it ends.");
@@ -295,7 +318,7 @@ export default function StudioPage() {
     setSaving(true);
     try {
       const npcInputs = studioNpcInputsFromDrafts(arcNpcs);
-      await createStudioStory({
+      const payload = {
         characterId: form.characterId,
         title: form.title.trim() || "Untitled story",
         setting: form.setting.trim(),
@@ -310,12 +333,16 @@ export default function StudioPage() {
         coPresent: form.coPresent,
         tone: form.tone,
         ...(npcInputs.length ? { npcs: npcInputs } : {}),
-      });
-      setForm(emptyForm(form.characterId));
-      setArcNpcs([]);
+      };
+      if (editingStoryId) {
+        await updateStudioStory(editingStoryId, payload);
+      } else {
+        await createStudioStory(payload);
+      }
+      cancelArcEdit();
       refresh();
     } catch {
-      setError("Couldn't save the story. Please try again.");
+      setError(editingStoryId ? "Couldn't update the story. Please try again." : "Couldn't save the story. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -338,6 +365,7 @@ export default function StudioPage() {
     try {
       await deleteStudioStory(s.id);
       setStories((prev) => prev.filter((x) => x.id !== s.id));
+      if (editingStoryId === s.id) cancelArcEdit();
     } catch {
       /* non-fatal */
     } finally {
@@ -388,21 +416,29 @@ export default function StudioPage() {
           <li><span className="font-medium text-stone-800 dark:text-stone-100">Pick a companion</span> and describe where you are and what&apos;s happening.</li>
           <li><span className="font-medium text-stone-800 dark:text-stone-100">Tell the character how to act</span> and how the story should end.</li>
           <li><span className="font-medium text-stone-800 dark:text-stone-100">Add scene NPCs</span> (optional) — friends, rivals, or venue staff who can speak in the scene.</li>
-          <li><span className="font-medium text-stone-800 dark:text-stone-100">Save, then Play</span> from the list on the right — or open their chat and pick your story from Stories.</li>
+          <li><span className="font-medium text-stone-800 dark:text-stone-100">Save, then Play</span> from the list on the right — or edit anytime with the pencil icon.</li>
         </ol>
         <p className="text-xs text-stone-500">Want branching choices instead? Use the <button type="button" onClick={() => setTab("adventures")} className="font-semibold text-accent underline-offset-2 hover:underline">Adventures</button> tab.</p>
       </StudioGuide>
       <div className={`grid gap-8 lg:grid-cols-[1fr_360px] ${studioFormWrapperClass}`}>
         {/* Builder form */}
-        <div className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
+        <div id="studio-arc-form" className="rounded-3xl border border-black/10 dark:border-white/10 glass p-6">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
-                <BookPlus size={16} className="text-accent" /> New story arc
+                {editingStoryId ? <Pencil size={16} className="text-accent" /> : <BookPlus size={16} className="text-accent" />}
+                {editingStoryId ? "Edit story arc" : "New story arc"}
               </h2>
-              <p className="text-xs text-stone-600 dark:text-stone-400">Fields marked below are required to save.</p>
+              <p className="text-xs text-stone-600 dark:text-stone-400">
+                {editingStoryId ? "Update fields below, then save changes." : "Fields marked below are required to save."}
+              </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              {editingStoryId && (
+                <button type="button" onClick={cancelArcEdit} className="inline-flex items-center gap-1.5 rounded-xl border border-black/10 px-3 py-2 text-xs font-semibold text-stone-600 transition-colors hover:bg-black/[0.04] dark:border-white/10 dark:text-stone-300">
+                  <X size={14} /> Cancel
+                </button>
+              )}
               <button type="button" disabled={randomBusy} onClick={() => handleRandomArc(false)} className={randomBtnClass}>
                 {randomBusy ? <Loader2 size={14} className="animate-spin" /> : <Dices size={14} />}
                 Random story
@@ -522,12 +558,12 @@ export default function StudioPage() {
 
           <button
             type="button"
-            onClick={handleCreate}
+            onClick={handleSaveStory}
             disabled={saving}
             className="mt-5 flex items-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-accent/25 transition-all hover:bg-accent-deep active:scale-95 disabled:opacity-50"
           >
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <BookPlus size={16} />}
-            {saving ? "Saving…" : "Save story"}
+            {saving ? <Loader2 size={16} className="animate-spin" /> : editingStoryId ? <Pencil size={16} /> : <BookPlus size={16} />}
+            {saving ? "Saving…" : editingStoryId ? "Save changes" : "Save story"}
           </button>
         </div>
 
@@ -536,20 +572,25 @@ export default function StudioPage() {
           <h2 className="mb-3 text-sm font-semibold text-stone-800 dark:text-stone-100">My stories</h2>
           {loading ? (
             <p className="flex items-center gap-2 py-6 text-sm text-stone-500"><Loader2 size={16} className="animate-spin" /> Loading…</p>
-          ) : stories.length === 0 ? (
+          ) : arcStories.length === 0 ? (
             <p className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] p-4 text-sm text-stone-500">
               No stories yet. Write one on the left and hit Save.
             </p>
           ) : (
             <ul className="space-y-3">
-              {stories.map((s) => {
+              {arcStories.map((s) => {
                 const npcCount = Array.isArray(s.spec?.npcs) ? s.spec.npcs.length : 0;
+                const isEditing = editingStoryId === s.id;
                 return (
                 <motion.li
                   key={s.id}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="rounded-2xl border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03] p-4"
+                  className={`rounded-2xl border p-4 ${
+                    isEditing
+                      ? "border-accent/50 bg-accent/5 dark:bg-accent/10"
+                      : "border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/[0.03]"
+                  }`}
                 >
                   <p className="text-[11px] font-medium uppercase tracking-wide text-accent">
                     {charName(s.characterId)} · {s.format}{npcCount ? ` · ${npcCount} NPC${npcCount === 1 ? "" : "s"}` : ""}
@@ -559,6 +600,15 @@ export default function StudioPage() {
                     <p className="mt-1 line-clamp-2 text-xs italic text-stone-500">{s.spec.setting as string}</p>
                   )}
                   <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => loadArcForEdit(s)}
+                      disabled={busyId === s.id}
+                      className="flex items-center justify-center gap-1.5 rounded-xl border border-black/10 px-3 py-2 text-xs font-semibold text-stone-600 transition-colors hover:bg-black/[0.05] dark:border-white/10 dark:text-stone-300 disabled:opacity-50"
+                      aria-label="Edit story"
+                    >
+                      <Pencil size={13} />
+                    </button>
                     <button
                       type="button"
                       onClick={() => handlePlay(s)}

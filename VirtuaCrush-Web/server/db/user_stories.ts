@@ -81,6 +81,32 @@ export async function getUserStory(id: string): Promise<UserStory | null> {
   return rows[0] ? rowToStory(rows[0]) : null;
 }
 
+/** Updates an owned story's metadata and spec (arcs and packs). */
+export async function updateUserStory(
+  ownerUserId: string,
+  id: string,
+  p: {
+    characterId: string;
+    title: string;
+    blurb: string;
+    spec: Record<string, unknown>;
+  },
+): Promise<UserStory | null> {
+  const n = Number(id);
+  if (!Number.isFinite(n)) return null;
+  const { rows } = await pool.query<Row>(
+    `UPDATE user_stories
+        SET character_id = $3,
+            title = $4,
+            blurb = $5,
+            spec = $6::jsonb
+      WHERE id = $1 AND owner_user_id = $2
+      RETURNING *`,
+    [n, ownerUserId, p.characterId, p.title.slice(0, 120), p.blurb.slice(0, 400), JSON.stringify(p.spec)],
+  );
+  return rows[0] ? rowToStory(rows[0]) : null;
+}
+
 export async function deleteUserStory(ownerUserId: string, id: string): Promise<boolean> {
   const n = Number(id);
   if (!Number.isFinite(n)) return false;

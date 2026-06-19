@@ -302,6 +302,14 @@ export async function createStudioStory(input: StudioArcInput): Promise<StudioSt
   return res.story;
 }
 
+export async function updateStudioStory(id: string, input: StudioArcInput): Promise<StudioStory> {
+  const res = await api<{ story: StudioStory }>(`/api/studio/stories/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ format: 'arc', ...input }),
+  });
+  return res.story;
+}
+
 export async function listStudioStories(characterId?: string): Promise<StudioStory[]> {
   const q = characterId ? `?characterId=${encodeURIComponent(characterId)}` : '';
   const res = await api<{ stories: StudioStory[] }>(`/api/studio/stories${q}`);
@@ -577,6 +585,14 @@ export interface StudioPackInput {
 export async function createStudioPack(input: StudioPackInput): Promise<StudioPack> {
   const res = await api<{ pack: StudioPack }>(`/api/studio/packs`, {
     method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return res.pack;
+}
+
+export async function updateStudioPack(id: string, input: StudioPackInput): Promise<StudioPack> {
+  const res = await api<{ pack: StudioPack }>(`/api/studio/packs/${id}`, {
+    method: 'PUT',
     body: JSON.stringify(input),
   });
   return res.pack;

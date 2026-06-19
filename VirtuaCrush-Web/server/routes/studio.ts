@@ -8,13 +8,14 @@
 // POST   /api/studio/stories            — create an arc
 // GET    /api/studio/stories?characterId — list my stories (optionally per character)
 // GET    /api/studio/stories/:id        — get one (owner only)
+// PUT    /api/studio/stories/:id        — update an arc (owner only)
 // DELETE /api/studio/stories/:id        — delete (owner only)
 // POST   /api/studio/stories/:id/play   — activate this arc for the chat with its character
 // POST   /api/studio/stories/:id/stop   — clear the active arc
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import {
-  createUserStory, listUserStories, getUserStory, deleteUserStory,
+  createUserStory, listUserStories, getUserStory, updateUserStory, deleteUserStory,
   setStoryVisibility, type UserStory,
 } from '../db/user_stories';
 import {
@@ -328,6 +329,39 @@ router.get('/packs/:id', requireAuth, async (req: Request, res: Response) => {
   return res.json({ pack: story });
 });
 
+// PUT /api/studio/packs/:id — update an adventure (owner only)
+router.put('/packs/:id', requireAuth, async (req: Request, res: Response) => {
+  const existing = await getUserStory(req.params.id);
+  if (!existing || existing.ownerUserId !== req.user!.id || existing.format !== 'pack') {
+    return res.status(404).json({ error: 'not_found' });
+  }
+
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const characterId = String(b.characterId ?? existing.characterId);
+  if (!characterId) return res.status(400).json({ error: 'missing_character' });
+  if (!(await resolveStudioCharacter(characterId, req.user!.id))) {
+    return res.status(400).json({ error: 'unknown_character' });
+  }
+
+  const v = validatePackSpec(b);
+  if (!v.ok || !v.spec) return res.status(400).json({ error: 'invalid_spec', detail: v.error });
+
+  try {
+    const pack = await updateUserStory(req.user!.id, existing.id, {
+      characterId,
+      title: v.spec.title,
+      blurb: v.spec.blurb,
+      spec: v.spec as unknown as Record<string, unknown>,
+    });
+    if (!pack) return res.status(404).json({ error: 'not_found' });
+    return res.json({ pack });
+  } catch (err) {
+    console.error('[studio] pack update failed:', err);
+    return res.status(500).json({ error: 'update_failed' });
+  }
+});
+
+// PUT    /api/studio/packs/:id — update an adventure (owner only)
 // DELETE /api/studio/packs/:id
 router.delete('/packs/:id', requireAuth, async (req: Request, res: Response) => {
   const story = await getUserStory(req.params.id);
@@ -387,6 +421,37 @@ router.get('/stories/:id', requireAuth, async (req: Request, res: Response) => {
   const story = await getUserStory(req.params.id);
   if (!story || story.ownerUserId !== req.user!.id) return res.status(404).json({ error: 'not_found' });
   return res.json({ story });
+});
+
+// --- Update (arc) ----------------------------------------------------------
+router.put('/stories/:id', requireAuth, async (req: Request, res: Response) => {
+  const existing = await getUserStory(req.params.id);
+  if (!existing || existing.ownerUserId !== req.user!.id) return res.status(404).json({ error: 'not_found' });
+  if (existing.format !== 'arc') return res.status(400).json({ error: 'unsupported_format' });
+
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const characterId = String(b.characterId ?? existing.characterId);
+  if (!characterId) return res.status(400).json({ error: 'missing_character' });
+  if (!(await resolveStudioCharacter(characterId, req.user!.id))) {
+    return res.status(400).json({ error: 'unknown_character' });
+  }
+
+  const v = validateArcSpec(b);
+  if (!v.ok || !v.spec) return res.status(400).json({ error: 'invalid_spec', detail: v.error });
+
+  try {
+    const story = await updateUserStory(req.user!.id, existing.id, {
+      characterId,
+      title: String(b.title ?? existing.title),
+      blurb: String(b.blurb ?? ''),
+      spec: v.spec as unknown as Record<string, unknown>,
+    });
+    if (!story) return res.status(404).json({ error: 'not_found' });
+    return res.json({ story });
+  } catch (err) {
+    console.error('[studio] update failed:', err);
+    return res.status(500).json({ error: 'update_failed' });
+  }
 });
 
 // --- Delete ----------------------------------------------------------------
