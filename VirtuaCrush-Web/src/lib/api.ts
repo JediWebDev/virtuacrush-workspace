@@ -101,6 +101,23 @@ export async function fetchAffinity(characterId: string): Promise<number> {
   return typeof res.score === 'number' ? res.score : 0;
 }
 
+/** True when dev reset API is available (local / ALLOW_DEV_RESET). */
+export async function fetchDevResetEnabled(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/dev/enabled', { credentials: 'include' });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { enabled?: boolean };
+    return body.enabled === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Wipes chat + arc progress for one character (dev only). */
+export async function devResetCharacter(characterId: string): Promise<{ ok: boolean }> {
+  return api(`/api/dev/reset-character/${encodeURIComponent(characterId)}`, { method: 'POST' });
+}
+
 // Respond to a surfaced desire event (encourage / redirect / decline).
 export async function respondToDesire(
   characterId: string,

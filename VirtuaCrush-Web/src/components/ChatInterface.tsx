@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
-import { fetchGreeting, fetchCharacterState, fetchAffinity, respondToDesire, fetchChatHistory, fetchChatHistoryDay, type CharacterState, type ChatHistoryDay } from "../lib/api";
+import { fetchGreeting, fetchCharacterState, fetchAffinity, fetchDevResetEnabled, devResetCharacter, respondToDesire, fetchChatHistory, fetchChatHistoryDay, type CharacterState, type ChatHistoryDay } from "../lib/api";
 import { splitNarration } from "../lib/narration";
 import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked } from "lucide-react";
+import { Send, User, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw } from "lucide-react";
 import { Character } from "../types/character";
 import type { UserTier } from "../types/subscription";
 import SocialFeed from "./SocialFeed";
@@ -112,6 +112,8 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     badge: null,
   });
   const [meetArcComplete, setMeetArcComplete] = useState(() => isCustomCharacterId(character.id));
+  const [devResetEnabled, setDevResetEnabled] = useState(false);
+  const [devResetting, setDevResetting] = useState(false);
   const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Restore an in-progress story when the chat is (re)opened so the Story tab
@@ -287,6 +289,56 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
       .catch((err) => console.error('[affinity] fetch failed:', err));
     return () => { cancelled = true; };
   }, [character.id, onAffinityChange]);
+
+  useEffect(() => {
+    fetchDevResetEnabled().then(setDevResetEnabled).catch(() => setDevResetEnabled(false));
+  }, []);
+
+  const handleDevReset = async () => {
+    if (devResetting) return;
+    const ok = window.confirm(
+      `Reset all chat and story progress with ${character.name}? This clears the meet-cute, messages, affinity, and packs. Dev only.`,
+    );
+    if (!ok) return;
+    setDevResetting(true);
+    try {
+      await devResetCharacter(character.id);
+      setAffinity(0);
+      onAffinityChange?.(character.id, 0);
+      setActiveStoryArc(null);
+      setMeetArcComplete(isCustomCharacterId(character.id));
+      setActiveThread('freeRoam');
+      setArchiveDay(null);
+      setActivePackSession(null);
+      setPackMessages([]);
+      setPackChoices(null);
+      setPackCompleted(false);
+      clearReplyChoices();
+      setGreetingLoading(true);
+      const result = await fetchGreeting(character.id);
+      const sceneMsgs =
+        !result.hasHistory && result.sceneHeader
+          ? [{ id: 'scene-header', role: 'assistant' as const, content: `[NARRATOR] ${result.sceneHeader}` }]
+          : [];
+      if (result.hasHistory && result.history?.length) {
+        setMessages(result.history.map((m, i) => ({ id: `history-${i}`, role: m.role, content: m.content })));
+      } else if (result.greeting) {
+        setMessages([...sceneMsgs, { id: 'greeting', role: 'assistant', content: result.greeting }]);
+      } else if (sceneMsgs.length) {
+        setMessages(sceneMsgs);
+      } else {
+        setMessages([]);
+      }
+      if (typeof result.meetArcComplete === 'boolean') setMeetArcComplete(result.meetArcComplete);
+      fetchCharacterState(character.id).then(setStoryState).catch(() => {});
+    } catch (err) {
+      console.error('[dev] reset failed:', err);
+      window.alert('Dev reset failed — is the server running in dev mode?');
+    } finally {
+      setDevResetting(false);
+      setGreetingLoading(false);
+    }
+  };
 
   const characterWithAffinity: Character = { ...character, currentAffinity: affinity };
 
@@ -708,7 +760,18 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           <ActivityLog characterId={character.id} name={character.name} />
         </div>
 
-        <div className="mt-auto border-t border-black/[0.06] dark:border-white/[0.06] pt-6">
+        <div className="mt-auto border-t border-black/[0.06] dark:border-white/[0.06] pt-6 space-y-3">
+            {devResetEnabled ? (
+              <button
+                type="button"
+                onClick={() => void handleDevReset()}
+                disabled={devResetting || isLoading}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-500/15 disabled:opacity-50 dark:text-amber-200"
+              >
+                <RotateCcw size={14} className={devResetting ? 'animate-spin' : ''} />
+                {devResetting ? 'Resetting…' : 'Dev: reset character'}
+              </button>
+            ) : null}
             <p className="text-center text-[11px] leading-relaxed text-stone-900 dark:text-stone-500">
               Private chat · Encrypted in transit
             </p>
