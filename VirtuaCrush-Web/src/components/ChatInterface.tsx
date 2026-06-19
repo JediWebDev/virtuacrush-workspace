@@ -1043,7 +1043,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
 
         {activeThread === 'freeRoam' && !archiveDay && !isLoading && replyChoices.length > 0 && (
           <ChoiceButtons
-            title="Suggested replies"
+            title="What do you say or do?"
             choices={replyChoices.map((c, i) => ({ id: `rc_${i}`, label: c.label, userMessage: c.userMessage, next: '' }))}
             onChoice={(c) => { void sendMessage(c.userMessage); }}
             disabled={isLoading}

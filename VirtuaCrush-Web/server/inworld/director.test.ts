@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDirectorPrompt, companionTagFor, parseDirectorTurns, parseScene, turnsToTranscript } from './director';
+import { buildDirectorPrompt, companionTagFor, parseDirectorTurns, parseScene, parseDirectorOutput, sanitizeReplyChoices, turnsToTranscript } from './director';
 
 test('companionTagFor uppercases a name', () => {
   assert.equal(companionTagFor('Serena'), 'SERENA');
@@ -97,4 +97,47 @@ test('parseDirectorTurns: strips leaked character_actions and character_lines ke
   assert.equal(lines[0]?.text, 'hey, you made it');
   const trailing = parseDirectorTurns('[{"speaker":"Serena","text":"*waves*"]"}]', 'Serena');
   assert.equal(trailing[0]?.text, '*waves*');
+});
+
+test('buildDirectorPrompt: choices are player tap-to-send, separate from lines', () => {
+  const p = buildDirectorPrompt({
+    companionSystem: 'You are Serena.',
+    companionTag: 'SERENA',
+    companionName: 'Serena',
+    npcs: [],
+    directives: '',
+    history: [],
+    userMessage: 'hi',
+  });
+  assert.ok(p.includes('FROM THE PLAYER'));
+  assert.ok(/never use second-person "You/i.test(p));
+  assert.ok(p.includes('address them as "you"'));
+});
+
+test('parseDirectorOutput: drops companion dialogue and narrator-style choices', () => {
+  const raw = JSON.stringify({
+    lines: [{ speaker: 'Serena', text: "Don't worry, I've got you." }],
+    choices: [
+      { label: "Don't worry, I've got you.", userMessage: "Don't worry, I've got you." },
+      { label: 'You ask about her day', userMessage: 'You ask about her day' },
+      { label: 'What happened back there?', userMessage: 'What happened back there?' },
+    ],
+  });
+  const out = parseDirectorOutput(raw, 'Serena');
+  assert.equal(out.choices.length, 1);
+  assert.equal(out.choices[0]?.userMessage, 'What happened back there?');
+});
+
+test('sanitizeReplyChoices: filters second-person and companion-prefixed lines', () => {
+  const kept = sanitizeReplyChoices(
+    [
+      { label: 'You lean in closer', userMessage: 'You lean in closer' },
+      { label: 'Serena, tell me everything', userMessage: 'Serena, tell me everything' },
+      { label: '*take her hand*', userMessage: '*take her hand*' },
+    ],
+    'Serena',
+    [],
+  );
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0]?.userMessage, '*take her hand*');
 });

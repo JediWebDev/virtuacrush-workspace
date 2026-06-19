@@ -218,8 +218,12 @@ This is a live scene that may include more than just you. ${outputSchema}
 Allowed speakers in "lines" (use these names exactly):
 ${speakerLines}
 
-Guidance: ALWAYS include at least one "${stage.companionName}" line with their spoken reply so the player gets an answer. Put ANY physical action, reaction, expression, or scene beat in a "narrator" line — characters NEVER narrate themselves, so most turns also include a "narrator" line. (Only a pure, wordless reaction may be a "narrator" line alone.) Keep it short. Never write a line for the player. ADDRESS THE PLAYER AS "you" (second person) — never call them "the user" or "the player".
-SUGGESTED MOVES: In "choices", offer 2-3 short, DISTINCT next moves the PLAYER could make right now — written as the literal, ready-to-send words or *action* in the player's own voice (e.g. a question, a flirt, a playful action), true to where the conversation is. ${stage.playerName ? `The player's name is "${stage.playerName}" — if a move has them give their name, write "${stage.playerName}" verbatim.` : `If a move would have them give their name, phrase it without one (e.g. "introduce yourself").`} NEVER use placeholders, brackets, or template tokens of any kind (no "[Name]", "[your name]", "{name}", etc.) — every choice must be real text the player could send as-is. Do NOT suggest moves that repeat something already done or established earlier in the conversation — e.g. re-introducing themselves, re-stating their name, or re-asking something already answered; if names have already been exchanged, never offer an introduction again. Every choice must move the conversation FORWARD. CRUCIAL — fit the player's CURRENT situation and POV: choices may only be things THIS player could actually attempt right now from where they are. If the player is NOT with ${stage.companionName} (separated, captive, elsewhere) or is restrained/gagged/hurt, the choices are the player's OWN physical actions in their predicament (e.g. try to wriggle your wrists loose, look around the room, try to make noise so someone hears, search for a way out) — NOT lines spoken to ${stage.companionName} and NOT instructions for ${stage.companionName} to follow. Never offer a choice that requires an ability the player doesn't currently have (e.g. calmly chatting with ${stage.companionName} while gagged and held across town). These are optional suggestions the player may tap or ignore; never put your own dialogue in them, and never assume the player has chosen one.
+Guidance for "lines": ALWAYS include at least one "${stage.companionName}" line with their spoken reply so the player gets an answer. Put ANY physical action, reaction, expression, or scene beat in a "narrator" line — characters NEVER narrate themselves, so most turns also include a "narrator" line. (Only a pure, wordless reaction may be a "narrator" line alone.) Keep it short. Never write a line for the player in "lines". When ${stage.companionName} speaks TO the player in a "lines" entry, address them as "you" (second person) — never call them "the user" or "the player".
+SUGGESTED MOVES ("choices" field ONLY — separate from "lines"): Offer 2–3 short, DISTINCT tap-to-send messages FROM THE PLAYER (the human), not from ${stage.companionName}. These become the player's next chat message if tapped — so they must read as the player speaking or acting, never as ${stage.companionName}'s reply.
+- Speech: first person toward ${stage.companionName} (e.g. "I've been thinking about you", "What happened back there?"). Do NOT write ${stage.companionName}'s dialogue, reactions, or reassurances (wrong: "Don't worry, I've got you", "I'm so glad you're here" when ${stage.companionName} would say that).
+- Actions: *asterisk-wrapped* player actions (e.g. *take her hand*, *look around the room*).
+- NEVER use second-person "You …" to describe the player (wrong: "You ask her about her day" — that is narrator voice, not a sendable player message).
+${stage.playerName ? `The player's name is "${stage.playerName}" — if a move has them give their name, write "${stage.playerName}" verbatim.` : `If a move would have them give their name, phrase it without one (e.g. "introduce yourself").`} NEVER use placeholders, brackets, or template tokens of any kind (no "[Name]", "[your name]", "{name}", etc.) — every choice must be real text the player could send as-is. Do NOT suggest moves that repeat something already done or established earlier in the conversation — e.g. re-introducing themselves, re-stating their name, or re-asking something already answered; if names have already been exchanged, never offer an introduction again. Every choice must move the conversation FORWARD. CRUCIAL — fit the player's CURRENT situation: choices may only be things THIS player could actually attempt right now from where they are. If the player is NOT with ${stage.companionName} (separated, captive, elsewhere) or is restrained/gagged/hurt, offer the player's OWN actions in first person or *actions* (e.g. *try to wriggle wrists loose*, "Can anyone hear me?" if they can speak) — NOT lines ${stage.companionName} would say, NOT instructions for ${stage.companionName} to follow, and NOT casual chat with ${stage.companionName} if they cannot reach them. Never offer a choice that requires an ability the player doesn't currently have. These are optional; never assume the player has chosen one.
 SCENE CONTINUITY: Always return "sceneSnapshot" with the CURRENT authoritative state. Player mobility/voice persist until you explicitly change them or narration clears them — never drop "restrained" or "gagged" silently. Update "present" and "departed" when cast changes. Also return "sceneState" as a short prose summary. Set "memorable" only when something genuinely durable happened that's worth recalling in a FUTURE conversation (a confession, a milestone, a kidnapping, a rescue); otherwise null.
 Output ONLY the JSON object — no preamble, no code fences, no commentary.
 
@@ -268,6 +272,33 @@ const VALID_ARC_STATUSES = new Set(['ongoing', 'climax', 'completed', 'abandoned
  * Works whether or not arcContext was provided — `arc` is null when the
  * response has no arcStatus field (i.e. when no arc was active).
  */
+/** True when text looks like narrator-style "You …" rather than a sendable player line. */
+function looksLikeSecondPersonPlayerDesc(text: string): boolean {
+  return /^you\b/i.test(text.trim()) && !/^\*[^*]+\*$/.test(text.trim());
+}
+
+/** Drop choices that duplicate companion dialogue or use narrator "You …" voice. */
+export function sanitizeReplyChoices(
+  choices: ReplyChoice[],
+  companionName: string,
+  companionLines: string[] = [],
+): ReplyChoice[] {
+  const companionNorm = new Set(
+    companionLines.map((t) => t.trim().toLowerCase()).filter(Boolean),
+  );
+  const tag = companionName.trim().toLowerCase();
+  return choices.filter((c) => {
+    const msg = c.userMessage.trim();
+    const label = c.label.trim();
+    if (!msg || !label) return false;
+    const msgNorm = msg.toLowerCase();
+    if (companionNorm.has(msgNorm) || companionNorm.has(label.toLowerCase())) return false;
+    if (tag && (msgNorm.startsWith(`${tag},`) || msgNorm.startsWith(`${tag}:`))) return false;
+    if (looksLikeSecondPersonPlayerDesc(msg) || looksLikeSecondPersonPlayerDesc(label)) return false;
+    return true;
+  });
+}
+
 /** Maps a raw choices array into clean ReplyChoice objects (fail-soft). */
 function mapReplyChoices(arr: unknown): ReplyChoice[] {
   if (!Array.isArray(arr)) return [];
@@ -329,6 +360,10 @@ export function parseDirectorOutput(raw: string, companionName: string): Directo
   }
 
   if (turns.length === 0) turns = parseDirectorTurns(text, companionName);
+  const companionLines = turns
+    .filter((t) => t.speaker.toLowerCase() === companionName.toLowerCase())
+    .map((t) => t.text);
+  choices = sanitizeReplyChoices(choices, companionName, companionLines);
   return { turns, arc, choices, sceneState, sceneSnapshotPatch, memorable };
 }
 
@@ -420,6 +455,16 @@ export function parsePackScene(raw: string, companionName: string): PackSceneRes
     }
   }
   if (turns.length === 0) turns = parseDirectorTurns(text, companionName);
+  const companionLines = turns
+    .filter((t) => t.speaker.toLowerCase() === companionName.toLowerCase())
+    .map((t) => t.text);
+  choices = choices.filter((c) =>
+    sanitizeReplyChoices(
+      [{ label: c.label, userMessage: c.userMessage }],
+      companionName,
+      companionLines,
+    ).length > 0,
+  );
   return { advance, turns, choices, arcStatus, sceneState, sceneSnapshotPatch, memorable };
 }
 
