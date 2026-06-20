@@ -116,6 +116,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'social', 'chaos'],
+    npcs: [
+      {
+        name: 'Clerk',
+        stance: 'bystander',
+        roleId: 'shop_clerk',
+        description: 'Anxious store employee who wants the aisle cleared before someone else gets hurt.',
+      },
+    ],
     introNarrative:
       "You're browsing a cramped art supply store when a cascade of spray paint cans rains down from the shelf above you. The girl responsible — white hair, heavy eyeliner, full look of mortification — freezes the moment she sees you.",
     npcInstruction:
@@ -190,6 +198,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'social', 'chaos'],
+    npcs: [
+      {
+        name: 'Vendor',
+        stance: 'bystander',
+        archetypeId: 'shop_clerk_default',
+        description: 'Artist Alley vendor whose booth merch got scattered in the collision — not thrilled, but not hostile.',
+      },
+    ],
     introNarrative:
       "Artist Alley is its own contained chaos — booths, banners, people moving in every direction at once. You're somewhere in the middle of it when someone moving considerably faster than everyone else takes you out completely.",
     npcInstruction:
@@ -227,6 +243,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'social', 'stability'],
+    npcs: [
+      {
+        name: 'Barista',
+        stance: 'bystander',
+        roleId: 'barista',
+        description: 'Watching the same-drink moment with raised eyebrows, waiting for a resolution.',
+      },
+    ],
     introNarrative:
       "The coffee shop line has been moving for ten minutes. The barista finally slides a drink onto the counter. Two of you reach for it at exactly the same moment.",
     npcInstruction:
@@ -301,6 +325,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'social', 'friendship'],
+    npcs: [
+      {
+        name: 'Jamie',
+        stance: 'friend',
+        archetypeId: 'companion_best_friend',
+        description: "Riot's friend who bailed for someone they met at the show — may text or reappear apologetically.",
+      },
+    ],
     introNarrative:
       "The show ended thirty minutes ago and your friend who was also your ride abandoned you to go with someone they met. You're looking on your rideshare app when the backstage door opens and the lead guitarist walks out. He turns to your direction, gives you a warm smile, and starts walking towards you.",
     npcInstruction:
@@ -336,6 +368,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'chaos', 'social'],
+    npcs: [
+      {
+        name: 'Garage Security',
+        stance: 'bystander',
+        roleId: 'security_guard',
+        description: 'Patrolling the garage — may notice the slim jim if voices carry.',
+      },
+    ],
     introNarrative:
       "Level 3 of the parking garage is mostly empty at this hour. You're heading back to your car when you find a girl in a leather jacket with what looks very much like a slim jim wedged into your driver's side door.",
     npcInstruction:
@@ -502,6 +542,14 @@ const ARCS: StoryArc[] = [
     rarity: 'uncommon',
     repeatable: false,
     arcTags: ['friendship', 'conflict', 'trust'],
+    npcs: [
+      {
+        name: 'Maya',
+        stance: 'friend',
+        archetypeId: 'companion_best_friend',
+        description: "Serena's best friend — their fight is still raw; she may text or be referenced as tension simmers.",
+      },
+    ],
     introNarrative:
       "Serena is quieter than usual. When you ask, she admits she had a fight with her best friend Maya — a real one, the kind that leaves you wondering if things will ever go back to normal.",
     npcInstruction:
@@ -567,6 +615,14 @@ const ARCS: StoryArc[] = [
     rarity: 'uncommon',
     repeatable: false,
     arcTags: ['jealousy', 'friendship', 'conflict'],
+    npcs: [
+      {
+        name: 'Caleb',
+        stance: 'enemy',
+        archetypeId: 'rival',
+        description: "Becca's friend who just landed the opportunity Becca wanted — success Becca is ashamed to resent.",
+      },
+    ],
     introNarrative:
       "Becca mentions that a friend just got a huge opportunity — the kind Becca has been working toward for years. She says she's happy for them, but the way she says it tells a different story.",
     npcInstruction:
@@ -652,6 +708,14 @@ const ARCS: StoryArc[] = [
     rarity: 'uncommon',
     repeatable: false,
     arcTags: ['romance', 'conflict', 'trust'],
+    npcs: [
+      {
+        name: 'Ethan',
+        stance: 'enemy',
+        archetypeId: 'jealous_ex',
+        description: "Madison's ex who just texted — possessive history, bad at boundaries, may escalate if ignored.",
+      },
+    ],
     introNarrative:
       "Madison got a text from someone she used to date — the kind of message you don't know what to do with. She shows you the preview without letting you read the whole thing.",
     npcInstruction:

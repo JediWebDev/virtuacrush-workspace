@@ -68,6 +68,12 @@ import {
 } from '../inworld/story_structure';
 
 import { DEFAULT_PACK_AFFINITY_REWARD } from '../progression';
+import { assembleWorld } from '../db/sim_world';
+import { detectWorldEvent } from '../db/world_util';
+import { recordWorldChaosEvent } from '../db/world_sim';
+import { buildSceneContext } from '../sim/scene_context';
+import { inferArcTagsFromPack } from '../sim/pack_chaos';
+import { planChaosTurn, logChaosResidues } from '../sim/chaos_engine';
 
 const router = Router();
 
@@ -162,6 +168,7 @@ function buildPackDirectorPrompt(
   characterId: string,
   priorSceneBlock = '',
   storyMemoryBlock = '',
+  chaosDirective = '',
 ): string {
   let character;
   try { character = getCharacter(characterId as Parameters<typeof getCharacter>[0]); }
@@ -240,6 +247,7 @@ function buildPackDirectorPrompt(
     actBlock +
     sceneDirective +
     npcBlock +
+    chaosDirective +
     sceneSoFar +
     storyMemoryBlock +
     formatCharacterFactsBlock(lore) +
@@ -503,6 +511,38 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
       ? `\n\n=== SCENE SO FAR (authoritative continuity — honor this; it persists beyond the recent messages) ===\n${session.sceneState}`
       : '';
   const priorSceneState = priorSceneBlock;
+
+  let chaosDirective = '';
+  let chaosResidues: string[] = [];
+  let firedNpcChaosKey: string | null = null;
+  try {
+    const world = await assembleWorld(req.user!.id, session.characterId);
+    const packNpcs = resolvePackNpcsFromStory(pack);
+    const packTurn = history.filter((m) => m.role === 'user').length + 1;
+    const sceneCtx = buildSceneContext({
+      world,
+      composition: null,
+      resolvedNpcs: packNpcs,
+      activeArc: null,
+      turn: packTurn,
+      companionId: session.characterId,
+      companionName,
+      atVenue: false,
+      mode: 'pack',
+      arcTags: inferArcTagsFromPack(pack),
+      coPresent: Boolean(pack.sceneAnchor?.coPresent),
+      suppressAmbientDisruptions: true,
+      firedNpcChaos: priorSnapshot?.firedNpcChaos ?? [],
+    });
+    const chaos = planChaosTurn(sceneCtx, { worldEvent: detectWorldEvent(message) });
+    chaosDirective = chaos.directiveBlock;
+    chaosResidues = chaos.residues;
+    firedNpcChaosKey = chaos.firedNpcChaosKey;
+    logChaosResidues(req.user!.id, chaos.residues, recordWorldChaosEvent);
+  } catch (chaosErr) {
+    console.warn('[packs] chaos engine failed:', chaosErr);
+  }
+
   const directorPrompt = buildPackDirectorPrompt(
     pack,
     node,
@@ -510,6 +550,7 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
     session.characterId,
     priorSceneBlock,
     formatCharacterStoryBlock(companionName, storyBeats),
+    chaosDirective,
   );
   const turnsStr = history
     .map((m) => (m.role === 'user' ? `Player: ${m.content}` : m.content))
@@ -587,8 +628,19 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
 
   // Persist rolling scene continuity + any durable story beat.
   try {
-    await updatePackSceneContinuity(sessionId, continuity.snapshot, continuity.sceneState);
+    const nextSnapshot = continuity.snapshot
+      ? {
+          ...continuity.snapshot,
+          firedNpcChaos: firedNpcChaosKey
+            ? [...new Set([...(continuity.snapshot.firedNpcChaos ?? []), firedNpcChaosKey])]
+            : continuity.snapshot.firedNpcChaos,
+        }
+      : continuity.snapshot;
+    await updatePackSceneContinuity(sessionId, nextSnapshot, continuity.sceneState);
   } catch (e) { console.warn('[packs] scene state persist failed:', e); }
+  for (const residue of chaosResidues) {
+    recordStoryBeat(req.user!.id, session.characterId, { summary: residue, source: 'disruption' });
+  }
   if (result.memorable) {
     recordStoryBeat(req.user!.id, session.characterId, { summary: result.memorable, source: 'memorable' });
   }

@@ -22,6 +22,8 @@ export interface SceneSnapshot {
   companion: { notes: string };
   openThreads: string[];
   updatedAt: string;
+  /** Schema-driven chaos NPCs that already fired this session (pack threads). */
+  firedNpcChaos?: string[];
 }
 
 /** Partial update the director may return each turn. */

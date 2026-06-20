@@ -202,9 +202,7 @@ export function planChaosTurn(ctx: SceneContext, opts: PlanChaosOpts = {}): Chao
   }
 
   // 3. Schema-weighted NPC chaos when no ambient beat fired (avoid double-stack).
-  const firedNpcKeys = new Set(
-    (ctx.composition?.firedNpcChaos ?? []).map((k) => k.toLowerCase()),
-  );
+  const firedNpcKeys = new Set(ctx.firedNpcChaos.map((k) => k.toLowerCase()));
   if (!firedDisruption) {
     const chaosNpc = pickSchemaNpcChaos(ctx, enriched, firedNpcKeys, r);
     if (chaosNpc) {
@@ -226,4 +224,15 @@ export function planChaosTurn(ctx: SceneContext, opts: PlanChaosOpts = {}): Chao
     agencyActions,
     residues,
   };
+}
+
+/** Fire-and-forget world log for chaos residues (free roam + packs). */
+export function logChaosResidues(
+  userId: string,
+  residues: string[],
+  log: (userId: string, kind: string, actors: string[], text: string) => Promise<void>,
+): void {
+  for (const text of residues) {
+    void log(userId, 'chaos', [], text).catch(() => {});
+  }
 }

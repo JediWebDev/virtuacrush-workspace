@@ -330,5 +330,13 @@
       "choices": null,
       "act": "end"
     }
-  }
+  },
+  "npcs": [
+    {
+      "name": "Security",
+      "stance": "bystander",
+      "roleId": "security_guard",
+      "description": "Garage security who patrols the lower levels — may intervene if the confrontation gets loud."
+    }
+  ]
 }

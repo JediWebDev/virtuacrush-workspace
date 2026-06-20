@@ -37,3 +37,22 @@ export async function listWorldEvents(userId: string, limit = 40): Promise<World
     createdAt: r.created_at,
   }));
 }
+
+const TURN_MINUTES = 8;
+
+/** Advance sim clock and append a world-event log entry. */
+export async function recordWorldChaosEvent(
+  userId: string,
+  kind: string,
+  actors: string[],
+  text: string,
+): Promise<void> {
+  const clock = await getWorldClock(userId);
+  const atMin = clock.simMinutes + TURN_MINUTES;
+  await pool.query(
+    `INSERT INTO world_events (user_id, at_min, kind, actors, text, created_at)
+     VALUES ($1, $2, $3, $4::jsonb, $5, NOW())`,
+    [userId, atMin, kind, JSON.stringify(actors), text.slice(0, 500)],
+  );
+  await setWorldClock(userId, atMin);
+}

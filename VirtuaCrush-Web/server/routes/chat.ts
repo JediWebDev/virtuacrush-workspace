@@ -74,8 +74,9 @@ import {
 } from '../sim/interruptions';
 import { detectWorldEvent } from '../db/world_util';
 import { buildSceneContext } from '../sim/scene_context';
-import { planChaosTurn } from '../sim/chaos_engine';
+import { planChaosTurn, logChaosResidues } from '../sim/chaos_engine';
 import { npcEntityIdFromName } from '../sim/world_npcs';
+import { recordWorldChaosEvent } from '../db/world_sim';
 import { formatSituationBlock, formatLocationBlock } from '../db/scene_util';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
 import { assembleWorld } from '../db/sim_world';
@@ -588,6 +589,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     firedDisruption = chaos.firedDisruption;
     firedNpcChaosKey = chaos.firedNpcChaosKey;
     chaosResidues = chaos.residues;
+    logChaosResidues(req.user!.id, chaos.residues, recordWorldChaosEvent);
     for (const act of chaos.agencyActions) {
       if (act.npc === characterId) continue;
       const resolved = resolvedSceneNpcs.find((n) => npcEntityIdFromName(n.name) === act.npc);

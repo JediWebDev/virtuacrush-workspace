@@ -59,16 +59,16 @@ export const CHARACTERS: Character[] = [
     feedPosts: [
       {
         id: "m1",
-        text: "Cosplay progress check ✨ sleeves are finally behaving. Should I stream the final build tonight?",
+        text: "Cosplay progress check ✨ sleeves are finally behaving. Follow me for updates!",
         timestamp: "2 hours ago",
         initialLikes: 284,
         isAboutUser: false,
         requiredAffinity: 0,
         comments: [
           {
-            author: "streamfan_22",
-            avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100",
-            text: "YES stream tonight!!",
+            author: "stackyCake",
+            avatar: "",
+            text: "YES!! I can't wait to see the final result!",
           },
         ],
         media: {

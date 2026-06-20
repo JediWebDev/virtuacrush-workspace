@@ -20,9 +20,9 @@ export interface SceneContext {
   turn: number;
   companionId: string;
   companionName: string;
-  /** True when ambient phone/texture disruptions should be suppressed. */
   suppressAmbientDisruptions: boolean;
   coPresent: boolean;
+  firedNpcChaos: string[];
 }
 
 export interface BuildSceneContextInput {
@@ -35,11 +35,21 @@ export interface BuildSceneContextInput {
   companionName: string;
   atVenue: boolean;
   mode?: SceneMode;
+  /** Override when no StoryArc is active (pack sessions). */
+  arcTags?: NarrativeTag[];
+  coPresent?: boolean;
+  suppressAmbientDisruptions?: boolean;
+  /** NPC chaos keys already fired this scene/session. */
+  firedNpcChaos?: string[];
 }
 
 export function buildSceneContext(input: BuildSceneContextInput): SceneContext {
-  const coPresent = Boolean(input.activeArc?.sceneAnchor?.coPresent) || input.atVenue;
-  const arcTags = input.activeArc?.arcTags ?? [];
+  const coPresent =
+    (input.coPresent ?? Boolean(input.activeArc?.sceneAnchor?.coPresent)) || input.atVenue;
+  const arcTags = input.arcTags ?? input.activeArc?.arcTags ?? [];
+  const suppressAmbientDisruptions =
+    input.suppressAmbientDisruptions ?? (coPresent || input.atVenue);
+  const firedNpcChaos = input.firedNpcChaos ?? input.composition?.firedNpcChaos ?? [];
   return {
     mode: input.mode ?? (input.activeArc ? 'arc' : 'freeRoam'),
     world: input.world,
@@ -50,7 +60,8 @@ export function buildSceneContext(input: BuildSceneContextInput): SceneContext {
     turn: input.turn,
     companionId: input.companionId,
     companionName: input.companionName,
-    suppressAmbientDisruptions: coPresent || input.atVenue,
+    suppressAmbientDisruptions,
     coPresent,
+    firedNpcChaos,
   };
 }
