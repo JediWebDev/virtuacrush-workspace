@@ -4,7 +4,6 @@ import { fetchGreeting, fetchCharacterState, fetchAffinity, fetchDevResetEnabled
 import { splitNarration } from "../lib/narration";
 import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
-import WorldActivityFeed from "./WorldActivityFeed";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw, Zap } from "lucide-react";
@@ -70,7 +69,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           detail: info.chaos.detail,
           tone: info.chaos.tone,
         });
-        setWorldRefreshKey((k) => k + 1);
       }
       fetchCharacterState(character.id)
         .then((st) => {
@@ -96,7 +94,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [profileOpen, setProfileOpen] = useState(false);
   const [storyState, setStoryState] = useState<CharacterState | null>(null);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
-  const [worldRefreshKey, setWorldRefreshKey] = useState(0);
   const [chaosToast, setChaosToast] = useState<{
     open: boolean;
     title: string;
@@ -811,7 +808,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             onAbandon={handlePackAbandon}
           />
           <SecretCard secret={storyState?.secret} name={character.name} />
-          <WorldActivityFeed refreshKey={worldRefreshKey} />
           <ActivityLog characterId={character.id} name={character.name} />
         </div>
 
@@ -1363,7 +1359,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                   </button>
                 ) : null}
                       <SecretCard secret={storyState?.secret} name={character.name} />
-                <WorldActivityFeed refreshKey={worldRefreshKey} />
                 <ActivityLog characterId={character.id} name={character.name} />
               </div>
             </motion.div>

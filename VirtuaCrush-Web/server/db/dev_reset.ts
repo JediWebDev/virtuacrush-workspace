@@ -78,6 +78,11 @@ export async function resetCharacterDevState(userId: string, characterId: string
       [userId, characterId],
     );
 
+    await client.query(
+      `DELETE FROM world_events WHERE user_id = $1`,
+      [userId],
+    );
+
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK');

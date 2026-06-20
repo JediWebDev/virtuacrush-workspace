@@ -1,113 +1,173 @@
-// Mid-scene interruptions. The scene composer pre-rolls a seeded disruption
-// budget when a scene is composed; the chat loop fires each one when its turn
-// arrives by injecting an engine-bounded directive (character reacts, deflects if
-// asked, do NOT resolve — it's a hook). The sim decides outcome bounds; the
-// LLM performs inside them. Severity ladder (MVP): texture (no redirect),
-// beat interrupts (momentary redirect that deposits content), friend beats
-// (only when the friend is in the scene). Cast changes & scene breaks later.
+// Mid-scene chaos events — NPC entrances and natural disasters that MUST
+// derail the moment. No ignorable phone pings or background texture. The scene
+// composer pre-rolls a budget; the chat loop fires each slot when its turn
+// arrives. The LLM performs inside engine bounds; the sim decides what fires.
 import { friendFor, pronounsFor, type Pronouns } from './scene_registry';
 import { pickFrom } from './scene_registry';
 import type { NarrativeTag } from '../inworld/arcs';
 
-export type DisruptionKind = 'texture' | 'beat';
+export type DisruptionKind = 'npc_event' | 'disaster';
 
 export interface PlannedDisruption {
-  id: string;       // unique within the composition ("d1", "d2", ...)
-  poolId: string;   // which authored spec to render
-  kind: DisruptionKind;
-  atTurn: number;   // fires on the first user turn >= this, once
-}
-
-interface DisruptionSpec {
+  id: string;
   poolId: string;
   kind: DisruptionKind;
-  /** 'home' = remote/texting scenes, 'any' = all scenes. */
+  atTurn: number;
+}
+
+interface ChaosEventSpec {
+  poolId: string;
+  kind: DisruptionKind;
+  /** 'home' = remote/at-home scenes, 'any' = all scenes including venues. */
   phase: 'home' | 'any';
   requiresFriend?: boolean;
-  /** Narrative tags used for arc-weighted selection. */
   tags: NarrativeTag[];
   directive: (name: string, friend: string, pro: Pronouns) => string;
-  /** Durable memory written after the beat fires (texture leaves none). */
   residue?: (name: string, friend: string, pro: Pronouns) => string;
 }
 
-// --- Authored pools -----------------------------------------------------------
+const MANDATORY_RULES =
+  'MANDATORY: This MUST appear in this reply — narrated and reacted to. ' +
+  'The companion cannot ignore it, swipe it away, or continue as if nothing happened. ' +
+  'The player should feel the moment derail. Leave a hook; do not fully resolve in one turn.';
 
-const TEXTURES: DisruptionSpec[] = [
-  {
-    poolId: 'notification_swipe', kind: 'texture', phase: 'any',
-    tags: ['social'],
-    directive: (n, _f, pro) =>
-      `${n}'s phone buzzes with some notification; ${pro.subject} glances and swipes it away without comment.`,
-  },
-  {
-    poolId: 'ambient_sound', kind: 'texture', phase: 'home',
-    tags: ['stability'],
-    directive: () => `Somewhere outside, a car alarm starts and gives up after a few seconds.`,
-  },
-  {
-    poolId: 'tv_moment', kind: 'texture', phase: 'home',
-    tags: ['stability'],
-    directive: (n) => `Whatever's on ${n}'s TV gets suddenly loud for a second — ${n} mutes it without looking.`,
-  },
-  {
-    poolId: 'drink_refill', kind: 'texture', phase: 'home',
-    tags: ['stability'],
-    directive: (n) => `${n} pads off mid-thought to refill ${n}'s drink and comes back settling deeper into the couch.`,
-  },
+// --- NPC events (friends, enemies, bystanders enter and speak) ----------------
 
-];
-
-const BEATS: DisruptionSpec[] = [
+const NPC_EVENTS: ChaosEventSpec[] = [
   {
-    poolId: 'friend_text', kind: 'beat', phase: 'any',
+    poolId: 'friend_crash_in',
+    kind: 'npc_event',
+    phase: 'any',
+    requiresFriend: true,
+    tags: ['friendship', 'social', 'conflict'],
+    directive: (n, f, pro) =>
+      `${f} crashes into the scene — door flying open, unmuted on the call, or physically arriving with obvious intent. ` +
+      `Voice ${f} via [${f.trim().toUpperCase()}] with at least one line of dialogue. ` +
+      `${pro.subjectCap} MUST react on-screen (surprise, guilt, delight, or irritation — in character). ` +
+      `The conversation cannot proceed unchanged.`,
+    residue: (n, f) => `${f} barged into ${n}'s scene mid-conversation and forced a reaction.`,
+  },
+  {
+    poolId: 'friend_demands_answer',
+    kind: 'npc_event',
+    phase: 'any',
     tags: ['friendship', 'conflict', 'social'],
     directive: (n, f, pro) =>
-      `${n}'s phone lights up — a text from ${f}. ${pro.subjectCap} reads it, reacts visibly (a snort, an eye-roll, a flicker of worry — your choice, in character), and puts the phone face-down. ` +
-      `If the player asks, ${pro.subject} gives a vague half-answer ("${f} being ${f}") and changes the subject. Do NOT explain what the text said — it's a hook for later.`,
-    residue: (n, f) => `${f} texted ${n} mid-conversation; ${n} got cagey about what it said.`,
+      `${f} shows up — in person or on speakerphone — and demands ${n}'s attention about something that clearly involves the player. ` +
+      `Voice ${f} via [${f.trim().toUpperCase()}]. ${pro.subjectCap} is caught between ${f} and the player; ` +
+      `must address ${f} directly this turn, not deflect with a glance at the phone.`,
+    residue: (n, f) => `${f} confronted ${n} about something involving the player.`,
   },
   {
-    poolId: 'mom_call', kind: 'beat', phase: 'any',
-    tags: ['family', 'stress', 'isolation'],
-    directive: (n, _f, pro) =>
-      `${n}'s phone rings: "Mom". ${pro.subjectCap} stares at it for a second too long, then declines the call. ${pro.possessive} mood dips — distracted, a little tight. ` +
-      `If the player asks, ${pro.subject} deflects ("it's nothing — family stuff") but doesn't fully recover this turn. Do NOT resolve why; leave the thread hanging.`,
-    residue: (n) => `${n}'s mom called during the conversation; ${n} declined it and went quiet about why.`,
-  },
-  {
-    poolId: 'delivery_knock', kind: 'beat', phase: 'home',
-    tags: ['money', 'chaos'],
-    directive: (n, _f, pro) =>
-      `A knock — a delivery ${n} forgot ${pro.subject} ordered. ${pro.subjectCap} is gone for a moment and comes back with a package ${pro.subject}'s clearly pleased about but won't open right now. ` +
-      `If the player asks what it is, ${pro.subject} teases ("you'll see... maybe") and moves on. Do NOT reveal the contents.`,
-    residue: (n) => `A mystery package arrived for ${n} mid-chat; ${n} refused to say what's inside.`,
-  },
-  {
-    poolId: 'work_ping', kind: 'beat', phase: 'any',
-    tags: ['work', 'stress'],
-    directive: (n, _f, pro) =>
-      `${n} gets a message that is obviously about work or ${pro.possessive} main hustle — ${pro.subject} groans, types a fast reply, and tosses the phone aside. ` +
-      `It costs ${pro.object} a beat of attention and earns the player a small apology. If asked, one tired sentence about it, then ${pro.subject} firmly changes the subject to the player.`,
-    residue: (n) => `Work pinged ${n} mid-conversation; whatever it was annoyed ${n}.`,
-  },
-  {
-    poolId: 'friend_ride_arrives', kind: 'beat', phase: 'home', requiresFriend: true,
-    tags: ['friendship', 'social'],
+    poolId: 'rival_steps_in',
+    kind: 'npc_event',
+    phase: 'any',
+    tags: ['jealousy', 'conflict', 'chaos'],
     directive: (n, f, pro) =>
-      `${f}'s ride is outside — ${pro.subject} has to go. ${pro.subjectCap} makes a small production of leaving (one last pointed remark aimed at ${n} about the player, in character), then ${pro.subject}'s gone and the room is suddenly quieter. ` +
-      `${n} reacts to the new privacy however fits ${n}'s current feelings. ${f} is now GONE from the scene — do not voice ${f} again after this reply.`,
-    residue: (n, f) => `${f} left partway through; on the way out ${f} made a pointed remark about the player to ${n}.`,
+      `A rival or ex — someone with obvious romantic or competitive history — enters or calls in with hostile energy aimed at the player. ` +
+      `Name them, voice them via [NPC TAG], give them dialogue. ${pro.subjectCap} MUST react: tension, defensiveness, or guilty surprise. ` +
+      `This is a confrontation hook, not background noise.`,
+    residue: (n) => `A rival interrupted ${n}'s scene with the player.`,
+  },
+  {
+    poolId: 'bystander_callout',
+    kind: 'npc_event',
+    phase: 'any',
+    tags: ['chaos', 'conflict', 'social'],
+    directive: (n, _f, pro) =>
+      `A stranger, staff member, or authority figure intervenes — calling out something in the scene (too loud, suspicious behavior, a mistaken identity, an overdue tab). ` +
+      `Voice them via [NPC TAG]. ${pro.subjectCap} and the player MUST respond; the scene pauses until this is addressed.`,
+    residue: (n) => `A bystander or staff member interrupted ${n}'s scene.`,
+  },
+  {
+    poolId: 'unexpected_guest',
+    kind: 'npc_event',
+    phase: 'home',
+    tags: ['family', 'social', 'chaos'],
+    directive: (n, f, pro) =>
+      `Someone ${n} did not expect — family, a roommate, or ${f} with keys — arrives unannounced and changes the privacy of the moment. ` +
+      `Voice the guest via [NPC TAG]. ${pro.subjectCap} must scramble to adjust; the player is now part of a more crowded, awkward beat.`,
+    residue: (n) => `An unexpected guest arrived while ${n} was with the player.`,
   },
 ];
 
-const ALL_SPECS = [...TEXTURES, ...BEATS];
+// --- Natural disasters & environmental chaos -----------------------------------
 
-export function disruptionSpec(poolId: string): DisruptionSpec | null {
+const DISASTERS: ChaosEventSpec[] = [
+  {
+    poolId: 'power_outage',
+    kind: 'disaster',
+    phase: 'home',
+    tags: ['isolation', 'chaos'],
+    directive: (n, _f, pro) =>
+      `The power cuts out — sudden darkness, devices dying, the mood shifts from cozy to vulnerable. ` +
+      `${pro.subjectCap} MUST react (nervous laugh, curse, reach for a flashlight, grab the player's arm). ` +
+      `Narrate the blackout; this changes the scene until power returns.`,
+    residue: (n) => `The power went out mid-conversation with ${n}.`,
+  },
+  {
+    poolId: 'fire_alarm',
+    kind: 'disaster',
+    phase: 'any',
+    tags: ['chaos', 'stress'],
+    directive: (n, _f, pro) =>
+      `A fire alarm blares — strobe lights, mandatory evacuation energy, or building staff shouting instructions. ` +
+      `${pro.subjectCap} MUST react and the scene MUST pause for the alarm; they cannot keep chatting through it.`,
+    residue: (n) => `A fire alarm interrupted ${n}'s scene with the player.`,
+  },
+  {
+    poolId: 'earthquake_tremor',
+    kind: 'disaster',
+    phase: 'any',
+    tags: ['chaos', 'isolation'],
+    directive: (_n, _f, pro) =>
+      `The ground shudders — a tremor that rattles shelves, spills a drink, or sends both of them grabbing for stability. ` +
+      `${pro.subjectCap} MUST react physically and emotionally; the moment becomes about safety and proximity.`,
+    residue: (n) => `An earthquake tremor hit during a conversation with ${n}.`,
+  },
+  {
+    poolId: 'sudden_storm',
+    kind: 'disaster',
+    phase: 'home',
+    tags: ['isolation', 'romance'],
+    directive: (n, _f, pro) =>
+      `Weather turns violent — wind, hail, or rain hammering the windows hard enough to startle. ` +
+      `Maybe a leak, a blown fuse, or a branch scraping the glass. ${pro.subjectCap} MUST react; ` +
+      `the storm forces them to deal with it together or seek shelter in a smaller space.`,
+    residue: (n) => `A sudden storm interrupted a chat with ${n}.`,
+  },
+  {
+    poolId: 'street_chaos',
+    kind: 'disaster',
+    phase: 'any',
+    tags: ['chaos', 'conflict'],
+    directive: (n, _f, pro) =>
+      `Chaos erupts nearby — a car crash, shouting match, sirens, or a crowd surge audible through the window/door. ` +
+      `${pro.subjectCap} MUST react (freeze, rush to look, pull the player back from the window). ` +
+      `The outside world invades the scene; they cannot pretend they didn't hear it.`,
+    residue: (n) => `Street chaos outside interrupted ${n}'s scene.`,
+  },
+  {
+    poolId: 'sprinkler_flood',
+    kind: 'disaster',
+    phase: 'any',
+    tags: ['chaos', 'stress'],
+    directive: (n, _f, pro) =>
+      `Sprinklers or a burst pipe activates — water everywhere, false alarm or real leak. ` +
+      `${pro.subjectCap} MUST react; belongings get soaked, they need to move, and the date/scene is physically disrupted.`,
+    residue: (n) => `Sprinklers or a flood interrupted ${n}'s scene.`,
+  },
+];
+
+const ALL_SPECS = [...NPC_EVENTS, ...DISASTERS];
+
+export function disruptionSpec(poolId: string): ChaosEventSpec | null {
   return ALL_SPECS.find((s) => s.poolId === poolId) ?? null;
 }
 
-// --- Planner (pure, seeded) ----------------------------------------------------
+export function allChaosEventSpecs(): readonly ChaosEventSpec[] {
+  return ALL_SPECS;
+}
 
 export interface PlanOpts {
   phase: 'home' | 'any';
@@ -115,7 +175,7 @@ export interface PlanOpts {
   firstMeeting: boolean;
 }
 
-function pickSpec(pool: DisruptionSpec[], opts: PlanOpts, r: () => number): DisruptionSpec | null {
+function pickSpec(pool: ChaosEventSpec[], opts: PlanOpts, r: () => number): ChaosEventSpec | null {
   const ok = pool.filter(
     (s) => (s.phase === 'any' || s.phase === opts.phase) && (!s.requiresFriend || opts.hasFriend),
   );
@@ -123,35 +183,31 @@ function pickSpec(pool: DisruptionSpec[], opts: PlanOpts, r: () => number): Disr
 }
 
 /**
- * Pre-rolls the scene's disruption budget: textures every ~5-7 turns, ONE beat
- * around turns 7-12 (none on first meetings — don't sabotage the meet-cute),
- * and the friend's exit a few turns after the beat when they're present.
+ * Pre-rolls substantive chaos for a scene: one NPC or disaster event mid-scene,
+ * optionally a second later. No textures or ignorable pings. Skipped on first
+ * meetings until the connection is established (turn 8+).
  */
 export function planDisruptions(r: () => number, opts: PlanOpts): PlannedDisruption[] {
   const out: PlannedDisruption[] = [];
   let n = 0;
-  const push = (spec: DisruptionSpec | null, atTurn: number) => {
+  const push = (spec: ChaosEventSpec | null, atTurn: number) => {
     if (spec) out.push({ id: `d${++n}`, poolId: spec.poolId, kind: spec.kind, atTurn });
   };
 
-  // Texture cadence: first around turn 4-6, second ~6 turns later.
-  const t1 = 4 + Math.floor(r() * 3);
-  push(pickSpec(TEXTURES, opts, r), t1);
-  push(pickSpec(TEXTURES, opts, r), t1 + 6 + Math.floor(r() * 3));
+  if (opts.firstMeeting) return out;
 
-  // One meaningful beat per scene (the workhorse), skipped on first meetings.
-  if (!opts.firstMeeting) {
-    const beatTurn = 7 + Math.floor(r() * 6);
-    push(pickSpec(BEATS.filter((b) => !b.requiresFriend), opts, r), beatTurn);
-    if (opts.hasFriend) {
-      push(pickSpec(BEATS.filter((b) => b.requiresFriend), opts, r), beatTurn + 4 + Math.floor(r() * 3));
-    }
+  const pool = [...NPC_EVENTS, ...DISASTERS];
+  const event1Turn = 5 + Math.floor(r() * 4);
+  push(pickSpec(pool, opts, r), event1Turn);
+
+  if (r() < 0.65) {
+    const event2Turn = event1Turn + 7 + Math.floor(r() * 5);
+    push(pickSpec(pool, opts, r), event2Turn);
   }
 
   return out.sort((a, b) => a.atTurn - b.atTurn);
 }
 
-/** The next unfired disruption due at or before this turn (lowest turn first). */
 export function nextDueDisruption(
   comp: { disruptions?: PlannedDisruption[]; firedDisruptions?: string[] },
   turn: number,
@@ -163,9 +219,6 @@ export function nextDueDisruption(
   return due[0] ?? null;
 }
 
-// --- Rendering -------------------------------------------------------------------
-
-/** Engine-bounded directive injected into the prompt the turn a disruption fires. */
 export function renderDisruptionDirective(
   d: PlannedDisruption,
   displayName: string,
@@ -175,22 +228,14 @@ export function renderDisruptionDirective(
   if (!spec) return '';
   const friend = friendFor(characterId).name;
   const pro = pronounsFor(characterId);
+  const label = spec.kind === 'disaster' ? 'NATURAL DISASTER' : 'NPC CHAOS';
   return (
-    `\n\n=== DISRUPTION THIS TURN (engine event — weave it into your reply) ===\n` +
-    `[${spec.kind}] ${spec.directive(displayName, friend, pro)}\n` +
-    `Rules: it happens DURING this reply, woven in naturally — never ignore it, never treat it as the player's doing. ` +
-    `It interrupts the moment but does not derail the scene unless the player engages withit. ` +
-    `Do not resolve any tension it introduces this turn, and keep every established scene fact intact.`
+    `\n\n=== CHAOS EVENT (${label} — ${spec.poolId.replace(/_/g, ' ')}) ===\n` +
+    `${spec.directive(displayName, friend, pro)}\n` +
+    MANDATORY_RULES
   );
 }
 
-/**
- * Re-rolls the poolId for each unfired disruption using arc-tag weighting.
- * Call this when a new arc activates mid-scene so the remaining disruption
- * slots are biased toward thematically resonant moments.
- *
- * Weight formula: 1 + (2 × N) where N = intersecting tags with arcTags.
- */
 export function rerollUnfiredDisruptions(
   disruptions: PlannedDisruption[],
   firedIds: Set<string>,
@@ -198,9 +243,9 @@ export function rerollUnfiredDisruptions(
   opts: Pick<PlanOpts, 'phase' | 'hasFriend'>,
 ): PlannedDisruption[] {
   return disruptions.map((d) => {
-    if (firedIds.has(d.id)) return d; // already fired â leave it
+    if (firedIds.has(d.id)) return d;
     const kind = d.kind;
-    const pool = (kind === 'texture' ? TEXTURES : BEATS).filter(
+    const pool = (kind === 'disaster' ? DISASTERS : NPC_EVENTS).filter(
       (s) =>
         (s.phase === 'any' || s.phase === opts.phase) &&
         (!s.requiresFriend || opts.hasFriend),
@@ -214,13 +259,13 @@ export function rerollUnfiredDisruptions(
     for (const spec of pool) {
       const overlap = spec.tags.filter((t) => arcTags.includes(t)).length;
       roll -= 1 + 2 * overlap;
-      if (roll <= 0) return { ...d, poolId: spec.poolId };
+      if (roll <= 0) return { ...d, poolId: spec.poolId, kind: spec.kind };
     }
-    return { ...d, poolId: pool[pool.length - 1].poolId };
+    const last = pool[pool.length - 1]!;
+    return { ...d, poolId: last.poolId, kind: last.kind };
   });
 }
 
-/** Durable memory text for beats (empty for texture). */
 export function disruptionResidue(
   d: PlannedDisruption,
   displayName: string,
@@ -230,4 +275,15 @@ export function disruptionResidue(
   if (!spec?.residue) return '';
   const pro = pronounsFor(characterId);
   return spec.residue(displayName, friendFor(characterId).name, pro);
+}
+
+/** Pick a one-off chaos event when no scene composition budget exists (packs, arcs). */
+export function pickEphemeralChaosEvent(
+  r: () => number,
+  opts: PlanOpts,
+): ChaosEventSpec | null {
+  const pool = ALL_SPECS.filter(
+    (s) => (s.phase === 'any' || s.phase === opts.phase) && (!s.requiresFriend || opts.hasFriend),
+  );
+  return pool.length ? pickFrom(pool, r) : null;
 }

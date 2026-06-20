@@ -47,8 +47,7 @@ export function buildSceneContext(input: BuildSceneContextInput): SceneContext {
   const coPresent =
     (input.coPresent ?? Boolean(input.activeArc?.sceneAnchor?.coPresent)) || input.atVenue;
   const arcTags = input.arcTags ?? input.activeArc?.arcTags ?? [];
-  const suppressAmbientDisruptions =
-    input.suppressAmbientDisruptions ?? input.atVenue;
+  const suppressAmbientDisruptions = input.suppressAmbientDisruptions ?? false;
   const firedNpcChaos = input.firedNpcChaos ?? input.composition?.firedNpcChaos ?? [];
   return {
     mode: input.mode ?? (input.activeArc ? 'arc' : 'freeRoam'),

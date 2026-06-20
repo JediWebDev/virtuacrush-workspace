@@ -67,7 +67,7 @@ describe('world_npcs', () => {
 });
 
 describe('chaos_engine', () => {
-  it('fires ambient disruption when due', () => {
+  it('fires planned disaster when due', () => {
     const comp: SceneComposition = {
       composedAt: new Date().toISOString(),
       forDate: '2026-01-01',
@@ -80,7 +80,7 @@ describe('chaos_engine', () => {
       outfit: 'casual',
       activity: 'scrolling',
       cast: [],
-      disruptions: [{ id: 'd1', poolId: 'notification_swipe', kind: 'texture', atTurn: 1 }],
+      disruptions: [{ id: 'd1', poolId: 'power_outage', kind: 'disaster', atTurn: 1 }],
       firedDisruptions: [],
     };
     const ctx = buildSceneContext({
@@ -95,66 +95,24 @@ describe('chaos_engine', () => {
     });
     const result = planChaosTurn(ctx);
     assert.ok(result.firedDisruption);
-    assert.match(result.directiveBlock, /DISRUPTION THIS TURN/);
+    assert.match(result.directiveBlock, /CHAOS EVENT/);
+    assert.match(result.directiveBlock, /MANDATORY/);
   });
 
-  it('fires ambient disruptions when co-present (remote-only suppression is at venue)', () => {
-    const comp: SceneComposition = {
-      composedAt: new Date().toISOString(),
-      forDate: '2026-01-01',
-      phase: 'home',
-      locationSlug: null,
-      timeLabel: 'evening',
-      weather: 'clear',
-      setting: 'at the art store',
-      details: [],
-      outfit: 'casual',
-      activity: 'talking',
-      cast: [],
-      disruptions: [{ id: 'd1', poolId: 'mom_call', kind: 'beat', atTurn: 1 }],
-      firedDisruptions: [],
-    };
-    const ctx = buildSceneContext({
-      world: baseWorld(),
-      composition: comp,
-      resolvedNpcs: [],
-      activeArc: {
-        id: 'test',
-        characterId: 'serena',
-        introNarrative: 'At the store.',
-        npcInstruction: 'x',
-        completionCriteria: 'y',
-        completionExamples: [],
-        tone: 'light',
-        rarity: 'common',
-        repeatable: false,
-        arcTags: ['romance'],
-        sceneAnchor: { setting: 'art store', situation: 'shopping', coPresent: true },
-      },
-      turn: 1,
-      companionId: 'serena',
-      companionName: 'Serena',
-      atVenue: false,
-    });
-    const result = planChaosTurn(ctx);
-    assert.ok(result.firedDisruption);
-    assert.match(result.directiveBlock, /DISRUPTION THIS TURN/);
-  });
-
-  it('suppresses ambient disruptions at a venue visit', () => {
+  it('fires chaos at venues (no longer suppressed by default)', () => {
     const comp: SceneComposition = {
       composedAt: new Date().toISOString(),
       forDate: '2026-01-01',
       phase: 'on_date',
       locationSlug: 'mall',
-      timeLabel: 'afternoon',
+      timeLabel: 'evening',
       weather: 'clear',
       setting: 'at the mall',
       details: [],
-      outfit: 'cute top',
-      activity: 'shopping',
+      outfit: 'casual',
+      activity: 'talking',
       cast: [],
-      disruptions: [{ id: 'd1', poolId: 'mom_call', kind: 'beat', atTurn: 1 }],
+      disruptions: [{ id: 'd1', poolId: 'fire_alarm', kind: 'disaster', atTurn: 1 }],
       firedDisruptions: [],
     };
     const ctx = buildSceneContext({
@@ -168,31 +126,25 @@ describe('chaos_engine', () => {
       atVenue: true,
     });
     const result = planChaosTurn(ctx);
-    assert.equal(result.firedDisruption, null);
-    assert.ok(!result.directiveBlock.includes('DISRUPTION THIS TURN'));
+    assert.ok(result.firedDisruption);
+    assert.match(result.directiveBlock, /fire alarm/i);
   });
 
-  it('schema npc chaos picks off-scene enemy with deterministic rng', () => {
-    const rival = resolveSceneNpc({ name: 'Urik', stance: 'enemy', archetypeId: 'rival' });
+  it('ephemeral chaos fires for pack-style sessions without composition', () => {
     const ctx = buildSceneContext({
       world: baseWorld(),
       composition: null,
-      resolvedNpcs: [rival],
+      resolvedNpcs: [],
       activeArc: null,
       turn: 5,
       companionId: 'mina',
       companionName: 'Mina',
       atVenue: false,
+      mode: 'pack',
     });
-    let rolls = 0;
-    const result = planChaosTurn(ctx, {
-      rng: () => {
-        rolls++;
-        return rolls === 1 ? 0.99 : 0.01; // agency low, chaos pick high then fire
-      },
-    });
-    assert.match(result.directiveBlock, /CHAOS EVENT \(schema — Urik\)/);
-    assert.equal(result.firedNpcChaosKey, 'urik');
+    const result = planChaosTurn(ctx, { rng: () => 0.01 });
+    assert.match(result.directiveBlock, /CHAOS EVENT/);
+    assert.equal(result.firedDisruption?.id, 'ephemeral');
   });
 
   it('lower chaosIntensity suppresses schema npc chaos', () => {
@@ -212,18 +164,50 @@ describe('chaos_engine', () => {
       chaosIntensity: 0.35,
       rng: () => {
         rolls++;
-        return rolls === 1 ? 0.99 : 0.5; // would fire at full intensity
+        return rolls === 1 ? 0.99 : 0.5;
       },
     });
     assert.equal(result.firedNpcChaosKey, null);
-    assert.ok(!result.directiveBlock.includes('CHAOS EVENT (schema'));
+    assert.ok(!result.directiveBlock.includes('CHAOS EVENT (NPC'));
+  });
+
+  it('only one chaos block fires per turn', () => {
+    const comp: SceneComposition = {
+      composedAt: new Date().toISOString(),
+      forDate: '2026-01-01',
+      phase: 'home',
+      locationSlug: null,
+      timeLabel: 'evening',
+      weather: 'clear',
+      setting: 'at home',
+      details: [],
+      outfit: 'casual',
+      activity: 'scrolling',
+      cast: [],
+      disruptions: [{ id: 'd1', poolId: 'power_outage', kind: 'disaster', atTurn: 1 }],
+      firedDisruptions: [],
+    };
+    const rival = resolveSceneNpc({ name: 'Urik', stance: 'enemy', archetypeId: 'rival' });
+    const ctx = buildSceneContext({
+      world: baseWorld(),
+      composition: comp,
+      resolvedNpcs: [rival],
+      activeArc: null,
+      turn: 6,
+      companionId: 'mina',
+      companionName: 'Mina',
+      atVenue: false,
+    });
+    const result = planChaosTurn(ctx, { rng: () => 0.01 });
+    const matches = result.directiveBlock.match(/=== CHAOS EVENT/g);
+    assert.equal(matches?.length ?? 0, 1);
   });
 
   it('chaosUiHint prioritizes world crime over disruption', () => {
     const hint = chaosUiHint(
       {
         directiveBlock: '',
-        firedDisruption: { id: 'd1', poolId: 'mom_call', kind: 'beat', atTurn: 3 },
+        firedDisruption: { id: 'd1', poolId: 'fire_alarm', kind: 'disaster', atTurn: 3 },
         firedNpcChaosKey: null,
         agencyActions: [],
         residues: [],
@@ -254,18 +238,18 @@ describe('chaos_engine', () => {
     assert.equal(hint?.tone, 'major');
   });
 
-  it('chaosUiHint maps known disruption pools', () => {
+  it('chaosUiHint maps disaster pools', () => {
     const hint = chaosUiHint(
       {
         directiveBlock: '',
-        firedDisruption: { id: 'd2', poolId: 'friend_text', kind: 'beat', atTurn: 2 },
+        firedDisruption: { id: 'd2', poolId: 'power_outage', kind: 'disaster', atTurn: 2 },
         firedNpcChaosKey: null,
         agencyActions: [],
         residues: [],
       },
       { companionName: 'Mina', resolvedNpcs: [] },
     );
-    assert.equal(hint?.title, 'Someone else reached out');
+    assert.equal(hint?.title, 'Lights out');
     assert.equal(hint?.tone, 'major');
   });
 

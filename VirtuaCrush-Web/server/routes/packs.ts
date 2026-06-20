@@ -70,10 +70,9 @@ import {
 import { DEFAULT_PACK_AFFINITY_REWARD } from '../progression';
 import { assembleWorld } from '../db/sim_world';
 import { detectWorldEvent } from '../db/world_util';
-import { recordWorldChaosEvent } from '../db/world_sim';
 import { buildSceneContext } from '../sim/scene_context';
 import { inferArcTagsFromPack, PACK_CHOICE_CHAOS_INTENSITY, PACK_FREE_TEXT_CHAOS_INTENSITY } from '../sim/pack_chaos';
-import { planChaosTurn, logChaosResidues } from '../sim/chaos_engine';
+import { planChaosTurn } from '../sim/chaos_engine';
 
 const router = Router();
 
@@ -531,7 +530,7 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
       mode: 'pack',
       arcTags: inferArcTagsFromPack(pack),
       coPresent: Boolean(pack.sceneAnchor?.coPresent),
-      suppressAmbientDisruptions: true,
+      suppressAmbientDisruptions: false,
       firedNpcChaos: priorSnapshot?.firedNpcChaos ?? [],
     });
     const chaos = planChaosTurn(sceneCtx, {
@@ -541,7 +540,6 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
     chaosDirective = chaos.directiveBlock;
     chaosResidues = chaos.residues;
     firedNpcChaosKey = chaos.firedNpcChaosKey;
-    logChaosResidues(req.user!.id, chaos.residues, recordWorldChaosEvent);
   } catch (chaosErr) {
     console.warn('[packs] chaos engine failed:', chaosErr);
   }

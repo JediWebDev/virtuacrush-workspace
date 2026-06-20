@@ -25,10 +25,10 @@ const SEEDS: Record<string, NpcSeed> = {
   jordan: { id: 'jordan', name: 'Jordan', role: 'companion', goals: [{ id: 'increase_closeness', weight: 0.6, target: PLAYER }], fashionPrefs: ['athletic', 'sporty', 'casual'], faction: 'civilian', appearance: {}, personality: { warmth: 0.6, volatility: 0.6, boldness: 0.8, extraversion: 0.7, grudge: 0.4 } },
   serena: { id: 'serena', name: 'Serena', role: 'companion', goals: [{ id: 'increase_closeness', weight: 0.6, target: PLAYER }], fashionPrefs: ['alternative', 'goth', 'emo', 'grunge'], faction: 'civilian', appearance: { hair: 'white' }, personality: { warmth: 0.6, volatility: 0.3, boldness: 0.3, extraversion: 0.3, grudge: 0.4 } },
   riot: { id: 'riot', name: 'Riot', role: 'companion', goals: [{ id: 'increase_closeness', weight: 0.6, target: PLAYER }], fashionPrefs: ['indie', 'rock', 'edgy', 'vintage'], faction: 'civilian', appearance: {}, personality: { warmth: 0.6, volatility: 0.7, boldness: 0.7, extraversion: 0.7, grudge: 0.5 } },
-  avery: { id: 'avery', name: 'Avery', role: 'companion', goals: [{ id: 'increase_closeness', weight: 0.6, target: PLAYER }], fashionPrefs: ['cozy', 'casual', 'soft'], faction: 'civilian', appearance: {}, personality: { warmth: 0.8, volatility: 0.3, boldness: 0.4, extraversion: 0.5, grudge: 0.3 } },
-  jun: { id: 'jun', name: 'Jun', role: 'companion', goals: [{ id: 'increase_closeness', weight: 0.6, target: PLAYER }], fashionPrefs: ['classic', 'smart', 'minimal'], faction: 'civilian', appearance: {}, personality: { warmth: 0.6, volatility: 0.2, boldness: 0.5, extraversion: 0.4, grudge: 0.3 } },
   iris: { id: 'iris', name: 'Iris', role: 'companion', goals: [{ id: 'increase_closeness', weight: 0.5, target: PLAYER }], fashionPrefs: ['natural', 'zen', 'earthy'], faction: 'civilian', appearance: {}, personality: { warmth: 0.7, volatility: 0.2, boldness: 0.4, extraversion: 0.3, grudge: 0.2 } },
   ash: { id: 'ash', name: 'Ash', role: 'companion', goals: [{ id: 'increase_closeness', weight: 0.6, target: PLAYER }], fashionPrefs: ['rugged', 'outdoors', 'practical'], faction: 'civilian', appearance: {}, personality: { warmth: 0.6, volatility: 0.4, boldness: 0.8, extraversion: 0.4, grudge: 0.4 } },
+  lexi: { id: 'lexi', name: 'Lexi', role: 'companion', goals: [{ id: 'increase_closeness', weight: 0.6, target: PLAYER }], fashionPrefs: ['street', 'edgy', 'casual'], faction: 'civilian', appearance: {}, personality: { warmth: 0.5, volatility: 0.8, boldness: 0.9, extraversion: 0.7, grudge: 0.5 } },
+  lin: { id: 'lin', name: 'Lin', role: 'companion', goals: [{ id: 'increase_closeness', weight: 0.6, target: PLAYER }], fashionPrefs: ['classic', 'smart', 'minimal'], faction: 'civilian', appearance: {}, personality: { warmth: 0.6, volatility: 0.2, boldness: 0.5, extraversion: 0.4, grudge: 0.3 } },
 };
 
 // Daytime + evening haunts. Overlaps create co-location, which is what lets the
@@ -38,14 +38,12 @@ const SPOTS: Record<string, { day: string; eve: string }> = {
   becca: { day: 'mall', eve: 'movie_theater' },
   madison: { day: 'coffee_shop', eve: 'restaurant' },
   jordan: { day: 'golf_course', eve: 'restaurant' },
-  bohdi: { day: 'beach', eve: 'bar' },
-  lexi: { day: 'race_track', eve: 'bar' },
   serena: { day: 'arts_craft_store', eve: 'cemetary' },
   riot: { day: 'coffee_shop', eve: 'bar' },
-  avery: { day: 'coffee_shop', eve: 'mall' },
-  jun: { day: 'coffee_shop', eve: 'restaurant' },
   iris: { day: 'park', eve: 'coffee_shop' },
   ash: { day: 'dark_home', eve: 'open_market' },
+  lexi: { day: 'race_track', eve: 'bar' },
+  lin: { day: 'library', eve: 'coffee_shop' },
 };
 
 function buildSchedule(id: string): ScheduleEntry[] {

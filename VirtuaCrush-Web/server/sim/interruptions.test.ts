@@ -11,41 +11,38 @@ import {
 
 const OPTS = { phase: 'home' as const, hasFriend: false, firstMeeting: false };
 
-test('planDisruptions: deterministic for a seed; textures + one beat in range', () => {
+test('planDisruptions: deterministic for a seed; substantive events only', () => {
   const a = planDisruptions(rng(42), OPTS);
   const b = planDisruptions(rng(42), OPTS);
   assert.deepEqual(a, b);
-  const beats = a.filter((d) => d.kind === 'beat');
-  assert.equal(beats.length, 1);
-  assert.ok(beats[0].atTurn >= 7 && beats[0].atTurn <= 12);
-  assert.ok(a.filter((d) => d.kind === 'texture').length >= 1);
-  // sorted by turn
+  assert.ok(a.length >= 1);
+  assert.ok(a.every((d) => d.kind === 'npc_event' || d.kind === 'disaster'));
   for (let i = 1; i < a.length; i++) assert.ok(a[i].atTurn >= a[i - 1].atTurn);
 });
 
-test('planDisruptions: first meetings get no beat (texture only)', () => {
+test('planDisruptions: first meetings get no pre-rolled chaos', () => {
   const plan = planDisruptions(rng(7), { ...OPTS, firstMeeting: true });
-  assert.equal(plan.filter((d) => d.kind === 'beat').length, 0);
+  assert.equal(plan.length, 0);
 });
 
-test('planDisruptions: friend exit beat only when the friend is present', () => {
+test('planDisruptions: friend events only when the friend is present', () => {
   for (let s = 0; s < 20; s++) {
     const without = planDisruptions(rng(s), OPTS);
-    assert.ok(!without.some((d) => d.poolId === 'friend_ride_arrives'));
+    assert.ok(!without.some((d) => d.poolId === 'friend_crash_in'));
   }
-  let sawExit = false;
-  for (let s = 0; s < 20 && !sawExit; s++) {
+  let sawFriend = false;
+  for (let s = 0; s < 30 && !sawFriend; s++) {
     const withFriend = planDisruptions(rng(s), { ...OPTS, hasFriend: true });
-    sawExit = withFriend.some((d) => d.poolId === 'friend_ride_arrives');
+    sawFriend = withFriend.some((d) => d.poolId === 'friend_crash_in' || d.poolId === 'friend_demands_answer');
   }
-  assert.ok(sawExit, 'expected a friend exit beat within 20 seeds');
+  assert.ok(sawFriend, 'expected a friend chaos event within 30 seeds');
 });
 
 test('nextDueDisruption: respects turn + fired list, lowest turn first', () => {
   const comp = {
     disruptions: [
-      { id: 'd1', poolId: 'notification_swipe', kind: 'texture' as const, atTurn: 4 },
-      { id: 'd2', poolId: 'mom_call', kind: 'beat' as const, atTurn: 8 },
+      { id: 'd1', poolId: 'power_outage', kind: 'disaster' as const, atTurn: 4 },
+      { id: 'd2', poolId: 'fire_alarm', kind: 'disaster' as const, atTurn: 8 },
     ],
     firedDisruptions: [] as string[],
   };
@@ -55,27 +52,31 @@ test('nextDueDisruption: respects turn + fired list, lowest turn first', () => {
   assert.equal(nextDueDisruption({ ...comp, firedDisruptions: ['d1', 'd2'] }, 20), null);
 });
 
-test('directive carries engine bounds; beat residue exists, texture residue does not', () => {
-  const beat = { id: 'x', poolId: 'mom_call', kind: 'beat' as const, atTurn: 8 };
+test('directive carries mandatory rules; disasters leave residue', () => {
+  const beat = { id: 'x', poolId: 'fire_alarm', kind: 'disaster' as const, atTurn: 8 };
   const dir = renderDisruptionDirective(beat, 'Serena', 'serena');
-  assert.ok(dir.includes('DISRUPTION THIS TURN'));
-  assert.ok(dir.includes('Do not resolve'));
+  assert.ok(dir.includes('CHAOS EVENT'));
+  assert.ok(dir.includes('MANDATORY'));
   assert.ok(disruptionResidue(beat, 'Serena', 'serena').length > 10);
-  const tex = { id: 'y', poolId: 'ambient_sound', kind: 'texture' as const, atTurn: 4 };
-  assert.equal(disruptionResidue(tex, 'Serena', 'serena'), '');
 });
 
-test('friend beats render the canonical friend name', () => {
-  const beat = { id: 'z', poolId: 'friend_text', kind: 'beat' as const, atTurn: 8 };
+test('friend events render the canonical friend name', () => {
+  const beat = { id: 'z', poolId: 'friend_crash_in', kind: 'npc_event' as const, atTurn: 8 };
   const dir = renderDisruptionDirective(beat, 'Serena', 'serena');
-  assert.ok(/[A-Z][a-z]+/.test(dir)); // contains a proper name
+  assert.ok(/[A-Z][a-z]+/.test(dir));
   const residue = disruptionResidue(beat, 'Serena', 'serena');
-  assert.ok(residue.includes('texted'));
+  assert.ok(residue.includes('barged'));
 });
 
 test('disruption directives use character pronouns (male characters)', () => {
-  const beat = { id: 'm', poolId: 'mom_call', kind: 'beat' as const, atTurn: 8 };
+  const beat = { id: 'm', poolId: 'power_outage', kind: 'disaster' as const, atTurn: 8 };
   const dir = renderDisruptionDirective(beat, 'Ash', 'ash');
-  assert.ok(dir.includes('He stares'), dir);
-  assert.ok(!dir.includes('She stares'), dir);
+  assert.ok(dir.includes('He MUST'), dir);
+  assert.ok(!dir.includes('She MUST'), dir);
+});
+
+test('no legacy texture or phone ping pools remain', () => {
+  assert.equal(disruptionSpec('notification_swipe'), null);
+  assert.equal(disruptionSpec('mom_call'), null);
+  assert.equal(disruptionSpec('work_ping'), null);
 });
