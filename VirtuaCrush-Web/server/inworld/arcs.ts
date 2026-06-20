@@ -161,6 +161,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'social', 'friendship'],
+    npcs: [
+      {
+        name: 'Customer',
+        stance: 'bystander',
+        roleId: 'shop_clerk',
+        description: 'Another customer browsing nearby — may eavesdrop on the same-DVD moment or ask Becca for help mid-conversation.',
+      },
+    ],
     introNarrative:
       "The sign outside says VIDEO RENTAL in letters that have been fading for years. Inside it smells like plastic cases and strong opinions. You reach for a DVD on the second shelf. Another hand gets there at the exact same moment.",
     npcInstruction:
@@ -288,6 +296,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'social', 'friendship'],
+    npcs: [
+      {
+        name: 'Teammate',
+        stance: 'friend',
+        archetypeId: 'companion_best_friend',
+        description: "One of Jordan's pickup teammates — may trash-talk, call next play, or rib Jordan about the new recruit.",
+      },
+    ],
     introNarrative:
       "The public courts in the park are loud on a Saturday afternoon. A pickup game is going on one of them, and the girl on the sideline is scanning the perimeter with the laser focus of someone who desperately needs a fifth player. She lands on you.",
     npcInstruction:
@@ -413,6 +429,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'trust', 'friendship'],
+    npcs: [
+      {
+        name: 'Librarian',
+        stance: 'bystander',
+        roleId: 'shop_clerk',
+        description: 'Desk librarian who shushes from afar if the stack-drop gets too loud — otherwise stays out of the way.',
+      },
+    ],
     introNarrative:
       "The library has a particular settled quiet — the kind that belongs to old buildings. You're looking along a shelf when you see a very tall stack of books begin to tilt past the point of no return. You reach out without thinking.",
     npcInstruction:
@@ -450,6 +474,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'trust', 'stability'],
+    npcs: [
+      {
+        name: 'Volunteer',
+        stance: 'bystander',
+        roleId: 'shop_clerk',
+        description: 'Garden volunteer pruning nearby — may offer directions or comment if the conversation gets emotional.',
+      },
+    ],
     introNarrative:
       "The botanical garden wasn't exactly in your plans today. The light here is softer than outside, and you've been standing in front of the same display for about ten minutes without fully understanding it. Somewhere nearby, someone has been quietly watching you.",
     npcInstruction:
@@ -487,6 +519,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'trust', 'stability'],
+    npcs: [
+      {
+        name: 'Gate Agent',
+        stance: 'bystander',
+        roleId: 'security_guard',
+        description: 'Airport staff at the nearby counter — may page someone or ask passengers to keep walkways clear.',
+      },
+    ],
     introNarrative:
       "You just landed in a new city that you have wanted to visit for a long time. You're excited to explore and see the sights, you reach for your phone to request a rideshare when you realize you've lost it. You begin to panic a little and look around, when you notice a man with a calm alluring presence approach you.",
     npcInstruction:
@@ -521,6 +561,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['work', 'stress', 'growth'],
+    npcs: [
+      {
+        name: 'Casting Rival',
+        stance: 'enemy',
+        archetypeId: 'rival',
+        description: "Another actor up for the same role — may text, be referenced in casting gossip, or spike Serena's anxiety.",
+      },
+    ],
     introNarrative:
       "You notice Serena seems distracted — she mentions offhand that she just got a callback for a lead role she's been chasing for over a year. The audition is in three days and she looks like she hasn't slept since she found out.",
     npcInstruction:
@@ -594,6 +642,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['work', 'stress', 'health'],
+    npcs: [
+      {
+        name: 'Regular',
+        stance: 'bystander',
+        roleId: 'shop_clerk',
+        description: 'Longtime rental-store regular who keeps asking Becca for recommendations while she is clearly running on empty.',
+      },
+    ],
     introNarrative:
       "Becca looks exhausted in a way that goes past tired — like someone who has been running on fumes for months. She makes a joke about it, but it doesn't quite land.",
     npcInstruction:
@@ -739,6 +795,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: true,
     arcTags: ['work', 'money', 'social'],
+    npcs: [
+      {
+        name: 'Marcus',
+        stance: 'friend',
+        archetypeId: 'companion_best_friend',
+        description: "Jordan's business-minded friend who may text skepticism or show up if Jordan pitches too hard.",
+      },
+    ],
     introNarrative:
       "Jordan is excited about a new idea — like genuinely lit up in a way you don't see often. They want to walk you through it, and from the look on their face, they really want you to get it.",
     npcInstruction:
@@ -759,6 +823,14 @@ const ARCS: StoryArc[] = [
     rarity: 'rare',
     repeatable: false,
     arcTags: ['romance', 'trust', 'stability'],
+    npcs: [
+      {
+        name: 'Teammate',
+        stance: 'friend',
+        archetypeId: 'companion_best_friend',
+        description: 'Pickup teammate who might walk past mid-conversation — Jordan is hyper-aware of being overheard.',
+      },
+    ],
     introNarrative:
       "Jordan says something that, in context, sounds a lot more serious than they probably meant it to. They notice you noticed. There is a silence.",
     npcInstruction:
@@ -781,6 +853,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['work', 'conflict', 'stress'],
+    npcs: [
+      {
+        name: 'Manager',
+        stance: 'enemy',
+        archetypeId: 'rival',
+        description: 'Band manager or label contact who made the call Riot is furious about — may call or text while tempers are hot.',
+      },
+    ],
     introNarrative:
       "Riot is furious about something — controlled fury, the kind that happens when someone who works twice as hard gets overlooked for the third time.",
     npcInstruction:
@@ -801,6 +881,14 @@ const ARCS: StoryArc[] = [
     rarity: 'uncommon',
     repeatable: false,
     arcTags: ['isolation', 'stress', 'trust'],
+    npcs: [
+      {
+        name: 'Jamie',
+        stance: 'friend',
+        archetypeId: 'companion_best_friend',
+        description: "Riot's friend who knows something is wrong — may text check-ins that Riot ignores.",
+      },
+    ],
     introNarrative:
       "Riot is fine. Says so twice before you can ask. There is something behind it that is clearly not fine and they know you can probably see it.",
     npcInstruction:
@@ -824,6 +912,14 @@ const ARCS: StoryArc[] = [
     rarity: 'uncommon',
     repeatable: false,
     arcTags: ['money', 'chaos', 'stress'],
+    npcs: [
+      {
+        name: 'Creditor',
+        stance: 'enemy',
+        archetypeId: 'rival',
+        description: 'Someone Lexi owes or crossed — may text a deadline or show up if the gamble goes sideways.',
+      },
+    ],
     introNarrative:
       "Lexi mentions, very casually, that she made a decision this week that she is still not sure about. She glosses over it fast but there is a look in her eyes.",
     npcInstruction:
@@ -844,6 +940,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: true,
     arcTags: ['romance', 'growth', 'chaos'],
+    npcs: [
+      {
+        name: 'Dani',
+        stance: 'friend',
+        archetypeId: 'companion_best_friend',
+        description: 'Old friend who has seen Lexi repeat this pattern before — may be referenced or text "again?"',
+      },
+    ],
     introNarrative:
       "Lexi says something about a recent situation that sounds, almost word for word, like something she told you before — a different situation, same shape. You are not sure if she has noticed.",
     npcInstruction:
@@ -866,6 +970,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: true,
     arcTags: ['trust', 'growth', 'friendship'],
+    npcs: [
+      {
+        name: 'Colleague',
+        stance: 'bystander',
+        roleId: 'shop_clerk',
+        description: 'Library colleague shelving nearby — Lin keeps one ear on whether anyone is listening.',
+      },
+    ],
     introNarrative:
       "Lin says something that at first sounds like a simple observation. A beat later, you realize it was a question hidden inside a statement.",
     npcInstruction:
@@ -887,6 +999,14 @@ const ARCS: StoryArc[] = [
     rarity: 'rare',
     repeatable: false,
     arcTags: ['trust', 'isolation', 'growth'],
+    npcs: [
+      {
+        name: 'Professor',
+        stance: 'bystander',
+        roleId: 'shop_clerk',
+        description: 'Former mentor Lin still respects — may be referenced in the slipped detail that does not add up.',
+      },
+    ],
     introNarrative:
       "Lin says something that doesn't line up with anything else you know about him. It's small — a slipped detail, a reference that doesn't fit — but it's there. He notices you noticed.",
     npcInstruction:
@@ -911,6 +1031,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['trust', 'romance', 'stability'],
+    npcs: [
+      {
+        name: 'Assistant',
+        stance: 'bystander',
+        roleId: 'shop_clerk',
+        description: 'Studio assistant who may knock or remind Iris of a session — Iris prefers privacy for this invitation.',
+      },
+    ],
     introNarrative:
       "Iris mentions something she has been working on — a new approach she wants to try with someone she trusts. Almost as an afterthought, she asks if you'd like to experience it.",
     npcInstruction:
@@ -932,6 +1060,14 @@ const ARCS: StoryArc[] = [
     rarity: 'uncommon',
     repeatable: false,
     arcTags: ['romance', 'trust', 'growth'],
+    npcs: [
+      {
+        name: 'Client',
+        stance: 'friend',
+        archetypeId: 'companion_best_friend',
+        description: 'Long-term wellness client Iris trusts — may text during the disclosure, grounding Iris in her work identity.',
+      },
+    ],
     introNarrative:
       "Something shifts in how Iris speaks today. There is something she has been holding back — a belief, a way of being in relationship — and today she seems closer to letting it through.",
     npcInstruction:
@@ -956,6 +1092,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['romance', 'growth', 'friendship'],
+    npcs: [
+      {
+        name: 'Bartender',
+        stance: 'bystander',
+        roleId: 'barista',
+        description: 'No-sign bar staff who knows Ash by name — may interrupt with last call or a knowing look.',
+      },
+    ],
     introNarrative:
       "After meeting Ash the night before, you find yourself thinking more about him than you usually do with someone you just met. But as the day goes by with no communication from him, you start to wonder if he's still thinking about you. The sun sets and you feel like he was just being polite and wasn't really interested, when all of a sudden he texts you. He apologizes for the late response and asks if you're still available for a tour around the city.",
     npcInstruction:
@@ -978,6 +1122,14 @@ const ARCS: StoryArc[] = [
     rarity: 'common',
     repeatable: false,
     arcTags: ['trust', 'stress', 'growth'],
+    npcs: [
+      {
+        name: 'Concierge',
+        stance: 'bystander',
+        roleId: 'security_guard',
+        description: 'Hotel concierge Ash uses as cover — may call about a "meeting" if daytime plans get awkward.',
+      },
+    ],
     introNarrative:
       "You suggest something simple — breakfast, the morning market, watching the sunrise from the pier — and Ash hesitates just half a second too long before he says he can't. He says it casually. It doesn't feel casual.",
     npcInstruction:

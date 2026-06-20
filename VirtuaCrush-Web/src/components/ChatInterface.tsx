@@ -4,6 +4,7 @@ import { fetchGreeting, fetchCharacterState, fetchAffinity, fetchDevResetEnabled
 import { splitNarration } from "../lib/narration";
 import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
+import WorldActivityFeed from "./WorldActivityFeed";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw } from "lucide-react";
@@ -785,6 +786,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             onAbandon={handlePackAbandon}
           />
           <SecretCard secret={storyState?.secret} name={character.name} />
+          <WorldActivityFeed />
           <ActivityLog characterId={character.id} name={character.name} />
         </div>
 
@@ -1336,6 +1338,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                   </button>
                 ) : null}
                       <SecretCard secret={storyState?.secret} name={character.name} />
+                <WorldActivityFeed />
                 <ActivityLog characterId={character.id} name={character.name} />
               </div>
             </motion.div>

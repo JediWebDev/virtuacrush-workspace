@@ -35,6 +35,8 @@ export interface PlanChaosOpts {
   rng?: () => number;
   /** Player message — optional world-event detector input. */
   worldEvent?: WorldEvent;
+  /** Scales schema-chaos probability and agency firing (0–1). Default 1. */
+  chaosIntensity?: number;
 }
 
 const NPC_CHAOS_MIN_TURN = 7;
@@ -141,16 +143,16 @@ function pickSchemaNpcChaos(
   world: WorldState,
   firedKeys: Set<string>,
   r: () => number,
+  intensity: number,
 ): ResolvedSceneNpc | null {
   if (ctx.turn < NPC_CHAOS_MIN_TURN) return null;
   const pool = offSceneDisruptors(ctx, world).filter(
     (n) => !firedKeys.has(n.name.trim().toLowerCase()),
   );
   if (!pool.length) return null;
-  // ~30% base chance per eligible turn, scaled by top weight.
   const pick = weightedPick(pool, ctx.arcTags, r);
   if (!pick) return null;
-  const chance = Math.min(0.55, 0.22 + pick.chaosWeight * 0.35);
+  const chance = Math.min(0.55, 0.22 + pick.chaosWeight * 0.35) * intensity;
   return r() < chance ? pick : null;
 }
 
@@ -159,6 +161,7 @@ function pickSchemaNpcChaos(
  */
 export function planChaosTurn(ctx: SceneContext, opts: PlanChaosOpts = {}): ChaosTurnResult {
   const r = opts.rng ?? Math.random;
+  const intensity = Math.max(0, Math.min(1, opts.chaosIntensity ?? 1));
   const blocks: string[] = [];
   const residues: string[] = [];
   let firedDisruption: PlannedDisruption | null = null;
@@ -180,8 +183,11 @@ export function planChaosTurn(ctx: SceneContext, opts: PlanChaosOpts = {}): Chao
     }
   }
 
-  // 2. NPC agency on enriched world.
-  const agencyActions = advanceNpcs(enriched, { next: r });
+  // 2. NPC agency on enriched world (scaled down at lower intensity).
+  let agencyActions: NpcAction[] = [];
+  if (intensity > 0 && (intensity >= 1 || r() < intensity)) {
+    agencyActions = advanceNpcs(enriched, { next: r });
+  }
   for (const act of agencyActions) {
     if (act.npc === ctx.companionId) {
       blocks.push(renderAgencyInnerDrive(act, ctx.companionName, ctx.companionName));
@@ -203,8 +209,8 @@ export function planChaosTurn(ctx: SceneContext, opts: PlanChaosOpts = {}): Chao
 
   // 3. Schema-weighted NPC chaos when no ambient beat fired (avoid double-stack).
   const firedNpcKeys = new Set(ctx.firedNpcChaos.map((k) => k.toLowerCase()));
-  if (!firedDisruption) {
-    const chaosNpc = pickSchemaNpcChaos(ctx, enriched, firedNpcKeys, r);
+  if (!firedDisruption && intensity > 0) {
+    const chaosNpc = pickSchemaNpcChaos(ctx, enriched, firedNpcKeys, r, intensity);
     if (chaosNpc) {
       blocks.push(renderSchemaNpcChaosDirective(chaosNpc, ctx.companionName));
       firedNpcChaosKey = chaosNpc.name.trim().toLowerCase();

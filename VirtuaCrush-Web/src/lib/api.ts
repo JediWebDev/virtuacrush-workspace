@@ -158,6 +158,21 @@ export async function fetchDiary(characterId: string): Promise<DiaryEntry[]> {
   return res.entries;
 }
 
+export interface WorldEventEntry {
+  id: string;
+  atMin: number;
+  kind: string;
+  actors: string[];
+  text: string;
+  createdAt: string;
+}
+
+/** Simulated-world activity log for the signed-in user (newest first). */
+export async function fetchWorldEvents(): Promise<WorldEventEntry[]> {
+  const res = await api<{ events: WorldEventEntry[] }>('/api/world');
+  return res.events;
+}
+
 // --- Usage / subscription -------------------------------------------------------
 
 export interface UsageInfo {

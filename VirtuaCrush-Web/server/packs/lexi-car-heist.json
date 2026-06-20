@@ -9,6 +9,7 @@
     "Tension"
   ],
   "mood": "dramatic",
+  "arcTags": ["money", "chaos", "conflict"],
   "estimatedMinutes": 30,
   "maxTurns": 100,
   "coverGradient": [

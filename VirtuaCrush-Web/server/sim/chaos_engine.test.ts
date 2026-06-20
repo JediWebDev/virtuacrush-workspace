@@ -154,4 +154,28 @@ describe('chaos_engine', () => {
     assert.match(result.directiveBlock, /CHAOS EVENT \(schema — Urik\)/);
     assert.equal(result.firedNpcChaosKey, 'urik');
   });
+
+  it('lower chaosIntensity suppresses schema npc chaos', () => {
+    const rival = resolveSceneNpc({ name: 'Urik', stance: 'enemy', archetypeId: 'rival' });
+    const ctx = buildSceneContext({
+      world: baseWorld(),
+      composition: null,
+      resolvedNpcs: [rival],
+      activeArc: null,
+      turn: 10,
+      companionId: 'mina',
+      companionName: 'Mina',
+      atVenue: false,
+    });
+    let rolls = 0;
+    const result = planChaosTurn(ctx, {
+      chaosIntensity: 0.35,
+      rng: () => {
+        rolls++;
+        return rolls === 1 ? 0.99 : 0.5; // would fire at full intensity
+      },
+    });
+    assert.equal(result.firedNpcChaosKey, null);
+    assert.ok(!result.directiveBlock.includes('CHAOS EVENT (schema'));
+  });
 });

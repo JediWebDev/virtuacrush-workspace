@@ -2,6 +2,7 @@
 
 import type { StoryAct } from './story_structure';
 import type { BystanderRoleId, NpcStance } from './npc_schema';
+import type { NarrativeTag } from './arcs';
 
 export type { StoryAct };
 
@@ -60,6 +61,8 @@ export interface StoryPack {
   blurb: string;
   tags: string[];
   mood: PackMood;
+  /** Explicit narrative tags for chaos-engine weighting (merged with inferred tags). */
+  arcTags?: NarrativeTag[];
   estimatedMinutes: number;
   /** Auto-complete the session after this many total messages (Option C fallback). Default 40. */
   maxTurns?: number;

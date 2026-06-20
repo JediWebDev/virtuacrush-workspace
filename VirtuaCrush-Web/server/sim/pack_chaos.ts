@@ -34,6 +34,7 @@ const TAG_KEYWORDS: Array<[RegExp, NarrativeTag]> = [
 
 export function inferArcTagsFromPack(pack: StoryPack): NarrativeTag[] {
   const out = new Set<NarrativeTag>();
+  for (const t of pack.arcTags ?? []) out.add(t);
   for (const t of MOOD_TAGS[pack.mood] ?? []) out.add(t);
   for (const tag of pack.tags) {
     for (const [re, narrative] of TAG_KEYWORDS) {
@@ -43,6 +44,10 @@ export function inferArcTagsFromPack(pack: StoryPack): NarrativeTag[] {
   if (!out.size) out.add('social');
   return [...out];
 }
+
+/** Pack authored-choice turns use lower chaos probability than free text. */
+export const PACK_CHOICE_CHAOS_INTENSITY = 0.35;
+export const PACK_FREE_TEXT_CHAOS_INTENSITY = 1;
 
 /** Minimal composition stub for pack sessions (ambient disruptions disabled). */
 export function packChaosComposition(

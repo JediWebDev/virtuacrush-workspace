@@ -72,7 +72,7 @@ import { assembleWorld } from '../db/sim_world';
 import { detectWorldEvent } from '../db/world_util';
 import { recordWorldChaosEvent } from '../db/world_sim';
 import { buildSceneContext } from '../sim/scene_context';
-import { inferArcTagsFromPack } from '../sim/pack_chaos';
+import { inferArcTagsFromPack, PACK_CHOICE_CHAOS_INTENSITY, PACK_FREE_TEXT_CHAOS_INTENSITY } from '../sim/pack_chaos';
 import { planChaosTurn, logChaosResidues } from '../sim/chaos_engine';
 
 const router = Router();
@@ -534,7 +534,10 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
       suppressAmbientDisruptions: true,
       firedNpcChaos: priorSnapshot?.firedNpcChaos ?? [],
     });
-    const chaos = planChaosTurn(sceneCtx, { worldEvent: detectWorldEvent(message) });
+    const chaos = planChaosTurn(sceneCtx, {
+      worldEvent: detectWorldEvent(message),
+      chaosIntensity: explicitAdvance ? PACK_CHOICE_CHAOS_INTENSITY : PACK_FREE_TEXT_CHAOS_INTENSITY,
+    });
     chaosDirective = chaos.directiveBlock;
     chaosResidues = chaos.residues;
     firedNpcChaosKey = chaos.firedNpcChaosKey;

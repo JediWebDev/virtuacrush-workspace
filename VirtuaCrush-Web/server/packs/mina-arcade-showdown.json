@@ -9,6 +9,7 @@
     "High Energy"
   ],
   "mood": "playful",
+  "arcTags": ["conflict", "social", "chaos"],
   "estimatedMinutes": 20,
   "maxTurns": 90,
   "coverGradient": [
