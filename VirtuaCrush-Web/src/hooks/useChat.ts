@@ -33,6 +33,8 @@ export interface ChatDoneInfo {
   affinityAwarded?: number;
   earnedBadge?: { title: string; description: string } | null;
   meetArcComplete?: boolean;
+  /** World/chaos engine beat the player should notice this turn. */
+  chaos?: { title: string; detail: string; tone: 'subtle' | 'major' };
 }
 
 interface UseChatOptions {
@@ -178,6 +180,14 @@ export function useChat({
               affinityAwarded: typeof d.affinityAwarded === 'number' ? d.affinityAwarded : undefined,
               earnedBadge: d.earnedBadge ?? null,
               meetArcComplete: d.meetArcComplete === true,
+              chaos:
+                d.chaos && typeof d.chaos.title === 'string'
+                  ? {
+                      title: d.chaos.title,
+                      detail: typeof d.chaos.detail === 'string' ? d.chaos.detail : '',
+                      tone: d.chaos.tone === 'subtle' ? 'subtle' : 'major',
+                    }
+                  : undefined,
             });
             if (typeof d.affinityScore === 'number') {
               setAffinityScore(d.affinityScore);

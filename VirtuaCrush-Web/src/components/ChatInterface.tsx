@@ -7,7 +7,7 @@ import ActivityLog from "./ActivityLog";
 import WorldActivityFeed from "./WorldActivityFeed";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw } from "lucide-react";
+import { Send, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw, Zap } from "lucide-react";
 import ChatAvatar from "./ChatAvatar";
 import { Character } from "../types/character";
 import type { UserTier } from "../types/subscription";
@@ -63,6 +63,15 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
       if (info.meetArcComplete) {
         setMeetArcComplete(true);
       }
+      if (info.chaos) {
+        setChaosToast({
+          open: true,
+          title: info.chaos.title,
+          detail: info.chaos.detail,
+          tone: info.chaos.tone,
+        });
+        setWorldRefreshKey((k) => k + 1);
+      }
       fetchCharacterState(character.id)
         .then((st) => {
           setStoryState(st);
@@ -87,6 +96,13 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [profileOpen, setProfileOpen] = useState(false);
   const [storyState, setStoryState] = useState<CharacterState | null>(null);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
+  const [worldRefreshKey, setWorldRefreshKey] = useState(0);
+  const [chaosToast, setChaosToast] = useState<{
+    open: boolean;
+    title: string;
+    detail: string;
+    tone: 'subtle' | 'major';
+  }>({ open: false, title: '', detail: '', tone: 'major' });
   const navigate = useNavigate();
   const location = useLocation();
   const studioArcTitleRef = useRef<string | null>(
@@ -726,6 +742,15 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
         onClose={() => setHistoryToast((t) => ({ ...t, open: false }))}
         offsetRem={1.5}
       />
+      <NoticeToast
+        open={chaosToast.open}
+        title={chaosToast.title}
+        detail={chaosToast.detail}
+        icon={<Zap size={18} />}
+        durationMs={chaosToast.tone === 'major' ? 6500 : 4500}
+        onClose={() => setChaosToast((t) => ({ ...t, open: false }))}
+        offsetRem={10.5}
+      />
       <div className="pointer-events-none absolute inset-0 -z-10 ambient-accent" />
 
       {/* Profile rail — dating / social profile feel */}
@@ -786,7 +811,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             onAbandon={handlePackAbandon}
           />
           <SecretCard secret={storyState?.secret} name={character.name} />
-          <WorldActivityFeed />
+          <WorldActivityFeed refreshKey={worldRefreshKey} />
           <ActivityLog characterId={character.id} name={character.name} />
         </div>
 
@@ -1338,7 +1363,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                   </button>
                 ) : null}
                       <SecretCard secret={storyState?.secret} name={character.name} />
-                <WorldActivityFeed />
+                <WorldActivityFeed refreshKey={worldRefreshKey} />
                 <ActivityLog characterId={character.id} name={character.name} />
               </div>
             </motion.div>

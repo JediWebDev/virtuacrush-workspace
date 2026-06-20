@@ -75,7 +75,7 @@ import {
 import { friendFor } from '../sim/scene_registry';
 import { detectWorldEvent } from '../db/world_util';
 import { buildSceneContext } from '../sim/scene_context';
-import { planChaosTurn, logChaosResidues } from '../sim/chaos_engine';
+import { planChaosTurn, logChaosResidues, chaosUiHint, type ChaosUiHint } from '../sim/chaos_engine';
 import { npcEntityIdFromName } from '../sim/world_npcs';
 import { recordWorldChaosEvent } from '../db/world_sim';
 import { formatSituationBlock, formatLocationBlock } from '../db/scene_util';
@@ -488,6 +488,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let firedDisruption: PlannedDisruption | null = null;
   let firedNpcChaosKey: string | null = null;
   let chaosResidues: string[] = [];
+  let chaosHint: ChaosUiHint | null = null;
   let newPendingEvent: DriveEventCard | undefined;
   let appliedAffinity: number | null = null;
   let effIntent: PlayerIntent | undefined;
@@ -604,11 +605,17 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       companionName: displayName,
       atVenue: Boolean(situation.scene.location),
     });
-    const chaos = planChaosTurn(sceneCtx, { worldEvent: detectWorldEvent(message) });
+    const worldEvent = detectWorldEvent(message);
+    const chaos = planChaosTurn(sceneCtx, { worldEvent });
     chaosDirective = chaos.directiveBlock;
     firedDisruption = chaos.firedDisruption;
     firedNpcChaosKey = chaos.firedNpcChaosKey;
     chaosResidues = chaos.residues;
+    chaosHint = chaosUiHint(chaos, {
+      companionName: displayName,
+      resolvedNpcs: resolvedSceneNpcs,
+      worldEvent,
+    });
     logChaosResidues(req.user!.id, chaos.residues, recordWorldChaosEvent);
     for (const act of chaos.agencyActions) {
       if (act.npc === characterId) continue;
@@ -1032,6 +1039,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       meetArcComplete: earnedBadge && activeArc?.isMeetArc ? true : undefined,
       choices: replyChoices,
       posted,
+      chaos: chaosHint,
     });
 
     res.end();

@@ -24,7 +24,7 @@ function formatWhen(iso: string): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-export default function WorldActivityFeed() {
+export default function WorldActivityFeed({ refreshKey = 0 }: { refreshKey?: number }) {
   const [events, setEvents] = useState<WorldEventEntry[] | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -47,7 +47,7 @@ export default function WorldActivityFeed() {
       alive = false;
       clearInterval(t);
     };
-  }, []);
+  }, [refreshKey]);
 
   return (
     <div className="mb-6 w-full rounded-2xl border border-black/[0.06] dark:border-white/[0.06] bg-black/[0.03] dark:bg-white/[0.03] p-4 text-left">

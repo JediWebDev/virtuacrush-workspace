@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveSceneNpc, resolveSceneNpcs } from '../inworld/npc_schema';
 import { composeWorld } from './compose';
-import { planChaosTurn } from './chaos_engine';
+import { planChaosTurn, chaosUiHint } from './chaos_engine';
 import { buildSceneContext } from './scene_context';
 import { enrichWorldWithSceneNpcs, npcEntityIdFromName } from './world_npcs';
 import type { SceneComposition } from './scene_composer';
@@ -217,5 +217,69 @@ describe('chaos_engine', () => {
     });
     assert.equal(result.firedNpcChaosKey, null);
     assert.ok(!result.directiveBlock.includes('CHAOS EVENT (schema'));
+  });
+
+  it('chaosUiHint prioritizes world crime over disruption', () => {
+    const hint = chaosUiHint(
+      {
+        directiveBlock: '',
+        firedDisruption: { id: 'd1', poolId: 'mom_call', kind: 'beat', atTurn: 3 },
+        firedNpcChaosKey: null,
+        agencyActions: [],
+        residues: [],
+      },
+      {
+        companionName: 'Mina',
+        resolvedNpcs: [],
+        worldEvent: { kind: 'crime', crimeType: 'fire' },
+      },
+    );
+    assert.equal(hint?.title, 'The world reacted');
+    assert.equal(hint?.tone, 'major');
+  });
+
+  it('chaosUiHint surfaces NPC interrupt with display name', () => {
+    const rival = resolveSceneNpc({ name: 'Urik', stance: 'enemy', archetypeId: 'rival' });
+    const hint = chaosUiHint(
+      {
+        directiveBlock: '',
+        firedDisruption: null,
+        firedNpcChaosKey: null,
+        agencyActions: [{ npc: 'Urik', action: 'interrupt_date', reason: 'jealous' }],
+        residues: [],
+      },
+      { companionName: 'Mina', resolvedNpcs: [rival] },
+    );
+    assert.equal(hint?.title, 'Urik entered the scene');
+    assert.equal(hint?.tone, 'major');
+  });
+
+  it('chaosUiHint maps known disruption pools', () => {
+    const hint = chaosUiHint(
+      {
+        directiveBlock: '',
+        firedDisruption: { id: 'd2', poolId: 'friend_text', kind: 'beat', atTurn: 2 },
+        firedNpcChaosKey: null,
+        agencyActions: [],
+        residues: [],
+      },
+      { companionName: 'Mina', resolvedNpcs: [] },
+    );
+    assert.equal(hint?.title, 'Someone else reached out');
+    assert.equal(hint?.tone, 'major');
+  });
+
+  it('chaosUiHint returns null when nothing fired', () => {
+    const hint = chaosUiHint(
+      {
+        directiveBlock: '',
+        firedDisruption: null,
+        firedNpcChaosKey: null,
+        agencyActions: [],
+        residues: [],
+      },
+      { companionName: 'Mina', resolvedNpcs: [] },
+    );
+    assert.equal(hint, null);
   });
 });

@@ -248,3 +248,120 @@ export function logChaosResidues(
     void log(userId, 'chaos', [], text).catch(() => {});
   }
 }
+
+/** Player-facing summary of the most notable chaos beat this turn (for UI toast). */
+export interface ChaosUiHint {
+  title: string;
+  detail: string;
+  /** major = longer toast; subtle = ambient texture only */
+  tone: 'subtle' | 'major';
+}
+
+const DISRUPTION_UI: Record<string, { title: string; detail: string; tone: 'subtle' | 'major' }> = {
+  mom_call: {
+    title: 'The world interrupted',
+    detail: 'A phone call just cut through the moment.',
+    tone: 'major',
+  },
+  friend_text: {
+    title: 'Someone else reached out',
+    detail: 'A text from a friend landed mid-conversation.',
+    tone: 'major',
+  },
+  delivery_knock: {
+    title: 'Knock at the door',
+    detail: 'Something — or someone — showed up uninvited.',
+    tone: 'major',
+  },
+  work_ping: {
+    title: 'Work intrudes',
+    detail: 'A work notification pulled focus back to real life.',
+    tone: 'major',
+  },
+  friend_ride_arrives: {
+    title: 'Her friend is here',
+    detail: 'Someone in the scene just arrived and changed the energy.',
+    tone: 'major',
+  },
+  notification_swipe: {
+    title: 'Ping',
+    detail: 'A notification flickered across the screen.',
+    tone: 'subtle',
+  },
+  ambient_sound: {
+    title: 'Something outside',
+    detail: 'Noise from outside briefly stole attention.',
+    tone: 'subtle',
+  },
+  tv_moment: {
+    title: 'Background noise',
+    detail: 'Whatever was on in the background got loud for a second.',
+    tone: 'subtle',
+  },
+  drink_refill: {
+    title: 'Small interruption',
+    detail: 'They stepped away for a moment and came back.',
+    tone: 'subtle',
+  },
+};
+
+export function chaosUiHint(
+  result: ChaosTurnResult,
+  opts: {
+    companionName: string;
+    resolvedNpcs: ResolvedSceneNpc[];
+    worldEvent?: WorldEvent;
+  },
+): ChaosUiHint | null {
+  if (opts.worldEvent?.kind === 'crime') {
+    return {
+      title: 'The world reacted',
+      detail: 'Your action had serious consequences — expect a response in-scene.',
+      tone: 'major',
+    };
+  }
+  if (opts.worldEvent?.kind === 'mischief') {
+    return {
+      title: 'Someone noticed',
+      detail: 'Staff or security may push back on what just happened.',
+      tone: 'major',
+    };
+  }
+
+  const interrupt = result.agencyActions.find((a) => a.action === 'interrupt_date');
+  if (interrupt) {
+    const npc =
+      opts.resolvedNpcs.find((n) => n.name.trim().toLowerCase() === interrupt.npc.toLowerCase())
+      ?? opts.resolvedNpcs.find((n) => npcEntityIdFromName(n.name) === interrupt.npc);
+    const name = npc?.name ?? interrupt.npc.replace(/^npc:/, '').replace(/_/g, ' ');
+    return {
+      title: `${name} entered the scene`,
+      detail: `Something shifted — ${opts.companionName} will have to react.`,
+      tone: 'major',
+    };
+  }
+
+  if (result.firedNpcChaosKey) {
+    const npc = opts.resolvedNpcs.find(
+      (n) => n.name.trim().toLowerCase() === result.firedNpcChaosKey!.toLowerCase(),
+    );
+    const name = npc?.name ?? result.firedNpcChaosKey;
+    return {
+      title: `${name} stirred things up`,
+      detail: 'Watch the reply — someone new is pulling focus into the scene.',
+      tone: 'major',
+    };
+  }
+
+  if (result.firedDisruption) {
+    const mapped = DISRUPTION_UI[result.firedDisruption.poolId];
+    if (mapped) return mapped;
+    return {
+      title: 'The moment shifted',
+      detail: 'Something unexpected threaded into the scene.',
+      tone: result.firedDisruption.kind === 'beat' ? 'major' : 'subtle',
+    };
+  }
+
+  return null;
+}
