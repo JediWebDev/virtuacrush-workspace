@@ -51,7 +51,7 @@ import {
   sceneCastToNpcRefs,
   suggestBystanderForSetting,
 } from '../inworld/npc_schema';
-import { maybeAutonomousPost, postReasonForTurn } from '../inworld/social_post';
+import { maybeAutonomousPost, postTriggerForTurn } from '../inworld/social_post';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
 import { formatPersonaTraitsBlock, shouldRevealSecret } from '../sim/traits';
 import {
@@ -393,6 +393,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let arcSceneInit = false;
   let arcIntroNarrative: string | undefined;
   let earnedBadge: { title: string; description: string } | null = null;
+  let completedArcIdForPost: string | null = null;
   let affinityAwarded = 0;
 
   // --- Arc selection / continuation ---
@@ -890,6 +891,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         if (arcStatus === 'completed' && !arcJustStarted && completionBadge) {
           if (userTurnsSinceStart >= 2) {
             earnedBadge = completionBadge;
+            completedArcIdForPost = activeArc.id;
             void saveCompletedArc(req.user!.id, characterId, activeArc, earnedBadge).catch(() => {});
             void clearArcState(req.user!.id, characterId).catch(() => {});
             if (activeArc.isMeetArc) {
@@ -979,19 +981,20 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     // generator self-rate-limits with a cooldown; we only do the (cheap) check
     // when a trigger fired, and surface `posted` so the client refreshes the feed.
     let posted = false;
-    const postReason = postReasonForTurn({
+    const postTrigger = postTriggerForTurn({
+      completedArcId: completedArcIdForPost,
       arcBadgeTitle: earnedBadge?.title ?? null,
       turnText: `${message}\n${assistantFull}`,
       prevAffinity: affinity,
       newAffinity: newAffinityScore,
       emotionalDisclosure: revealSecretNow,
     });
-    if (postReason) {
+    if (postTrigger) {
       posted = (await maybeAutonomousPost({
         userId: req.user!.id,
         characterId,
         displayName,
-        reason: postReason,
+        trigger: postTrigger,
       })) != null;
     }
 

@@ -9,10 +9,16 @@
 import { completePrompt } from '../llm';
 import { getCharacter } from './characters';
 import { createPost, lastPostAt } from '../db/posts';
+import { hasPostTrigger, recordPostTrigger } from '../db/post_triggers';
 import { storeSignificantEvent } from '../db/memory';
 
 // At most one autonomous post per character per ~day, so feeds never spam.
 const COOLDOWN_MS = 20 * 60 * 60 * 1000;
+
+export interface PostTrigger {
+  key: string;
+  reason: string;
+}
 
 function cleanPost(s: string): string {
   return (s ?? '')
@@ -50,28 +56,28 @@ async function generatePostText(
 }
 
 /**
- * Generates + stores an in-character social post if the cooldown allows.
- * Returns the post text on success, or null if skipped/failed. Safe to await
- * from the chat route only when a trigger actually fired (keeps latency off the
- * common path).
+ * Generates + stores an in-character social post if the cooldown allows and
+ * this trigger has not fired before for this user/character pair.
  */
 export async function maybeAutonomousPost(p: {
   userId: string;
   characterId: string;
   displayName: string;
-  reason: string;
+  trigger: PostTrigger;
 }): Promise<string | null> {
   try {
+    if (await hasPostTrigger(p.userId, p.characterId, p.trigger.key)) return null;
+
     const last = await lastPostAt(p.userId, p.characterId);
     if (last && Date.now() - last.getTime() < COOLDOWN_MS) return null;
 
-    const text = await generatePostText(p.characterId, p.reason);
+    const text = await generatePostText(p.characterId, p.trigger.reason);
     if (!text) return null;
 
     await createPost(p.userId, p.characterId, text);
-    // Remember it so the character has continuity ("I posted about meeting them").
+    await recordPostTrigger(p.userId, p.characterId, p.trigger.key);
     await storeSignificantEvent(p.userId, p.characterId, `${p.displayName} posted publicly: "${text}"`);
-    console.log(`[social_post] ${p.characterId} auto-posted for user=${p.userId}`);
+    console.log(`[social_post] ${p.characterId} auto-posted trigger=${p.trigger.key} user=${p.userId}`);
     return text;
   } catch (e) {
     console.warn('[social_post] maybeAutonomousPost failed:', e);
@@ -80,32 +86,69 @@ export async function maybeAutonomousPost(p: {
 }
 
 const AFFINITY_MILESTONES = [35, 55, 80] as const;
-const CONTACT_OR_PLANS =
-  /\b(number|digits|phone)\b|\btext me\b|\bhit me up\b|\bcall me\b|\bsee you (again|around|soon|next|later)\b|\bnext time\b|\bhang ?out\b|\bget together\b|\bmeet ?up\b|\bagain sometime\b|\bcome over\b|\byour place\b/i;
 
 /**
- * Picks the most specific post-worthy reason for this turn, or null. Pure so the
+ * Explicit contact handoff in this turn — not casual "see you later" or generic
+ * hang-out talk that can repeat every session.
+ */
+export function detectFirstContactExchange(turnText: string): boolean {
+  const t = turnText.toLowerCase();
+  if (
+    /\b(swap(ped|ping)?|exchange(d|s|ing)?|share(d|s|ing)?|trade(d|s|ing)?|give(n|s|ing)?|got|here'?s?)\s+(numbers?|digits?|phones?|contacts?)\b/.test(t)
+    || /\b(numbers?|digits?|phones?|contacts?)\s+(swap(ped|ping)?|exchange(d|s|ing)?|share(d|s|ing)?|trade(d|s|ing)?)\b/.test(t)
+    || /\b(my|your)\s+(cell|number|digits|phone|contact)\b/.test(t)
+    || /\bhere('s| is)\s+(my|the)\s+(cell|number|digits|phone|contact)\b/.test(t)
+    || /\b(text|message|call|dm)\s+me\b/.test(t)
+    || /\bhit\s+me\s+up\b/.test(t)
+    || /\b(add|save)\s+(me|my\s+(number|contact))\b/.test(t)
+    || /\b\d[\d\s\-().]{7,}\d\b/.test(t)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Picks the most specific post-worthy trigger for this turn, or null. Pure so the
  * chat route stays readable and this is unit-testable.
  */
-export function postReasonForTurn(p: {
-  arcBadgeTitle?: string | null;       // set when an arc (incl. the meet) just completed
-  turnText: string;                    // user message + assistant reply, for keyword detection
+export function postTriggerForTurn(p: {
+  completedArcId?: string | null;
+  arcBadgeTitle?: string | null;
+  turnText: string;
   prevAffinity: number;
   newAffinity: number;
-  emotionalDisclosure: boolean;        // e.g. a secret was revealed this turn
-}): string | null {
-  if (p.arcBadgeTitle) {
-    return `you just shared a memorable moment with someone you met (${p.arcBadgeTitle})`;
+  emotionalDisclosure: boolean;
+}): PostTrigger | null {
+  if (p.completedArcId && p.arcBadgeTitle) {
+    return {
+      key: `arc:${p.completedArcId}`,
+      reason: `you just shared a memorable moment with someone you met (${p.arcBadgeTitle})`,
+    };
   }
-  if (CONTACT_OR_PLANS.test(p.turnText)) {
-    return `you swapped numbers / made plans to see someone again`;
+  if (detectFirstContactExchange(p.turnText)) {
+    return {
+      key: 'contact_swap',
+      reason: 'you swapped numbers or traded contact info with someone new',
+    };
   }
   const crossed = AFFINITY_MILESTONES.find((m) => p.prevAffinity < m && p.newAffinity >= m);
   if (crossed) {
-    return `you're getting noticeably closer to someone you've been spending time with`;
+    return {
+      key: `affinity:${crossed}`,
+      reason: `you're getting noticeably closer to someone you've been spending time with`,
+    };
   }
   if (p.emotionalDisclosure) {
-    return `you opened up to someone about something you usually keep private`;
+    return {
+      key: 'emotional_disclosure',
+      reason: 'you opened up to someone about something you usually keep private',
+    };
   }
   return null;
+}
+
+/** @deprecated Use postTriggerForTurn — kept for tests migrating gradually. */
+export function postReasonForTurn(p: Parameters<typeof postTriggerForTurn>[0]): string | null {
+  return postTriggerForTurn(p)?.reason ?? null;
 }

@@ -67,13 +67,13 @@ export const CHARACTERS: Character[] = [
         comments: [
           {
             author: "stackyCake",
-            avatar: "",
+            avatar: "/api/assets/characters/Stacky_Cake.jpg",
             text: "YES!! I can't wait to see the final result!",
           },
         ],
         media: {
           type: "image",
-          src: "/api/assets/characters/Mina_Character.png",
+          src: "/api/assets/characters/Mina_Demon_Slayer_Cosplay.jpg",
         },
       },
       {

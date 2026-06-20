@@ -46,6 +46,11 @@ export async function resetCharacterDevState(userId: string, characterId: string
     );
 
     await client.query(
+      `DELETE FROM character_post_triggers WHERE user_id = $1 AND character_id = $2`,
+      [userId, characterId],
+    );
+
+    await client.query(
       `DELETE FROM character_affinity WHERE user_id = $1 AND character_id = $2`,
       [userId, characterId],
     );
