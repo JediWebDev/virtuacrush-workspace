@@ -72,7 +72,7 @@ import { assembleWorld } from '../db/sim_world';
 import { detectWorldEvent } from '../db/world_util';
 import { buildSceneContext } from '../sim/scene_context';
 import { inferArcTagsFromPack, PACK_CHOICE_CHAOS_INTENSITY, PACK_FREE_TEXT_CHAOS_INTENSITY } from '../sim/pack_chaos';
-import { planChaosTurn } from '../sim/chaos_engine';
+import { planChaosTurn, formatChaosPromptBlock, chaosRequiredActors } from '../sim/chaos_engine';
 
 const router = Router();
 
@@ -167,7 +167,6 @@ function buildPackDirectorPrompt(
   characterId: string,
   priorSceneBlock = '',
   storyMemoryBlock = '',
-  chaosDirective = '',
 ): string {
   let character;
   try { character = getCharacter(characterId as Parameters<typeof getCharacter>[0]); }
@@ -246,7 +245,6 @@ function buildPackDirectorPrompt(
     actBlock +
     sceneDirective +
     npcBlock +
-    chaosDirective +
     sceneSoFar +
     storyMemoryBlock +
     formatCharacterFactsBlock(lore) +
@@ -551,12 +549,29 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
     session.characterId,
     priorSceneBlock,
     formatCharacterStoryBlock(companionName, storyBeats),
+  );
+  const packNpcsForChaos = resolvePackNpcsFromStory(pack);
+  const chaosPromptBlock = formatChaosPromptBlock(
     chaosDirective,
+    companionName,
+    chaosDirective.trim()
+      ? chaosRequiredActors(
+          {
+            directiveBlock: chaosDirective,
+            firedDisruption: null,
+            firedNpcChaosKey,
+            agencyActions: [],
+            residues: chaosResidues,
+          },
+          session.characterId,
+          packNpcsForChaos,
+        ).map((a) => a.name)
+      : [],
   );
   const turnsStr = history
     .map((m) => (m.role === 'user' ? `Player: ${m.content}` : m.content))
     .join('\n');
-  const fullPrompt = `${directorPrompt}\n\n${turnsStr ? turnsStr + '\n' : ''}Player: ${message}\n\nJSON:`;
+  const fullPrompt = `${directorPrompt}\n\n${turnsStr ? turnsStr + '\n' : ''}${chaosPromptBlock}Player: ${message}\n\nJSON:`;
 
   let result;
   let continuity = applySceneContinuityUpdate({

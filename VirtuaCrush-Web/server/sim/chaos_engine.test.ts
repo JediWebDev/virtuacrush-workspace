@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveSceneNpc, resolveSceneNpcs } from '../inworld/npc_schema';
 import { composeWorld } from './compose';
-import { planChaosTurn, chaosUiHint } from './chaos_engine';
+import { planChaosTurn, chaosUiHint, formatChaosPromptBlock } from './chaos_engine';
 import { buildSceneContext } from './scene_context';
 import { enrichWorldWithSceneNpcs, npcEntityIdFromName } from './world_npcs';
 import type { SceneComposition } from './scene_composer';
@@ -95,7 +95,7 @@ describe('chaos_engine', () => {
     });
     const result = planChaosTurn(ctx);
     assert.ok(result.firedDisruption);
-    assert.match(result.directiveBlock, /CHAOS EVENT/);
+    assert.match(result.directiveBlock, /MANDATORY/);
     assert.match(result.directiveBlock, /MANDATORY/);
   });
 
@@ -143,7 +143,7 @@ describe('chaos_engine', () => {
       mode: 'pack',
     });
     const result = planChaosTurn(ctx, { rng: () => 0.01 });
-    assert.match(result.directiveBlock, /CHAOS EVENT/);
+    assert.match(result.directiveBlock, /MANDATORY/);
     assert.equal(result.firedDisruption?.id, 'ephemeral');
   });
 
@@ -168,7 +168,7 @@ describe('chaos_engine', () => {
       },
     });
     assert.equal(result.firedNpcChaosKey, null);
-    assert.ok(!result.directiveBlock.includes('CHAOS EVENT (NPC'));
+    assert.ok(!result.directiveBlock.includes('MANDATORY'));
   });
 
   it('only one chaos block fires per turn', () => {
@@ -199,14 +199,14 @@ describe('chaos_engine', () => {
       atVenue: false,
     });
     const result = planChaosTurn(ctx, { rng: () => 0.01 });
-    const matches = result.directiveBlock.match(/=== CHAOS EVENT/g);
+    const matches = result.directiveBlock.match(/MANDATORY/g);
     assert.equal(matches?.length ?? 0, 1);
   });
 
   it('chaosUiHint prioritizes world crime over disruption', () => {
     const hint = chaosUiHint(
       {
-        directiveBlock: '',
+        directiveBlock: 'Security arrives on-scene.',
         firedDisruption: { id: 'd1', poolId: 'fire_alarm', kind: 'disaster', atTurn: 3 },
         firedNpcChaosKey: null,
         agencyActions: [],
@@ -214,11 +214,12 @@ describe('chaos_engine', () => {
       },
       {
         companionName: 'Mina',
+        characterId: 'mina',
         resolvedNpcs: [],
         worldEvent: { kind: 'crime', crimeType: 'fire' },
       },
     );
-    assert.equal(hint?.title, 'The world reacted');
+    assert.equal(hint?.title, 'Security responded');
     assert.equal(hint?.tone, 'major');
   });
 
@@ -226,30 +227,30 @@ describe('chaos_engine', () => {
     const rival = resolveSceneNpc({ name: 'Urik', stance: 'enemy', archetypeId: 'rival' });
     const hint = chaosUiHint(
       {
-        directiveBlock: '',
+        directiveBlock: 'Urik walks in unannounced.',
         firedDisruption: null,
         firedNpcChaosKey: null,
         agencyActions: [{ npc: 'Urik', action: 'interrupt_date', reason: 'jealous' }],
         residues: [],
       },
-      { companionName: 'Mina', resolvedNpcs: [rival] },
+      { companionName: 'Mina', characterId: 'mina', resolvedNpcs: [rival] },
     );
-    assert.equal(hint?.title, 'Urik entered the scene');
+    assert.equal(hint?.title, 'Urik walked in');
     assert.equal(hint?.tone, 'major');
   });
 
   it('chaosUiHint maps disaster pools', () => {
     const hint = chaosUiHint(
       {
-        directiveBlock: '',
+        directiveBlock: 'The power cuts out mid-conversation.',
         firedDisruption: { id: 'd2', poolId: 'power_outage', kind: 'disaster', atTurn: 2 },
         firedNpcChaosKey: null,
         agencyActions: [],
         residues: [],
       },
-      { companionName: 'Mina', resolvedNpcs: [] },
+      { companionName: 'Mina', characterId: 'mina', resolvedNpcs: [] },
     );
-    assert.equal(hint?.title, 'Lights out');
+    assert.equal(hint?.title, 'The power went out');
     assert.equal(hint?.tone, 'major');
   });
 
@@ -262,8 +263,29 @@ describe('chaos_engine', () => {
         agencyActions: [],
         residues: [],
       },
-      { companionName: 'Mina', resolvedNpcs: [] },
+      { companionName: 'Mina', characterId: 'mina', resolvedNpcs: [] },
     );
     assert.equal(hint, null);
+  });
+
+  it('chaosUiHint returns null when disruption metadata exists but directive is empty', () => {
+    const hint = chaosUiHint(
+      {
+        directiveBlock: '',
+        firedDisruption: { id: 'd2', poolId: 'power_outage', kind: 'disaster', atTurn: 2 },
+        firedNpcChaosKey: null,
+        agencyActions: [],
+        residues: [],
+      },
+      { companionName: 'Mina', characterId: 'mina', resolvedNpcs: [] },
+    );
+    assert.equal(hint, null);
+  });
+
+  it('formatChaosPromptBlock requires JSON lines for the beat', () => {
+    const block = formatChaosPromptBlock('The power cuts out.', 'Kayla', ['Femi']);
+    assert.ok(block.includes('REQUIRED'));
+    assert.ok(block.includes('Kayla'));
+    assert.ok(block.includes('Femi'));
   });
 });

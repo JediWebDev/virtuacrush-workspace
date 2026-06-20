@@ -287,3 +287,59 @@ export function pickEphemeralChaosEvent(
   );
   return pool.length ? pickFrom(pool, r) : null;
 }
+
+/** Player-facing toast copy — states what happened, not meta "read the reply". */
+export function chaosPlayerToast(
+  poolId: string,
+  displayName: string,
+  characterId: string,
+): { title: string; detail: string } | null {
+  const friend = friendFor(characterId).name;
+  const toasts: Record<string, { title: string; detail: string }> = {
+    friend_crash_in: {
+      title: `${friend} burst in`,
+      detail: `${friend} crashed into ${displayName}'s scene — mid-conversation.`,
+    },
+    friend_demands_answer: {
+      title: `${friend} needs an answer`,
+      detail: `${friend} showed up demanding ${displayName} explain something about you.`,
+    },
+    rival_steps_in: {
+      title: 'A rival showed up',
+      detail: `Someone with history walked in and aimed hostility at you and ${displayName}.`,
+    },
+    bystander_callout: {
+      title: 'Someone called you out',
+      detail: `A stranger or staff member interrupted ${displayName} and you.`,
+    },
+    unexpected_guest: {
+      title: 'Unexpected guest',
+      detail: `Someone ${displayName} didn't expect just walked in on you two.`,
+    },
+    power_outage: {
+      title: 'The power went out',
+      detail: `Lights died while you were talking with ${displayName}.`,
+    },
+    fire_alarm: {
+      title: 'Fire alarm',
+      detail: `Alarms blared — ${displayName}'s scene just got evacuated.`,
+    },
+    earthquake_tremor: {
+      title: 'Earthquake',
+      detail: `The ground shook; ${displayName} grabbed for stability.`,
+    },
+    sudden_storm: {
+      title: 'Storm hit',
+      detail: `Weather turned violent outside ${displayName}'s place.`,
+    },
+    street_chaos: {
+      title: 'Chaos outside',
+      detail: `Sirens or shouting erupted nearby — ${displayName} heard it.`,
+    },
+    sprinkler_flood: {
+      title: 'Sprinklers went off',
+      detail: `Water everywhere — ${displayName}'s scene got soaked.`,
+    },
+  };
+  return toasts[poolId] ?? null;
+}

@@ -75,7 +75,7 @@ import {
 import { friendFor } from '../sim/scene_registry';
 import { detectWorldEvent } from '../db/world_util';
 import { buildSceneContext } from '../sim/scene_context';
-import { planChaosTurn, chaosUiHint, type ChaosUiHint } from '../sim/chaos_engine';
+import { planChaosTurn, chaosUiHint, formatChaosPromptBlock, chaosRequiredActors, type ChaosUiHint } from '../sim/chaos_engine';
 import { npcEntityIdFromName } from '../sim/world_npcs';
 import { formatSituationBlock, formatLocationBlock } from '../db/scene_util';
 import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
@@ -610,8 +610,14 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     firedDisruption = chaos.firedDisruption;
     firedNpcChaosKey = chaos.firedNpcChaosKey;
     chaosResidues = chaos.residues;
+    for (const extra of chaosRequiredActors(chaos, characterId, resolvedSceneNpcs)) {
+      if (!npcs.some((a) => a.tag === extra.tag)) {
+        npcs.push({ tag: extra.tag, name: extra.name, kind: 'npc', brief: extra.brief });
+      }
+    }
     chaosHint = chaosUiHint(chaos, {
       companionName: displayName,
+      characterId,
       resolvedNpcs: resolvedSceneNpcs,
       worldEvent,
     });
@@ -706,7 +712,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           : formatSituationBlock(situation.state, scene, displayName, affinity)) +
       sceneFacts +
       sceneNpcBlock +
-      chaosDirective +
       formatCharacterFactsBlock(getLore(characterId)) +
       formatPersonaTraitsBlock(getLore(characterId), { discovered: secretDiscovered, revealNow: revealSecretNow }) +
       ROLEPLAY_INPUT_DIRECTIVE +
@@ -749,6 +754,12 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           return prior;
         })();
 
+    const chaosPromptBlock = formatChaosPromptBlock(
+      chaosDirective,
+      displayName,
+      chaosRequiredActors(chaos, characterId, resolvedSceneNpcs).map((a) => a.name),
+    );
+
     directorPrompt = buildDirectorPrompt({
       companionSystem: getCharacter(characterId).systemPrompt,
       companionTag: companionTagFor(displayName),
@@ -760,6 +771,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       playerName: world?.user.profile.displayName ?? '',
       priorSceneState: priorSceneStateForValidation,
       arcContext,
+      chaosDirective: chaosPromptBlock || undefined,
     });
   }
 

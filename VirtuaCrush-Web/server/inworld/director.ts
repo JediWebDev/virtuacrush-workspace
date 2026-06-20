@@ -49,6 +49,8 @@ export interface DirectorStage {
   priorSceneState?: string;
   /** Present only when a story arc is active this turn. */
   arcContext?: ArcContext;
+  /** Chaos beat for this turn — injected immediately before the user message. */
+  chaosDirective?: string;
 }
 
 export interface DirectorTurn { speaker: string; text: string }
@@ -233,7 +235,7 @@ ${stage.playerName ? `The player's name is "${stage.playerName}" — if a move h
 SCENE CONTINUITY: Always return "sceneSnapshot" with the CURRENT authoritative state. Player mobility/voice persist until you explicitly change them or narration clears them — never drop "restrained" or "gagged" silently. Update "present" and "departed" when cast changes. Also return "sceneState" as a short prose summary. Set "memorable" only when something genuinely durable happened that's worth recalling in a FUTURE conversation (a confession, a milestone, a kidnapping, a rescue); otherwise null.
 Output ONLY the JSON object — no preamble, no code fences, no commentary.
 
-${turns ? turns + '\n' : ''}User: ${stage.userMessage}
+${turns ? turns + '\n' : ''}${stage.chaosDirective?.trim() ? `${stage.chaosDirective.trim()}\n` : ''}User: ${stage.userMessage}
 
 JSON:`
   );
