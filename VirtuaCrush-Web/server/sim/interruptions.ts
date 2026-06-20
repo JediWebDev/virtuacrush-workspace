@@ -110,7 +110,7 @@ export function disruptionSpec(poolId: string): DisruptionSpec | null {
 // --- Planner (pure, seeded) ----------------------------------------------------
 
 export interface PlanOpts {
-  phase: 'home';
+  phase: 'home' | 'any';
   hasFriend: boolean;
   firstMeeting: boolean;
 }

@@ -27,9 +27,8 @@ function goalsForSceneNpc(n: ResolvedSceneNpc, companionId: string): Goal[] {
 }
 
 function isPresentInScene(n: ResolvedSceneNpc, coPresent: boolean): boolean {
-  if (n.stance === 'friend' || n.stance === 'bystander') return true;
-  if (coPresent && n.stance === 'enemy') return true;
-  return false;
+  if (!coPresent) return false;
+  return n.stance === 'friend' || n.stance === 'bystander' || n.stance === 'enemy';
 }
 
 /** Returns a copy of world with scene NPC stubs merged in. */

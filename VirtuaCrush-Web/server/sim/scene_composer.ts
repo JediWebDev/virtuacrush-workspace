@@ -173,11 +173,11 @@ export function composeScene(p: ComposeParams): SceneComposition {
     meetHook: p.firstMeeting
       ? (MEET_HOOK_BY_CHARACTER[p.characterId] ?? 'You matched online and it clicked immediately')
       : undefined,
-    disruptions: p.phase === 'home' ? planDisruptions(r, {
-      phase: 'home',
+    disruptions: planDisruptions(r, {
+      phase: p.phase === 'on_date' ? 'any' : 'home',
       hasFriend: cast.length > 0,
       firstMeeting: Boolean(p.firstMeeting),
-    }) : [],
+    }),
     firedDisruptions: [],
   };
 }

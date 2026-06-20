@@ -39,7 +39,7 @@ export interface PlanChaosOpts {
   chaosIntensity?: number;
 }
 
-const NPC_CHAOS_MIN_TURN = 7;
+const NPC_CHAOS_MIN_TURN = 4;
 
 function tagBoost(tags: readonly NarrativeTag[], arcTags: NarrativeTag[]): number {
   if (!arcTags.length) return 1;
@@ -133,9 +133,15 @@ function offSceneDisruptors(
   const presentNames = new Set(
     world.scene.presentNpcIds.map((id) => world.npcs[id]?.name?.toLowerCase()).filter(Boolean),
   );
-  return disruptiveNpcs(ctx.resolvedNpcs, ctx.arcTags.length ? ctx.arcTags : undefined).filter(
+  let pool = disruptiveNpcs(ctx.resolvedNpcs, ctx.arcTags.length ? ctx.arcTags : undefined).filter(
     (n) => !presentNames.has(n.name.trim().toLowerCase()),
   );
+  if (!pool.length && ctx.arcTags.length) {
+    pool = disruptiveNpcs(ctx.resolvedNpcs).filter(
+      (n) => !presentNames.has(n.name.trim().toLowerCase()),
+    );
+  }
+  return pool;
 }
 
 function pickSchemaNpcChaos(

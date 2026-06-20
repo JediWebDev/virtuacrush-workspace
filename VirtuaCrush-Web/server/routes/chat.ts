@@ -72,6 +72,7 @@ import {
   rerollUnfiredDisruptions,
   type PlannedDisruption,
 } from '../sim/interruptions';
+import { friendFor } from '../sim/scene_registry';
 import { detectWorldEvent } from '../db/world_util';
 import { buildSceneContext } from '../sim/scene_context';
 import { planChaosTurn, logChaosResidues } from '../sim/chaos_engine';
@@ -559,9 +560,27 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       situation.scene.location && settingHint
         ? suggestBystanderForSetting(settingHint)
         : null;
+    const chaosNpcRefs = [
+      ...sceneCastToNpcRefs(sceneCast),
+      ...(activeArc?.npcs ?? []),
+    ];
+    // Remote free-roam: ensure at least one off-scene friend exists for chaos
+    // (phone/text beats) when the composed cast and arc roster are empty.
+    if (
+      !situation.scene.location &&
+      !activeArc?.sceneAnchor?.coPresent &&
+      !chaosNpcRefs.some((n) => n.stance === 'friend' || n.stance === 'enemy')
+    ) {
+      const f = friendFor(characterId);
+      chaosNpcRefs.push({
+        name: f.name,
+        stance: 'friend',
+        archetypeId: 'companion_best_friend',
+        description: f.vibe,
+      });
+    }
     const resolvedSceneNpcs = mergeSceneNpcs([
-      resolveSceneNpcs(sceneCastToNpcRefs(sceneCast)),
-      activeArc?.npcs?.length ? resolveSceneNpcs(activeArc.npcs) : [],
+      resolveSceneNpcs(chaosNpcRefs),
       venueNpc ? [venueNpc] : [],
     ]);
     sceneNpcBlock = formatSceneNpcBlock(resolvedSceneNpcs);

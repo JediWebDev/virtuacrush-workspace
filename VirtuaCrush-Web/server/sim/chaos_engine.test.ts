@@ -27,14 +27,23 @@ function baseWorld(companionId = 'mina') {
 }
 
 describe('world_npcs', () => {
-  it('enrichWorldWithSceneNpcs adds friend to present list', () => {
+  it('enrichWorldWithSceneNpcs adds friend to present list when co-present', () => {
+    const world = baseWorld();
+    const friend = resolveSceneNpc({ name: 'Rachel', stance: 'friend', archetypeId: 'companion_best_friend' });
+    const enriched = enrichWorldWithSceneNpcs(world, [friend], { companionId: 'mina', coPresent: true });
+    const id = npcEntityIdFromName('Rachel');
+    assert.ok(enriched.npcs[id]);
+    assert.ok(enriched.scene.presentNpcIds.includes(id));
+    assert.equal(enriched.npcs[id]!.goals[0]?.id, 'increase_closeness');
+  });
+
+  it('remote chat keeps scene friend off-scene for chaos entrance', () => {
     const world = baseWorld();
     const friend = resolveSceneNpc({ name: 'Rachel', stance: 'friend', archetypeId: 'companion_best_friend' });
     const enriched = enrichWorldWithSceneNpcs(world, [friend], { companionId: 'mina', coPresent: false });
     const id = npcEntityIdFromName('Rachel');
     assert.ok(enriched.npcs[id]);
-    assert.ok(enriched.scene.presentNpcIds.includes(id));
-    assert.equal(enriched.npcs[id]!.goals[0]?.id, 'increase_closeness');
+    assert.ok(!enriched.scene.presentNpcIds.includes(id));
   });
 
   it('enemy off-scene gets outcompete goal and belief companion is with player on date', () => {
@@ -89,7 +98,50 @@ describe('chaos_engine', () => {
     assert.match(result.directiveBlock, /DISRUPTION THIS TURN/);
   });
 
-  it('suppresses ambient disruptions when co-present', () => {
+  it('fires ambient disruptions when co-present (remote-only suppression is at venue)', () => {
+    const comp: SceneComposition = {
+      composedAt: new Date().toISOString(),
+      forDate: '2026-01-01',
+      phase: 'home',
+      locationSlug: null,
+      timeLabel: 'evening',
+      weather: 'clear',
+      setting: 'at the art store',
+      details: [],
+      outfit: 'casual',
+      activity: 'talking',
+      cast: [],
+      disruptions: [{ id: 'd1', poolId: 'mom_call', kind: 'beat', atTurn: 1 }],
+      firedDisruptions: [],
+    };
+    const ctx = buildSceneContext({
+      world: baseWorld(),
+      composition: comp,
+      resolvedNpcs: [],
+      activeArc: {
+        id: 'test',
+        characterId: 'serena',
+        introNarrative: 'At the store.',
+        npcInstruction: 'x',
+        completionCriteria: 'y',
+        completionExamples: [],
+        tone: 'light',
+        rarity: 'common',
+        repeatable: false,
+        arcTags: ['romance'],
+        sceneAnchor: { setting: 'art store', situation: 'shopping', coPresent: true },
+      },
+      turn: 1,
+      companionId: 'serena',
+      companionName: 'Serena',
+      atVenue: false,
+    });
+    const result = planChaosTurn(ctx);
+    assert.ok(result.firedDisruption);
+    assert.match(result.directiveBlock, /DISRUPTION THIS TURN/);
+  });
+
+  it('suppresses ambient disruptions at a venue visit', () => {
     const comp: SceneComposition = {
       composedAt: new Date().toISOString(),
       forDate: '2026-01-01',
@@ -109,23 +161,11 @@ describe('chaos_engine', () => {
       world: baseWorld(),
       composition: comp,
       resolvedNpcs: [],
-      activeArc: {
-        id: 'test',
-        characterId: 'mina',
-        introNarrative: 'At the mall.',
-        npcInstruction: 'x',
-        completionCriteria: 'y',
-        completionExamples: [],
-        tone: 'light',
-        rarity: 'common',
-        repeatable: false,
-        arcTags: ['romance'],
-        sceneAnchor: { setting: 'mall', situation: 'shopping', coPresent: true },
-      },
+      activeArc: null,
       turn: 1,
       companionId: 'mina',
       companionName: 'Mina',
-      atVenue: false,
+      atVenue: true,
     });
     const result = planChaosTurn(ctx);
     assert.equal(result.firedDisruption, null);
@@ -139,7 +179,7 @@ describe('chaos_engine', () => {
       composition: null,
       resolvedNpcs: [rival],
       activeArc: null,
-      turn: 10,
+      turn: 5,
       companionId: 'mina',
       companionName: 'Mina',
       atVenue: false,
@@ -162,7 +202,7 @@ describe('chaos_engine', () => {
       composition: null,
       resolvedNpcs: [rival],
       activeArc: null,
-      turn: 10,
+      turn: 5,
       companionId: 'mina',
       companionName: 'Mina',
       atVenue: false,
