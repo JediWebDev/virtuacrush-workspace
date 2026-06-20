@@ -73,7 +73,7 @@ export const CHARACTERS: Character[] = [
         ],
         media: {
           type: "image",
-          src: "/api/assets/characters/Mina_Demon_Slayer_Cosplay.jpg",
+          src: "/api/assets/characters/Mina_DemonSlayer_Cosplay.png",
         },
       },
       {

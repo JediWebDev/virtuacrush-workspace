@@ -39,9 +39,17 @@ import {
   buildInitialSceneSnapshot,
   buildFreeRoamSceneSnapshot,
   formatSceneSnapshotBlock,
+  snapshotToSceneState,
   applySceneContinuityUpdate,
   type SceneSnapshot,
 } from '../inworld/scene_snapshot';
+import { applyEngineSceneDelta } from '../db/scene_apply';
+import {
+  buildEngineSceneDelta,
+  reapplyEngineLocks,
+  engineDeltaLogLine,
+  type EngineSceneDelta,
+} from '../sim/scene_delta';
 import { getCharacter, type CharacterId } from '../inworld/characters';
 import { getLocation } from '../inworld/locations';
 import {
@@ -492,6 +500,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let appliedAffinity: number | null = null;
   let effIntent: PlayerIntent | undefined;
   let effectPlan: EffectPlan | undefined;
+  let engineSceneDelta: EngineSceneDelta | null = null;
   {
     // === Two-step LLM: referee classifies intent first; director narrates after
     // engine consequences are known (warnings, responders stay causal).
@@ -744,6 +753,26 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       });
     }
 
+    engineSceneDelta = buildEngineSceneDelta({
+      message,
+      intent: effIntent!,
+      prior: priorSceneSnapshot,
+      world: world!,
+      allowLocationChange: !activeArc?.sceneAnchor,
+    });
+    if (engineSceneDelta) {
+      const preDirector = await applyEngineSceneDelta(
+        req.user!.id,
+        characterId,
+        priorSceneSnapshot,
+        engineSceneDelta,
+      );
+      priorSceneSnapshot = preDirector.snapshot;
+      console.log(
+        `[scene_delta] ${engineDeltaLogLine(engineSceneDelta)} user=${req.user!.id} character=${characterId}`,
+      );
+    }
+
     priorSceneStateForValidation = priorSceneSnapshot
       ? formatSceneSnapshotBlock(priorSceneSnapshot).trim()
       : (() => {
@@ -821,6 +850,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         requiredNames: sceneValidationInput ? requiredCastNames(sceneValidationInput) : [],
         seedSnapshot: sceneSnapshotSeed,
       });
+      continuity.snapshot = reapplyEngineLocks(continuity.snapshot, engineSceneDelta);
+      continuity.sceneState = snapshotToSceneState(continuity.snapshot);
       dirOut.sceneState = continuity.sceneState;
 
       // Scene-state validation for structured stories (active arc with scene anchor).
@@ -840,7 +871,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           const fixNarrator = dirOut.turns
             .filter((t) => t.speaker.toLowerCase() === 'narrator')
             .map((t) => t.text);
-          const fixContinuity = applySceneContinuityUpdate({
+          let fixContinuity = applySceneContinuityUpdate({
             priorSnapshot: priorSceneSnapshot,
             sceneSnapshotPatch: dirOut.sceneSnapshotPatch,
             sceneStateProse: dirOut.sceneState,
@@ -848,6 +879,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
             requiredNames: requiredCastNames(sceneValidationInput),
             seedSnapshot: sceneSnapshotSeed,
           });
+          fixContinuity.snapshot = reapplyEngineLocks(fixContinuity.snapshot, engineSceneDelta);
+          fixContinuity.sceneState = snapshotToSceneState(fixContinuity.snapshot);
           dirOut.sceneState = fixContinuity.sceneState;
           continuity = fixContinuity;
           check = validateSceneStateUpdate({

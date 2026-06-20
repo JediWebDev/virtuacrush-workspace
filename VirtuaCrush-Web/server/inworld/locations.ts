@@ -238,6 +238,55 @@ export function getLocation(slug: string): CityLocation | null {
   return LOCATIONS.find((l) => l.slug === slug) ?? null;
 }
 
+const VENUE_KEYWORD_ALIASES: Record<string, string> = {
+  mall: 'westside_commons',
+  coffee: 'the_grind',
+  'coffee shop': 'the_grind',
+  cafe: 'the_grind',
+  'art store': 'palette_paper',
+  theater: 'ember_theater',
+  cinema: 'ember_theater',
+  movies: 'ember_theater',
+  home: 'player_home',
+};
+
+function normVenueText(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9\s']/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Fuzzy-match free text or an intent target to a registry slug.
+ * Returns null when no known venue matches (caller may still set free-text location).
+ */
+export function resolveVenueSlug(text: string): string | null {
+  const raw = (text ?? '').trim();
+  if (!raw) return null;
+
+  const norm = normVenueText(raw);
+  if (!norm) return null;
+
+  if (norm === 'player_home' || norm === 'your place' || norm === 'my place' || norm === 'home') {
+    return 'player_home';
+  }
+
+  const exact = getLocation(raw);
+  if (exact) return exact.slug;
+
+  for (const loc of LOCATIONS) {
+    const slugSpaced = loc.slug.replace(/_/g, ' ');
+    if (norm === loc.slug || norm === slugSpaced) return loc.slug;
+    if (norm.includes(loc.slug) || norm.includes(slugSpaced)) return loc.slug;
+    if (norm.includes(normVenueText(loc.name))) return loc.slug;
+    if (norm.includes(normVenueText(loc.shortName))) return loc.slug;
+  }
+
+  for (const [keyword, slug] of Object.entries(VENUE_KEYWORD_ALIASES)) {
+    if (norm.includes(keyword)) return slug;
+  }
+
+  return null;
+}
+
 /** All locations visible to a given character (includes that character's home). */
 export function locationsForCharacter(characterId: string): CityLocation[] {
   return LOCATIONS.filter(

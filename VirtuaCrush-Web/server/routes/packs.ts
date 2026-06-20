@@ -50,8 +50,11 @@ import {
 import {
   buildInitialSceneSnapshot,
   formatSceneSnapshotBlock,
+  snapshotToSceneState,
   applySceneContinuityUpdate,
 } from '../inworld/scene_snapshot';
+import { applyEngineSceneDelta } from '../db/scene_apply';
+import { buildEngineSceneDelta, reapplyEngineLocks } from '../sim/scene_delta';
 import { getUserStory, listUserStories } from '../db/user_stories';
 import { userStoryToPack } from '../inworld/user_pack';
 import { ensureUserCharacterLoaded } from '../db/user_characters';
@@ -502,6 +505,25 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
     sceneSnapshotSeed = buildInitialSceneSnapshot(sceneValidationInput);
     priorSnapshot = sceneSnapshotSeed;
   }
+
+  const packEngineDelta = buildEngineSceneDelta({
+    message,
+    intent: { type: 'observation', subtype: 'wait' },
+    prior: priorSnapshot,
+    world: {} as never,
+    allowLocationChange: !pack.sceneAnchor,
+  });
+  if (packEngineDelta) {
+    const preDirector = await applyEngineSceneDelta(
+      req.user!.id,
+      session.characterId,
+      priorSnapshot,
+      packEngineDelta,
+      { persistVenue: false },
+    );
+    priorSnapshot = preDirector.snapshot;
+  }
+
   const priorSceneBlock = priorSnapshot
     ? formatSceneSnapshotBlock(priorSnapshot)
     : session.sceneState
@@ -597,6 +619,8 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
       requiredNames: sceneValidationInput ? requiredCastNames(sceneValidationInput) : [],
       seedSnapshot: sceneSnapshotSeed,
     });
+    continuity.snapshot = reapplyEngineLocks(continuity.snapshot, packEngineDelta);
+    continuity.sceneState = snapshotToSceneState(continuity.snapshot);
     result.sceneState = continuity.sceneState;
 
     if (sceneValidationInput && result.sceneState) {
@@ -621,6 +645,8 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
           requiredNames: requiredCastNames(sceneValidationInput),
           seedSnapshot: sceneSnapshotSeed,
         });
+        continuity.snapshot = reapplyEngineLocks(continuity.snapshot, packEngineDelta);
+        continuity.sceneState = snapshotToSceneState(continuity.snapshot);
         result.sceneState = continuity.sceneState;
         check = validateSceneStateUpdate({
           priorSceneState,
