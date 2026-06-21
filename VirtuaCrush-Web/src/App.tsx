@@ -111,8 +111,8 @@ export default function App() {
           {isPublicPage ? <Footer /> : null}
         </div>
         <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-          <div className="absolute -left-1/4 top-0 h-[800px] w-[800px] rounded-full bg-accent/15 blur-[120px]" />
-          <div className="absolute -right-1/4 bottom-0 h-[600px] w-[600px] rounded-full bg-brand-sapphire/15 blur-[100px]" />
+          <div className="absolute -left-1/4 top-0 h-[800px] w-[800px] rounded-full bg-accent/8 blur-[120px]" />
+          <div className="absolute -right-1/4 bottom-0 h-[600px] w-[600px] rounded-full bg-brand-sapphire/8 blur-[100px]" />
         </div>
       </div>
     );
@@ -241,8 +241,8 @@ export default function App() {
       </div>
 
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute -left-1/4 top-0 h-[800px] w-[800px] rounded-full bg-accent/10 blur-[120px]" />
-        <div className="absolute -right-1/4 bottom-0 h-[600px] w-[600px] rounded-full bg-brand-sapphire/15 blur-[100px]" />
+        <div className="absolute -left-1/4 top-0 h-[800px] w-[800px] rounded-full bg-accent/8 blur-[120px]" />
+        <div className="absolute -right-1/4 bottom-0 h-[600px] w-[600px] rounded-full bg-brand-sapphire/8 blur-[100px]" />
       </div>
     </div>
   );
