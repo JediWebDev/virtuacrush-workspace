@@ -64,9 +64,6 @@ import {
   formatStoryActDirective,
   resolvePackNodeAct,
   sceneDirectiveFromAnchor,
-  validateSceneStateUpdate,
-  formatSceneValidationRetryHint,
-  repairSceneStateCast,
   requiredCastNames,
 } from '../inworld/story_structure';
 
@@ -599,7 +596,6 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
   let continuity = applySceneContinuityUpdate({
     priorSnapshot,
     sceneSnapshotPatch: null,
-    sceneStateProse: session.sceneState,
     narratorTexts: [],
     requiredNames: sceneValidationInput ? requiredCastNames(sceneValidationInput) : [],
     seedSnapshot: sceneSnapshotSeed,
@@ -614,7 +610,6 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
     continuity = applySceneContinuityUpdate({
       priorSnapshot,
       sceneSnapshotPatch: result.sceneSnapshotPatch,
-      sceneStateProse: result.sceneState,
       narratorTexts: narratorTextsForScene,
       requiredNames: sceneValidationInput ? requiredCastNames(sceneValidationInput) : [],
       seedSnapshot: sceneSnapshotSeed,
@@ -622,47 +617,6 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
     continuity.snapshot = reapplyEngineLocks(continuity.snapshot, packEngineDelta);
     continuity.sceneState = snapshotToSceneState(continuity.snapshot);
     result.sceneState = continuity.sceneState;
-
-    if (sceneValidationInput && result.sceneState) {
-      const narratorTexts = narratorTextsForScene;
-      let check = validateSceneStateUpdate({
-        priorSceneState,
-        nextSceneState: result.sceneState,
-        requiredNames: requiredCastNames(sceneValidationInput),
-        narratorTexts,
-      });
-      if (!check.ok) {
-        const rawFix = await completePrompt(fullPrompt + formatSceneValidationRetryHint(check), { json: true });
-        result = parsePackScene(rawFix, companionName);
-        const fixNarrator = result.turns
-          .filter((t) => t.speaker.toLowerCase() === 'narrator')
-          .map((t) => t.text);
-        continuity = applySceneContinuityUpdate({
-          priorSnapshot,
-          sceneSnapshotPatch: result.sceneSnapshotPatch,
-          sceneStateProse: result.sceneState,
-          narratorTexts: fixNarrator,
-          requiredNames: requiredCastNames(sceneValidationInput),
-          seedSnapshot: sceneSnapshotSeed,
-        });
-        continuity.snapshot = reapplyEngineLocks(continuity.snapshot, packEngineDelta);
-        continuity.sceneState = snapshotToSceneState(continuity.snapshot);
-        result.sceneState = continuity.sceneState;
-        check = validateSceneStateUpdate({
-          priorSceneState,
-          nextSceneState: result.sceneState,
-          requiredNames: requiredCastNames(sceneValidationInput),
-          narratorTexts: fixNarrator,
-        });
-        if (!check.ok && check.droppedCharacters?.length) {
-          result.sceneState = repairSceneStateCast(
-            result.sceneState,
-            check.droppedCharacters,
-            priorSceneState,
-          );
-        }
-      }
-    }
   } catch (err) {
     console.error('[packs] turn generation error:', err);
     return res.status(502).json({ error: 'generation_failed' });

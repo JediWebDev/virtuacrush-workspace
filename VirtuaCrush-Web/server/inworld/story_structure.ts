@@ -6,7 +6,8 @@
 //     explicit narrator transition beat
 
 import type { PackNode, StoryPack } from './pack_types';
-import type { SceneAnchor, ArcPhaseInstructions } from './arcs';
+import type { SceneAnchor, ArcPhaseInstructions, StoryArc } from './arcs';
+import { defaultMeetBadge, meetArcReadyToComplete, type MeetCompletionInput } from './meet_arc';
 
 export type StoryAct = 'beginning' | 'middle' | 'end';
 
@@ -91,20 +92,18 @@ export function formatStoryActDirective(act: StoryAct, mode: 'arc' | 'pack'): st
       return (
         `\n\n=== STORY ACT: ${label} ===\n` +
         `You are in the SETUP of this arc. Establish where everyone is, what just happened, and the emotional stakes. ` +
-        `Do NOT resolve or complete the arc yet. Hold arcStatus "ongoing".`
+        `Do not rush to wrap up — let the beat breathe.`
       );
     }
     if (act === 'middle') {
       return (
         `\n\n=== STORY ACT: ${label} ===\n` +
-        `You are in the CONFRONTATION / development phase. Escalate complications, deepen the relationship beat, and let the player’s choices matter. ` +
-        `Stay "ongoing" until a genuine climax moment; use "climax" only when the breaking point arrives.`
+        `You are in the CONFRONTATION / development phase. Escalate complications, deepen the relationship beat, and let the player’s choices matter.`
       );
     }
     return (
       `\n\n=== STORY ACT: ${label} ===\n` +
-      `You are in RESOLUTION. Pay off the arc’s setup and middle beats. ` +
-      `Use arcStatus "climax" for the peak beat, then "completed" only after a satisfying denouement — not mid-scene.`
+      `You are in RESOLUTION. Pay off the arc’s setup and middle beats with a satisfying emotional landing.`
     );
   }
 
@@ -130,21 +129,54 @@ export function formatStoryActDirective(act: StoryAct, mode: 'arc' | 'pack'): st
   );
 }
 
-/** Maps arc director status + turn count to a three-act phase. */
+/** Maps user turn count to a three-act phase (engine-owned — not LLM arcStatus). */
 export function resolveArcAct(opts: {
-  arcStatus?: 'ongoing' | 'climax' | 'completed' | 'abandoned';
   userTurnsSinceStart: number;
   /** Meet-cute arcs resolve faster — enter the end act after a few turns. */
   isMeetArc?: boolean;
 }): StoryAct {
-  if (opts.arcStatus === 'climax' || opts.arcStatus === 'completed') return 'end';
   if (opts.isMeetArc) {
     if (opts.userTurnsSinceStart <= 1) return 'beginning';
     if (opts.userTurnsSinceStart <= 4) return 'middle';
     return 'end';
   }
   if (opts.userTurnsSinceStart <= 2) return 'beginning';
-  return 'middle';
+  if (opts.userTurnsSinceStart <= 6) return 'middle';
+  return 'end';
+}
+
+const MIN_TURNS_BEFORE_ARC_COMPLETE = 2;
+
+/** Engine decides when an active arc is done — no LLM arcStatus field. */
+export function evaluateArcCompletion(opts: {
+  arc: StoryArc;
+  storyAct: StoryAct;
+  userTurnsSinceStart: number;
+  arcJustStarted: boolean;
+  meetInput?: MeetCompletionInput;
+}): { shouldComplete: boolean; badge: { title: string; description: string } | null } {
+  if (opts.arcJustStarted || opts.userTurnsSinceStart < MIN_TURNS_BEFORE_ARC_COMPLETE) {
+    return { shouldComplete: false, badge: null };
+  }
+
+  if (opts.arc.isMeetArc && opts.meetInput) {
+    if (meetArcReadyToComplete(opts.meetInput)) {
+      return { shouldComplete: true, badge: defaultMeetBadge(opts.arc) };
+    }
+    return { shouldComplete: false, badge: null };
+  }
+
+  if (opts.storyAct === 'end' && opts.userTurnsSinceStart >= MIN_TURNS_BEFORE_ARC_COMPLETE) {
+    return {
+      shouldComplete: true,
+      badge: {
+        title: opts.arc.badgeTitle || 'Story Complete',
+        description: opts.arc.badgeDescription || 'You saw this beat through.',
+      },
+    };
+  }
+
+  return { shouldComplete: false, badge: null };
 }
 
 /** Shortest-path depth from `start` for act inference when nodes lack an explicit `act`. */

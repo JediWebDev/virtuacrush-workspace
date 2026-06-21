@@ -183,15 +183,7 @@ export function buildDirectorPrompt(stage: DirectorStage): string {
 ${stage.arcContext.npcInstruction}
 ${stage.arcContext.storyAct ? formatStoryActDirective(stage.arcContext.storyAct, 'arc') : ''}
 ${stage.arcContext.sceneDirective ?? ''}
-
-ARC COMPLETION CRITERIA: ${stage.arcContext.completionCriteria}
-Examples of completion: ${stage.arcContext.completionExamples.map((e, i) => `(${i + 1}) ${e}`).join(' ')}
-${stage.arcContext.isMeetArc ? formatMeetArcPacingBlock() : ''}
-
-USER FREEDOM — ABSURDITY IS NOT ABANDONMENT: If the player responds with something chaotic, unhinged, or unorthodox, they are still engaging — keep arcStatus "ongoing" or "climax". Only emit "abandoned" if the player has persistently changed the subject over multiple turns or explicitly exited the conversation.
-PACING: ${stage.arcContext.isMeetArc
-    ? 'Meet-cute only — complete as soon as criteria are met (see MEET-CUTE PACING). Do not drag past a natural landing.'
-    : 'Hold "ongoing" across multiple turns. Use "climax" to mark the emotional breaking point immediately before resolution. Only emit "completed" after a genuine climax beat.'}` : '';
+${stage.arcContext.isMeetArc ? formatMeetArcPacingBlock() : ''}` : '';
 
   const sceneSoFar = stage.priorSceneState
     ? `\n\n=== SCENE CONTINUITY (engine-authoritative — honor this; persists beyond recent messages) ===\n${stage.priorSceneState}`
@@ -199,9 +191,7 @@ PACING: ${stage.arcContext.isMeetArc
 
   const intentField =
     `"intent": { "type": "<social|romance|transaction|movement|conflict|work|observation>", "subtype": "<short label>", "target": "<npc id, venue, or omit>", "magnitude": "<modest|big|lavish or omit>" }`;
-  const outputSchema = stage.arcContext
-    ? `JSON: { ${intentField}, "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable", "arcStatus", "earnedBadge" }`
-    : `JSON: { ${intentField}, "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable" }`;
+  const outputSchema = `JSON: { ${intentField}, "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneSnapshot", "memorable" }`;
 
   return (
 `${stage.companionSystem}${stage.directives}${arcBlock}${sceneSoFar}
@@ -212,7 +202,7 @@ Classify the player's last message in "intent" (what they did — not engine con
 Speakers: ${stage.companionName} (speech only), narrator (actions/scene), ${stage.npcs.map((n) => n.name).join(', ') || 'NPCs as listed'}.
 Include ≥1 "${stage.companionName}" line. Keep lines short. Output JSON only.
 Choices: 2–3 PLAYER tap-messages (first person / *actions*), never "${stage.companionName}" lines.${stage.playerName ? ` Player: "${stage.playerName}".` : ''}
-Return sceneSnapshot with current location, present, player mobility/voice (persist until cleared).
+Return sceneSnapshot with location, present cast, and player mobility/voice (engine merges — do not drop required characters).
 
 ${turns ? turns + '\n' : ''}${stage.chaosDirective?.trim() ? `${stage.chaosDirective.trim()}\n` : ''}User: ${stage.userMessage}
 

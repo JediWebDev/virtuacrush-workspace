@@ -8,17 +8,17 @@
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { enforceMessageQuota } from '../middleware/rateLimit';
-import { streamChat, completePrompt, streamPrompt, type ChatMessage } from '../inworld/chat';
+import { streamPrompt, type ChatMessage } from '../inworld/chat';
 import { buildDirectorPrompt, buildDirectorPromptParts, parseDirectorOutput, parseDirectorTurns, companionTagFor, turnsToTranscript, type Actor, type ArcContext, type ReplyChoice } from '../inworld/director';
 import { selectArc, getArc, type SceneAnchor, type StoryArc } from '../inworld/arcs';
 import { getUserStory } from '../db/user_stories';
 import { userStoryToArc } from '../inworld/user_arc';
 import { resolveMeetFirstStoryArc, arcOpeningLine } from '../inworld/active_arc';
-import { hasCompletedMeetArc, meetArcIdFor, MEET_AFFINITY_REWARD, meetArcReadyToComplete, resolveMeetCompletionBadge } from '../inworld/meet_arc';
+import { hasCompletedMeetArc, meetArcIdFor, MEET_AFFINITY_REWARD } from '../inworld/meet_arc';
 import { resolveFreeRoamWindow, freeRoamWindowClause, type FreeRoamWindow } from '../db/chat_window';
 import { sanitizeRoleplayTranscript } from '../inworld/transcript_sanitize';
 import { ensureUserCharacterLoaded } from '../db/user_characters';
-import { getArcState, setArcActive, clearArc as clearArcState, incrementAbandonmentStrikes, resetAbandonmentStrikes, saveCompletedArc, getCompletedArcIds } from '../db/arc_state';
+import { getArcState, setArcActive, clearArc as clearArcState, resetAbandonmentStrikes, saveCompletedArc, getCompletedArcIds } from '../db/arc_state';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
 import { pool } from '../db/pool';
@@ -111,11 +111,9 @@ import { budgetHistory } from '../llm/budget';
 import {
   formatPersistentSceneDirective,
   resolveArcAct,
+  evaluateArcCompletion,
   sceneDirectiveFromAnchor,
   buildInitialSceneState,
-  validateSceneStateUpdate,
-  formatSceneValidationRetryHint,
-  repairSceneStateCast,
   requiredCastNames,
   resolveArcNpcInstruction,
   type SceneDirectiveInput,
@@ -127,6 +125,16 @@ import {
 // phrasing, which is the main lever against verbatim self-repetition.
 const RECENT_TURNS_FOR_PROMPT = 14;
 
+function directorRequiredCastNames(
+  sceneInput: SceneDirectiveInput | null,
+  companionName: string,
+  coPresent: boolean,
+  sceneCast: SceneCastMember[],
+): string[] {
+  if (sceneInput) return requiredCastNames(sceneInput);
+  if (!coPresent) return [companionName];
+  return ['you', companionName, ...sceneCast.map((m) => m.name)];
+}
 
 /** Formats a SceneAnchor as the authoritative "current setting" block, replacing
  *  formatSituationBlock() for arcs that place the companion and player together. */
@@ -780,7 +788,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
     let lookNote = '';
     if (companionEntity) {
-      const coPresentNow = priorSceneSnapshot?.coPresent ?? false;
+      const coPresentNow =
+        activeArc?.sceneAnchor?.coPresent ?? priorSceneSnapshot?.coPresent ?? false;
       const lastOutfit = describeLastSeenOutfit(companionEntity.knowledge.lastSeenOutfit, 'player', itemsById(world.user.inventory));
       if (coPresentNow && lastOutfit) {
         lookNote = `\n\nLAST TIME YOU SAW THE PLAYER they were wearing ${lastOutfit}; you do not know if that has changed. Do NOT invent a different outfit.`;
@@ -891,32 +900,33 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           }
         }
       } catch (streamErr) {
-        console.warn('[chat] director stream failed; falling back to complete:', streamErr);
-        raw1 = await completePrompt('', dirOpts);
+        console.warn('[chat] director stream failed:', streamErr);
       }
-      if (!raw1.trim()) raw1 = await completePrompt('', dirOpts);
 
       let dirOut = parseDirectorOutput(raw1, displayName);
       if (badReply(dirOut.turns)) {
-        const raw2 = await completePrompt('', dirOpts);
-        dirOut = parseDirectorOutput(raw2, displayName);
-        if (badReply(dirOut.turns)) {
-          console.warn(
-            `[chat] director output unusable twice (${characterId}); raw tail: …${(raw2 || raw1 || '').slice(-220)}`,
-          );
-        }
+        dirOut = {
+          ...dirOut,
+          turns: [{ speaker: displayName, text: 'Mm — say that again? You had me for a second there.' }],
+        };
       }
 
       const narratorTextsForScene = dirOut.turns
         .filter((t) => t.speaker.toLowerCase() === 'narrator')
         .map((t) => t.text);
+      const castRequired = directorRequiredCastNames(
+        sceneValidationInput,
+        displayName,
+        activeArc?.sceneAnchor?.coPresent ?? priorSceneSnapshot?.coPresent ?? false,
+        sceneCast,
+      );
       let continuity = applySceneContinuityUpdate({
         priorSnapshot: priorSceneSnapshot,
         sceneSnapshotPatch: dirOut.sceneSnapshotPatch,
-        sceneStateProse: dirOut.sceneState,
         narratorTexts: narratorTextsForScene,
-        requiredNames: sceneValidationInput ? requiredCastNames(sceneValidationInput) : [],
+        requiredNames: castRequired,
         seedSnapshot: sceneSnapshotSeed,
+        coPresentLock: activeArc?.sceneAnchor?.coPresent === true,
       });
       continuity.snapshot = reapplyEngineLocks(continuity.snapshot, engineSceneDelta);
       continuity.sceneState = snapshotToSceneState(continuity.snapshot);
@@ -945,53 +955,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         priorSceneSnapshot = continuity.snapshot;
       }
 
-      // Scene-state validation for structured stories (active arc with scene anchor).
-      if (sceneValidationInput && dirOut.sceneState) {
-        let check = validateSceneStateUpdate({
-          priorSceneState: priorSceneStateForValidation,
-          nextSceneState: dirOut.sceneState,
-          requiredNames: requiredCastNames(sceneValidationInput),
-          narratorTexts: narratorTextsForScene,
-        });
-        if (!check.ok) {
-          const rawFix = await completePrompt(
-            '',
-            { ...dirOpts, user: dirOpts.user + formatSceneValidationRetryHint(check) },
-          );
-          dirOut = parseDirectorOutput(rawFix, displayName);
-          const fixNarrator = dirOut.turns
-            .filter((t) => t.speaker.toLowerCase() === 'narrator')
-            .map((t) => t.text);
-          let fixContinuity = applySceneContinuityUpdate({
-            priorSnapshot: priorSceneSnapshot,
-            sceneSnapshotPatch: dirOut.sceneSnapshotPatch,
-            sceneStateProse: dirOut.sceneState,
-            narratorTexts: fixNarrator,
-            requiredNames: requiredCastNames(sceneValidationInput),
-            seedSnapshot: sceneSnapshotSeed,
-          });
-          fixContinuity.snapshot = reapplyEngineLocks(fixContinuity.snapshot, engineSceneDelta);
-          fixContinuity.sceneState = snapshotToSceneState(fixContinuity.snapshot);
-          dirOut.sceneState = fixContinuity.sceneState;
-          continuity = fixContinuity;
-          check = validateSceneStateUpdate({
-            priorSceneState: priorSceneStateForValidation,
-            nextSceneState: dirOut.sceneState,
-            requiredNames: requiredCastNames(sceneValidationInput),
-            narratorTexts: fixNarrator,
-          });
-          if (!check.ok && check.droppedCharacters?.length) {
-            dirOut.sceneState = repairSceneStateCast(
-              dirOut.sceneState,
-              check.droppedCharacters,
-              priorSceneStateForValidation,
-            );
-          }
-        }
-      }
-
       let dturns = dirOut.turns.some((t) => looksDegenerate(t.text)) ? [] : dirOut.turns;
-      const arcResult = arcContext ? dirOut.arc : null;
       replyChoices = dirOut.choices ?? [];
       if (dirOut.memorable) {
         recordStoryBeat(req.user!.id, characterId, { summary: dirOut.memorable, source: 'memorable' });
@@ -1017,8 +981,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       ];
       assistantFull = sanitizeRoleplayTranscript(turnsToTranscript(replyTurns));
 
-      // --- Arc evaluation ---
-      if (arcResult && activeArc) {
+      // --- Arc evaluation (engine-owned — no LLM arcStatus) ---
+      if (activeArc && arcContext) {
         const startedAt = arcStateResult.activeArcStartedAt ?? new Date(0);
         const { rows: tcRows } = await pool.query<{ n: number }>(
           `SELECT count(*)::int AS n FROM chat_messages
@@ -1026,46 +990,40 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           [req.user!.id, characterId, startedAt],
         );
         const userTurnsSinceStart = Number(tcRows[0]?.n ?? 0) + 1;
+        const storyAct = resolveArcAct({
+          userTurnsSinceStart,
+          isMeetArc: !!activeArc.isMeetArc,
+        });
 
-        let arcStatus = arcResult.arcStatus;
-        if (
-          activeArc.isMeetArc &&
-          !arcJustStarted &&
-          arcStatus !== 'completed' &&
-          meetArcReadyToComplete({
-            userTurnsSinceStart,
-            playerDisplayName: world?.user.profile.displayName ?? '',
-            companionName: displayName,
-            recentText: [...turns, { role: 'user' as const, content: message }]
-              .slice(-14)
-              .map((m) => m.content)
-              .join('\n'),
-            currentUserMessage: message,
-          })
-        ) {
-          arcStatus = 'completed';
-        }
+        const evaluation = evaluateArcCompletion({
+          arc: activeArc,
+          storyAct,
+          userTurnsSinceStart,
+          arcJustStarted,
+          meetInput: activeArc.isMeetArc
+            ? {
+                userTurnsSinceStart,
+                playerDisplayName: world?.user.profile.displayName ?? '',
+                companionName: displayName,
+                recentText: [...turns, { role: 'user' as const, content: message }]
+                  .slice(-14)
+                  .map((m) => m.content)
+                  .join('\n'),
+                currentUserMessage: message,
+              }
+            : undefined,
+        });
 
-        const completionBadge = activeArc.isMeetArc
-          ? resolveMeetCompletionBadge(activeArc, arcResult.earnedBadge)
-          : arcResult.earnedBadge;
-        if (arcStatus === 'completed' && !arcJustStarted && completionBadge) {
-          if (userTurnsSinceStart >= 2) {
-            earnedBadge = completionBadge;
-            completedArcIdForPost = activeArc.id;
-            void saveCompletedArc(req.user!.id, characterId, activeArc, earnedBadge).catch(() => {});
-            void clearArcState(req.user!.id, characterId).catch(() => {});
-            if (activeArc.isMeetArc) {
-              affinityAwarded = MEET_AFFINITY_REWARD;
-              replyChoices = [];
-            }
+        if (evaluation.shouldComplete && evaluation.badge) {
+          earnedBadge = evaluation.badge;
+          completedArcIdForPost = activeArc.id;
+          void saveCompletedArc(req.user!.id, characterId, activeArc, earnedBadge).catch(() => {});
+          void clearArcState(req.user!.id, characterId).catch(() => {});
+          if (activeArc.isMeetArc) {
+            affinityAwarded = MEET_AFFINITY_REWARD;
+            replyChoices = [];
           }
-        } else if (arcStatus === 'abandoned') {
-          const newStrikes = await incrementAbandonmentStrikes(req.user!.id, characterId);
-          if (newStrikes >= 3) {
-            void clearArcState(req.user!.id, characterId).catch(() => {});
-          }
-        } else if ((arcStatus === 'ongoing' || arcStatus === 'climax') && arcStateResult.abandonmentStrikes > 0) {
+        } else if (arcStateResult.abandonmentStrikes > 0) {
           void resetAbandonmentStrikes(req.user!.id, characterId).catch(() => {});
         }
       }
@@ -1079,7 +1037,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       // Perception update for NEXT turn: companion learns name/bio, and outfit when co-present.
       if (companionEntity) {
         const learnedFacts = observePlayer({
-          coPresent: priorSceneSnapshot?.coPresent ?? activeArc?.sceneAnchor?.coPresent ?? false,
+          coPresent: continuity.snapshot.coPresent ?? activeArc?.sceneAnchor?.coPresent ?? false,
           message,
           profile: world!.user.profile,
           existingFacts: companionEntity.knowledge.knownPlayerFacts,

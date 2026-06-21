@@ -373,30 +373,37 @@ export function requiredNamesFromDirective(input: SceneDirectiveInput | null): s
 export function applySceneContinuityUpdate(opts: {
   priorSnapshot: SceneSnapshot | null;
   sceneSnapshotPatch: SceneSnapshotPatch | null;
-  sceneStateProse: string;
+  /** Ignored — sceneState is always derived from the merged snapshot. */
+  sceneStateProse?: string;
   narratorTexts: string[];
   requiredNames?: string[];
   seedSnapshot?: SceneSnapshot | null;
+  /** When true, coPresent stays true regardless of model patch (anchored in-person arcs). */
+  coPresentLock?: boolean;
 }): { snapshot: SceneSnapshot; sceneState: string } {
   const base =
     opts.priorSnapshot ??
     opts.seedSnapshot ??
     emptySceneSnapshot();
 
-  let snapshot = mergeSceneSnapshot(base, opts.sceneSnapshotPatch, {
-    requiredNames: opts.requiredNames ?? [],
-    narratorTexts: opts.narratorTexts,
-  });
+  let snapshot = opts.sceneSnapshotPatch
+    ? mergeSceneSnapshot(base, opts.sceneSnapshotPatch, {
+        requiredNames: opts.requiredNames ?? [],
+        narratorTexts: opts.narratorTexts,
+      })
+    : { ...base };
 
   const castCheck = validateSnapshotCast(snapshot, opts.requiredNames ?? [], opts.narratorTexts);
   if (!castCheck.ok && castCheck.dropped?.length) {
     snapshot = repairSnapshotCast(snapshot, castCheck.dropped);
   }
 
-  const sceneState =
-    opts.sceneSnapshotPatch || !opts.sceneStateProse.trim()
-      ? snapshotToSceneState(snapshot)
-      : opts.sceneStateProse.trim().slice(0, 1200);
+  if (opts.coPresentLock) {
+    snapshot = { ...snapshot, coPresent: true };
+  }
+
+  // Engine-authored prose only — never trust LLM sceneState text (it drifts and drops cast).
+  const sceneState = snapshotToSceneState(snapshot);
 
   return { snapshot, sceneState };
 }
