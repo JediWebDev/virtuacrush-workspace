@@ -43,34 +43,15 @@ export default function AvatarImageStudio({
 }: AvatarImageStudioProps) {
   return (
     <div className="rounded-2xl border border-black/[0.06] bg-black/[0.02] p-4 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-5">
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,280px)_1fr] lg:items-start">
-        <div className="relative mx-auto w-full max-w-[280px] lg:mx-0">
-          <div className="aspect-square relative overflow-hidden rounded-2xl border border-black/10 bg-black/[0.03] shadow-lg dark:border-white/10 dark:bg-white/[0.03]">
-            <img src={imageSrc} alt={alt} className="h-full w-full object-cover object-top" />
-            {busy ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-2xl bg-black/50 text-white backdrop-blur-[2px]">
-                <Loader2 size={28} className="animate-spin" />
-                <span className="text-xs font-medium">Working…</span>
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="min-w-0">
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-stone-700 dark:text-stone-300">
-            {promptLabel}
-          </label>
-          {promptHint ? (
-            <p className="mb-2 text-xs leading-relaxed text-stone-600 dark:text-stone-400">{promptHint}</p>
+      <div className="relative mx-auto w-full max-w-[280px]">
+        <div className="aspect-square relative overflow-hidden rounded-2xl border border-black/10 bg-black/[0.03] shadow-lg dark:border-white/10 dark:bg-white/[0.03]">
+          <img src={imageSrc} alt={alt} className="h-full w-full object-cover object-top" />
+          {busy ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-2xl bg-black/50 text-white backdrop-blur-[2px]">
+              <Loader2 size={28} className="animate-spin" />
+              <span className="text-xs font-medium">Working…</span>
+            </div>
           ) : null}
-          <textarea
-            className={textareaClass}
-            rows={5}
-            value={prompt}
-            onChange={(e) => onPromptChange(e.target.value)}
-            placeholder={promptPlaceholder}
-            disabled={busy}
-          />
         </div>
       </div>
 
@@ -111,6 +92,23 @@ export default function AvatarImageStudio({
             <ImagePlus size={16} /> Remove photo
           </button>
         ) : null}
+      </div>
+
+      <div className="mt-4">
+        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-stone-700 dark:text-stone-300">
+          {promptLabel}
+        </label>
+        {promptHint ? (
+          <p className="mb-2 text-xs leading-relaxed text-stone-600 dark:text-stone-400">{promptHint}</p>
+        ) : null}
+        <textarea
+          className={textareaClass}
+          rows={5}
+          value={prompt}
+          onChange={(e) => onPromptChange(e.target.value)}
+          placeholder={promptPlaceholder}
+          disabled={busy}
+        />
       </div>
 
       {!isPro ? (
