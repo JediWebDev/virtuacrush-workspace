@@ -1,10 +1,7 @@
-// The scene director. Two modes:
-//   * Legacy two-call: buildDirectorPrompt (narration only; intent came from a
-//     separate referee call) + parseDirectorTurns.
-//   * MERGED single-call (preferred): buildScenePrompt + parseScene classify the
-//     player's action AND narrate the scene in one JSON object — halving LLM
-//     calls (latency + cost). The engine still applies consequences from the
-//     returned `intent`; prompt rules keep narration consistent with them.
+// The scene director. Free-roam chat uses buildDirectorPrompt: one JSON object
+// with intent classification + lines + sceneSnapshot. The engine (not the model)
+// applies affinity, scene locks, chaos, and secrets from the parsed intent and
+// snapshot. buildScenePrompt remains for legacy/pack paths.
 // All parsing is fail-soft so a malformed model response never blanks a turn.
 import type { ChatMessage } from './chat';
 import { validateIntent, type PlayerIntent } from '../sim/intent';
@@ -71,6 +68,8 @@ export interface ReplyChoice {
 
 /** Extended output when an arc is active. */
 export interface DirectorOutput {
+  /** Classified player action — engine applies affinity/rules after narration. */
+  intent: PlayerIntent | null;
   turns: DirectorTurn[];
   arc: ArcResult | null;
   /** LLM-generated suggested next moves for the player (may be empty). */
@@ -198,15 +197,18 @@ PACING: ${stage.arcContext.isMeetArc
     ? `\n\n=== SCENE CONTINUITY (engine-authoritative — honor this; persists beyond recent messages) ===\n${stage.priorSceneState}`
     : '';
 
+  const intentField =
+    `"intent": { "type": "<social|romance|transaction|movement|conflict|work|observation>", "subtype": "<short label>", "target": "<npc id, venue, or omit>", "magnitude": "<modest|big|lavish or omit>" }`;
   const outputSchema = stage.arcContext
-    ? `JSON: { "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable", "arcStatus", "earnedBadge" }`
-    : `JSON: { "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable" }`;
+    ? `JSON: { ${intentField}, "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable", "arcStatus", "earnedBadge" }`
+    : `JSON: { ${intentField}, "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable" }`;
 
   return (
 `${stage.companionSystem}${stage.directives}${arcBlock}${sceneSoFar}
 
 === HOW TO REPLY ===
 ${outputSchema}
+Classify the player's last message in "intent" (what they did — not engine consequences). Hostility toward ${stage.companionName} = conflict; explicit purchase/gift/tip = transaction.
 Speakers: ${stage.companionName} (speech only), narrator (actions/scene), ${stage.npcs.map((n) => n.name).join(', ') || 'NPCs as listed'}.
 Include ≥1 "${stage.companionName}" line. Keep lines short. Output JSON only.
 Choices: 2–3 PLAYER tap-messages (first person / *actions*), never "${stage.companionName}" lines.${stage.playerName ? ` Player: "${stage.playerName}".` : ''}
@@ -325,6 +327,7 @@ function cleanField(v: unknown): string {
 
 export function parseDirectorOutput(raw: string, companionName: string): DirectorOutput {
   const text = (raw ?? '').trim();
+  let intent: PlayerIntent | null = null;
   let turns: DirectorTurn[] = [];
   let arc: ArcResult | null = null;
   let choices: ReplyChoice[] = [];
@@ -339,6 +342,7 @@ export function parseDirectorOutput(raw: string, companionName: string): Directo
     for (const json of [candidate, repairJson(candidate)]) {
       try {
         const obj = JSON.parse(json) as Record<string, unknown>;
+        if ('intent' in obj) intent = validateIntent(obj.intent);
         if (Array.isArray(obj.lines)) {
           const t = mapLines(obj.lines as unknown[], companionName);
           if (t.length) turns = t;
@@ -364,12 +368,13 @@ export function parseDirectorOutput(raw: string, companionName: string): Directo
     }
   }
 
+  if (!intent) intent = salvageIntent(text);
   if (turns.length === 0) turns = parseDirectorTurns(text, companionName);
   const companionLines = turns
     .filter((t) => t.speaker.toLowerCase() === companionName.toLowerCase())
     .map((t) => t.text);
   choices = sanitizeReplyChoices(choices, companionName, companionLines);
-  return { turns, arc, choices, sceneState, sceneSnapshotPatch, memorable };
+  return { intent, turns, arc, choices, sceneState, sceneSnapshotPatch, memorable };
 }
 
 /** Renders ordered turns into the canonical tagged transcript the UI reads. */

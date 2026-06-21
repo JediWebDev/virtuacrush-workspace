@@ -18,6 +18,7 @@ test('buildDirectorPrompt asks for JSON and lists speakers, no tag rules', () =>
     userMessage: '*dumps soap in the fountain*',
   });
   assert.ok(p.includes('"lines"'));
+  assert.ok(p.includes('"intent"'));
   assert.ok(p.includes('"Serena"'));
   assert.ok(p.includes('narrator'));
   assert.ok(p.includes('Security'));
@@ -128,6 +129,17 @@ test('buildDirectorPrompt: choices are player tap-to-send, separate from lines',
   });
   assert.ok(p.includes('PLAYER tap-messages'));
   assert.ok(p.includes('never "Serena" lines'));
+});
+
+test('parseDirectorOutput: extracts intent for engine consequence pass', () => {
+  const raw = JSON.stringify({
+    intent: { type: 'romance', subtype: 'flirt', target: 'lexi' },
+    lines: [{ speaker: 'Lexi', text: 'Oh, is that so?' }],
+    choices: [],
+  });
+  const out = parseDirectorOutput(raw, 'Lexi');
+  assert.equal(out.intent?.type, 'romance');
+  assert.equal(out.intent?.subtype, 'flirt');
 });
 
 test('parseDirectorOutput: drops companion dialogue and narrator-style choices', () => {

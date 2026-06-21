@@ -97,16 +97,15 @@ import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineForPrompt } from '../db/rol
 import { assembleWorld } from '../db/sim_world';
 import type { PlayerIntent } from '../sim/intent';
 import { validateIntent } from '../sim/intent';
-import { extractIntent, enrichRefereeFromSnapshot, refereeInputFromWorld } from '../sim/referee';
 import type { WorldState, NpcEntity } from '../sim/world';
 import { consequencesFor } from '../sim/rules';
-import { planEffects, formatEngineFactsBlock, type EffectPlan } from '../sim/effects';
+import { planEffects, type EffectPlan } from '../sim/effects';
 import { applyEffects } from '../db/sim_apply';
 import { describeKnownPlayer, observePlayer, describeAppearance } from '../sim/player';
 import { describeLastSeenOutfit, itemsById, wornItems, describeOutfit, describeGrooming } from '../sim/wardrobe';
 import { upsertNpcState } from '../db/npc_state';
 import { looksDegenerate } from '../llm/quality';
-import { refereeCompleteOpts, directorCompleteOpts } from '../llm/models';
+import { directorCompleteOpts } from '../llm/models';
 import { streamingDirectorTranscript } from '../llm/stream_director';
 import { budgetHistory } from '../llm/budget';
 import {
@@ -516,12 +515,11 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let effectPlan: EffectPlan | undefined;
   let engineSceneDelta: EngineSceneDelta | null = null;
   {
-    // === Two-step LLM: referee classifies intent first; director narrates after
-    // engine consequences are known (warnings, responders stay causal).
+    // === Single LLM: director classifies intent + narrates. Engine owns affinity,
+    // scene locks, chaos, secrets, and NPC scheduling before/after the call.
     world = await assembleWorld(req.user!.id, characterId);
     companionEntity = world.npcs[characterId];
     priorSceneSnapshot = readSceneSnapshot(companionEntity?.knowledge as unknown as Record<string, unknown> | undefined);
-    const authority = 'the authorities';
 
     npcs = [];
 
@@ -690,20 +688,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     }
     const driveReaction = (companionEntity?.knowledge.pendingDriveReaction as string | undefined) || '';
 
-    // Step 1 — Referee: classify the player's action (cheap, fast LLM call).
     const conversationScenePatch = inferSceneDeltaFromConversation(turns, message, priorSceneSnapshot);
-    const refereeInput = enrichRefereeFromSnapshot(
-      refereeInputFromWorld(world, message, turns),
-      priorSceneSnapshot,
-      conversationScenePatch,
-    );
-    const refereeOut = await extractIntent(
-      refereeInput,
-      (prompt) => completePrompt(prompt, refereeCompleteOpts()),
-    );
-    effIntent = validateIntent(refereeOut.intent) ?? { type: 'observation', subtype: 'wait' };
-    effectPlan = planEffects(consequencesFor(effIntent, world));
-    const engineFacts = formatEngineFactsBlock(effectPlan, authority);
 
     if (arcContext && activeArc) {
       const startedAt = arcStateResult.activeArcStartedAt ?? new Date(0);
@@ -756,8 +741,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
     engineSceneDelta = buildEngineSceneDelta({
       message,
-      intent: effIntent!,
-      sceneHints: refereeOut.sceneHints,
+      intent: { type: 'observation', subtype: 'wait' },
       prior: priorSceneSnapshot,
       world: world!,
       conversation: conversationScenePatch,
@@ -819,7 +803,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       lookNote +
       emotionTone +
       (driveReaction ? `\n\n${driveReaction}` : '') +
-      engineFacts +
       formatMemoryBlock(memories) +
       formatCharacterStoryBlock(displayName, storyBeats);
 
@@ -873,8 +856,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
   try {
     {
-      // Step 2 — Director: narrate the scene (intent already classified; engine
-      // facts are injected into the prompt). Degenerate output triggers one retry.
+      // Director: classify intent + narrate in one streamed call.
       const badReply = (lines: { text: string }[]) =>
         lines.length === 0 || lines.some((t) => looksDegenerate(t.text));
       const dirParts = buildDirectorPromptParts({
@@ -939,6 +921,29 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       continuity.snapshot = reapplyEngineLocks(continuity.snapshot, engineSceneDelta);
       continuity.sceneState = snapshotToSceneState(continuity.snapshot);
       dirOut.sceneState = continuity.sceneState;
+
+      effIntent = validateIntent(dirOut.intent) ?? { type: 'observation', subtype: 'wait' };
+      effectPlan = planEffects(consequencesFor(effIntent, world!));
+
+      const postIntentDelta = buildEngineSceneDelta({
+        message: '',
+        intent: effIntent,
+        prior: continuity.snapshot,
+        world: world!,
+        allowLocationChange: !activeArc?.sceneAnchor,
+      });
+      if (postIntentDelta) {
+        const postApply = await applyEngineSceneDelta(
+          req.user!.id,
+          characterId,
+          continuity.snapshot,
+          postIntentDelta,
+        );
+        continuity.snapshot = reapplyEngineLocks(postApply.snapshot, postIntentDelta);
+        continuity.sceneState = snapshotToSceneState(continuity.snapshot);
+        dirOut.sceneState = continuity.sceneState;
+        priorSceneSnapshot = continuity.snapshot;
+      }
 
       // Scene-state validation for structured stories (active arc with scene anchor).
       if (sceneValidationInput && dirOut.sceneState) {
