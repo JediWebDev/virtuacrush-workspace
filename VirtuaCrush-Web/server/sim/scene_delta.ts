@@ -29,8 +29,9 @@ const GO_VENUE_RE =
 const AT_LOCATION_RE =
   /\b(I'?m|we'?re|we\s+are)\s+(?:already\s+)?(?:at|in|inside)\s+(?:the\s+)?(.+?)(?:[.!?,]|$)/i;
 
+/** Achieved escape only — not aspirational "cut me free" while still bound. */
 const CLEAR_MOBILITY_RE =
-  /\b(free|released|untied|unbound|escaped|loose|wriggled?\s+free|broke\s+free|slipped?\s+free|slip\s+(?:out|free)|out\s+of\s+the\s+cuffs)\b/i;
+  /\b(released|untied|unbound|escaped|loose|wriggled?\s+free|broke\s+free|slipped?\s+free|slip\s+(?:out|free)|out\s+of\s+the\s+(?:cuffs|bindings|rope)|wrists?\s+(?:are|were)\s+free)\b/i;
 const ESCAPE_MOBILITY_RE =
   /\b(slip\s+out|wriggled?\s+free|broke\s+free|escaped|untied|unbound|released|out\s+of\s+the)\b/i;
 const RESTRAINED_RE =
@@ -89,6 +90,18 @@ export function extractSceneDeltaFromMessage(
     if (voice) patch.playerVoice = voice;
   }
 
+  // Muffled speech outside *actions* implies gag is still on.
+  if (!patch.playerVoice && /\bmm+[mf]+(?:[!?.]|$|\s)/i.test(message)) {
+    patch.playerVoice = 'gagged';
+  }
+  if (
+    !patch.playerMobility &&
+    (_prior?.player.mobility === 'restrained' ||
+      /\b(wrists?\s+(?:are|still)\s+tied|bound\s+behind|still\s+tied|tied\s+behind)\b/i.test(message))
+  ) {
+    patch.playerMobility = 'restrained';
+  }
+
   if (GO_HOME_RE.test(message)) {
     patch.venueSlug = null;
     patch.coPresent = false;
@@ -127,7 +140,8 @@ export function extractSceneDeltaFromIntent(
     };
   }
 
-  const rawTarget = intent.target ?? intent.detail ?? '';
+  const rawTarget = (intent.target ?? intent.detail ?? '').trim();
+  if (!rawTarget || /^venue$/i.test(rawTarget)) return {};
   const slug = resolveVenueSlug(rawTarget);
   if (slug) {
     return {

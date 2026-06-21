@@ -130,3 +130,20 @@ test('reapplyEngineLocks: director cannot undo engine location', () => {
   const locked = reapplyEngineLocks(afterDirector, delta);
   assert.ok(locked.location?.includes('Commons') || locked.location?.includes('Mall'));
 });
+
+test('extractSceneDeltaFromMessage: "cut me free" does not clear restraint prematurely', () => {
+  const prior = emptySceneSnapshot();
+  prior.player.mobility = 'restrained';
+  prior.player.voice = 'gagged';
+  const d = extractSceneDeltaFromMessage('Mmf! Mmf! *I try saying hurry up and cut me free.*', prior);
+  assert.notEqual(d.playerMobility, 'free');
+  assert.equal(d.playerVoice, 'gagged');
+});
+
+test('extractSceneDeltaFromIntent: ignores schema placeholder target "venue"', () => {
+  const d = extractSceneDeltaFromIntent(
+    { type: 'movement', subtype: 'go', target: 'venue' },
+    {} as never,
+  );
+  assert.deepEqual(d, {});
+});

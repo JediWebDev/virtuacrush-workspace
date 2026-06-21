@@ -5,6 +5,7 @@ import {
   inferSceneDeltaFromConversation,
   shouldSuppressHomeBaseline,
   reconcileSceneSnapshotForPrompt,
+  isCrisisScene,
 } from './scene_prompt';
 import { buildFreeRoamSceneSnapshot } from '../inworld/scene_snapshot';
 
@@ -53,4 +54,19 @@ test('reconcileSceneSnapshotForPrompt: coPresent clears stale remote location', 
   assert.equal(next.coPresent, true);
   assert.doesNotMatch(next.location, /\(remote\)/);
   assert.ok(next.present.some((n) => n.toLowerCase() === 'you'));
+});
+
+test('isCrisisScene: true when player is restrained', () => {
+  const prior = buildFreeRoamSceneSnapshot({ companionName: 'Lexi', coPresent: true });
+  prior.player.mobility = 'restrained';
+  assert.equal(isCrisisScene(prior, [], 'mmf'), true);
+});
+
+test('inferSceneDeltaFromConversation: cab interior from driver seat action', () => {
+  const patch = inferSceneDeltaFromConversation(
+    [],
+    '*I hobble to the drivers side, open the door, get in and close the door.*',
+    null,
+  );
+  assert.match(patch.location ?? '', /cab/i);
 });

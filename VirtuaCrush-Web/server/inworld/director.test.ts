@@ -31,7 +31,7 @@ test('buildDirectorPromptParts: stable system vs variable user for caching', () 
     companionSystem: 'You are Serena.\n\nROLEPLAY rules here.',
     companionTag: 'SERENA',
     companionName: 'Serena',
-    npcs: [] as const,
+    npcs: [] as import('../inworld/director').Actor[],
     directives: '\n\nAt the mall.',
     history: [{ role: 'user' as const, content: 'hi' }],
     userMessage: 'hello',

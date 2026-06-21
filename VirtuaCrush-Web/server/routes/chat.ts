@@ -49,6 +49,7 @@ import {
   shouldSuppressHomeBaseline,
   formatActiveSceneDirective,
   reconcileSceneSnapshotForPrompt,
+  isCrisisScene,
 } from '../sim/scene_prompt';
 import {
   buildEngineSceneDelta,
@@ -96,7 +97,7 @@ import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineForPrompt } from '../db/rol
 import { assembleWorld } from '../db/sim_world';
 import type { PlayerIntent } from '../sim/intent';
 import { validateIntent } from '../sim/intent';
-import { extractIntent, refereeInputFromWorld } from '../sim/referee';
+import { extractIntent, enrichRefereeFromSnapshot, refereeInputFromWorld } from '../sim/referee';
 import type { WorldState, NpcEntity } from '../sim/world';
 import { consequencesFor } from '../sim/rules';
 import { planEffects, formatEngineFactsBlock, type EffectPlan } from '../sim/effects';
@@ -625,6 +626,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       companionId: characterId,
       companionName: displayName,
       atVenue: Boolean(situation.scene.location),
+      coPresent: priorSceneSnapshot?.coPresent ?? !!situation.scene.location,
+      suppressAmbientDisruptions: isCrisisScene(priorSceneSnapshot, turns, message),
     });
     const worldEvent = detectWorldEvent(message);
     const chaos = planChaosTurn(sceneCtx, { worldEvent });
@@ -689,22 +692,11 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
     // Step 1 — Referee: classify the player's action (cheap, fast LLM call).
     const conversationScenePatch = inferSceneDeltaFromConversation(turns, message, priorSceneSnapshot);
-    const refereeInput = refereeInputFromWorld(world, message, turns);
-    const refSceneWhere =
-      conversationScenePatch.location ??
-      (priorSceneSnapshot?.location && !/\(remote\)$/i.test(priorSceneSnapshot.location)
-        ? priorSceneSnapshot.location
-        : null);
-    if (refSceneWhere) {
-      refereeInput.scene = {
-        ...refereeInput.scene,
-        where: refSceneWhere,
-        phase:
-          conversationScenePatch.coPresent || priorSceneSnapshot?.coPresent
-            ? 'on_date'
-            : refereeInput.scene.phase,
-      };
-    }
+    const refereeInput = enrichRefereeFromSnapshot(
+      refereeInputFromWorld(world, message, turns),
+      priorSceneSnapshot,
+      conversationScenePatch,
+    );
     const refereeOut = await extractIntent(
       refereeInput,
       (prompt) => completePrompt(prompt, refereeCompleteOpts()),

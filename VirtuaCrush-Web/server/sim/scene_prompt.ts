@@ -18,6 +18,8 @@ const PHYSICAL_SCENE_RE =
 const LOCATION_HINTS: { re: RegExp; label: string }[] = [
   { re: /\bcargo\s+bay\b/i, label: 'cargo bay of a van' },
   { re: /\bmoving\s+van\b|\binside the van\b|\bvan'?s rear\b|\brear doors\b/i, label: 'inside a van' },
+  { re: /\b(drivers?\s+side|driver'?s?\s+seat|passenger\s+seat|center\s+console|behind the wheel)\b/i, label: "Creditor's cab" },
+  { re: /\b(get\s+in(?:to)?|slide\s+behind)\s+the\s+(?:cab|truck|car)\b|\bin(?:side|to)\s+the\s+cab\b/i, label: "Creditor's cab" },
   { re: /\balley\b/i, label: 'an alley' },
   { re: /\bstairwell\b/i, label: 'a stairwell' },
   { re: /\bwarehouse\b/i, label: 'a warehouse' },
@@ -80,6 +82,15 @@ export function inferSceneDeltaFromConversation(
 
 export function conversationHasPhysicalScene(history: HistoryLine[], message = ''): boolean {
   return PHYSICAL_SCENE_RE.test(historyBlob(history, message, 16));
+}
+
+/** Skip ambient chaos (staff interruptions, etc.) during active captivity / escape beats. */
+export function isCrisisScene(snapshot: SceneSnapshot | null, history: HistoryLine[], message: string): boolean {
+  if (!snapshot) return conversationHasPhysicalScene(history, message);
+  if (snapshot.player.mobility !== 'free' || snapshot.player.voice !== 'free') return true;
+  const loc = (snapshot.location ?? '').toLowerCase();
+  if (/\b(van|cargo|cab|truck|captive|hostage)\b/.test(loc)) return true;
+  return conversationHasPhysicalScene(history, message);
 }
 
 export function shouldSuppressHomeBaseline(opts: {

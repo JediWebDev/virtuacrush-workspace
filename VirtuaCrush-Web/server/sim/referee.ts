@@ -5,6 +5,8 @@
 // the already-tested parseRefereeOutput (fail-soft).
 import { parseRefereeOutput, INTENT_CATEGORIES, type RefereeOutput } from './intent';
 import type { WorldState } from './world';
+import type { SceneSnapshot, SceneSnapshotPatch } from '../inworld/scene_snapshot';
+import { isStaleRemoteLocation } from './scene_prompt';
 
 export interface RefereeActor { id: string; name: string; role?: string }
 export interface RefereeInput {
@@ -12,6 +14,8 @@ export interface RefereeInput {
   scene: { phase: string; where: string; companion?: RefereeActor | null; present: RefereeActor[] };
   roster: RefereeActor[]; // known people the referee may reference by id
   history?: { role: 'user' | 'assistant'; content: string }[];
+  /** Engine snapshot constraints (mobility/voice/notes) — authoritative for classification. */
+  playerCondition?: string;
 }
 
 const CATEGORY_GUIDE: Record<string, string> = {
@@ -65,7 +69,7 @@ Omit "sceneHints" entirely when nothing about place or constraints changed.
 
 INPUT CONVENTION: text wrapped in *asterisks* is a physical ACTION the player performs; other text is them speaking aloud.
 
-CURRENT SCENE: phase=${input.scene.phase}, location=${input.scene.where}. Companion: ${companion}. Present: ${present}.
+CURRENT SCENE: phase=${input.scene.phase}, location=${input.scene.where}. Companion: ${companion}. Present: ${present}.${input.playerCondition ? ` Player condition (authoritative): ${input.playerCondition}.` : ''}
 KNOWN PEOPLE (use these ids for "target" and "affectedNpcs"): ${roster}
 
 ${history ? 'RECENT:\n' + history + '\n' : ''}PLAYER: ${input.message}
@@ -92,6 +96,46 @@ export async function extractIntent(
   } catch {
     return { interpretation: '', intent: { type: 'observation', subtype: 'wait' }, affectedNpcs: [], npcIntentHints: [] };
   }
+}
+
+/** Overlay engine scene snapshot onto referee context (world.scene is often stale at home). */
+export function enrichRefereeFromSnapshot(
+  input: RefereeInput,
+  snapshot: SceneSnapshot | null,
+  conversation?: Partial<SceneSnapshotPatch>,
+): RefereeInput {
+  const loc =
+    conversation?.location ??
+    (snapshot?.location && !isStaleRemoteLocation(snapshot.location) ? snapshot.location : null);
+
+  const coPresent = conversation?.coPresent ?? snapshot?.coPresent;
+
+  const playerParts: string[] = [];
+  if (snapshot?.player.mobility && snapshot.player.mobility !== 'free') {
+    playerParts.push(`mobility=${snapshot.player.mobility}`);
+  }
+  if (snapshot?.player.voice && snapshot.player.voice !== 'free') {
+    playerParts.push(`voice=${snapshot.player.voice}`);
+  }
+  if (snapshot?.player.notes?.trim()) {
+    playerParts.push(snapshot.player.notes.trim().slice(0, 100));
+  }
+
+  const presentFromSnap =
+    snapshot?.present
+      ?.filter((n) => n.trim() && n.toLowerCase() !== 'you')
+      .map((name) => ({ id: name.toLowerCase().replace(/[^a-z0-9]+/g, '_'), name })) ?? [];
+
+  return {
+    ...input,
+    scene: {
+      ...input.scene,
+      ...(loc ? { where: loc } : {}),
+      ...(coPresent ? { phase: 'on_date' } : {}),
+      ...(presentFromSnap.length ? { present: presentFromSnap } : {}),
+    },
+    playerCondition: playerParts.length ? playerParts.join('; ') : input.playerCondition,
+  };
 }
 
 /** Builds a RefereeInput from a WorldState + the player's message. Pure. */

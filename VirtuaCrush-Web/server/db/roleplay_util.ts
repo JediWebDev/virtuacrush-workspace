@@ -60,7 +60,8 @@ export function directorDisciplineCompact(characterName: string): string {
     `\n\nVOICE (strict): "${characterName}" lines = first-person speech ONLY. ` +
     `"narrator" = neutral third-person actions/scene (*asterisks*). ` +
     `NPC tags like [HANA] = speech only. Never write the player's actions. ` +
-    `Tag companion dialogue as "${characterName}" in JSON — not [${tag}] in strings.`
+    `Tag companion dialogue as "${characterName}" in JSON — not [${tag}] in strings. ` +
+    `No *actions* or stage directions inside character speech lines.`
   );
 }
 

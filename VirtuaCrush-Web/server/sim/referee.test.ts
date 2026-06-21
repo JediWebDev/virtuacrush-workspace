@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRefereePrompt, extractIntent, type RefereeInput } from './referee';
+import { buildRefereePrompt, extractIntent, enrichRefereeFromSnapshot, type RefereeInput } from './referee';
+import { buildFreeRoamSceneSnapshot } from '../inworld/scene_snapshot';
 
 const input: RefereeInput = {
   message: '*I tie up Becca and empty the register*',
@@ -26,6 +27,23 @@ test('buildRefereePrompt lists all categories + schema keys + scene + message', 
   assert.ok(!p.includes('prefer "social" or "romance"'));
   assert.ok(p.includes('becca (Becca)')); // roster id (name)
   assert.ok(p.includes('PLAYER: *I tie up Becca and empty the register*'));
+});
+
+test('enrichRefereeFromSnapshot: uses snapshot location and player condition', () => {
+  const snap = buildFreeRoamSceneSnapshot({ companionName: 'Lexi', coPresent: true });
+  snap.location = "Creditor's cab";
+  snap.player.mobility = 'restrained';
+  snap.player.voice = 'gagged';
+  const enriched = enrichRefereeFromSnapshot(
+    { ...input, scene: { ...input.scene, phase: 'home', where: 'home' } },
+    snap,
+    {},
+  );
+  const p = buildRefereePrompt(enriched);
+  assert.ok(p.includes("Creditor's cab"));
+  assert.ok(p.includes('phase=on_date'));
+  assert.ok(p.includes('mobility=restrained'));
+  assert.ok(p.includes('voice=gagged'));
 });
 
 test('buildRefereePrompt: truncates assistant history to first line', () => {
