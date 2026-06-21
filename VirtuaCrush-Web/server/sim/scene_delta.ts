@@ -1,6 +1,6 @@
 // Engine-owned scene setting deltas — detected from user input before the
-// director narrates. Phase 1: heuristics + movement intent; no extra LLM call.
-import type { PlayerIntent } from './intent';
+// director narrates. Phase 1: heuristics + movement intent; Phase 2: referee sceneHints.
+import type { PlayerIntent, RefereeSceneHints } from './intent';
 import type { WorldState } from './world';
 import { getLocation, resolveVenueSlug } from '../inworld/locations';
 import {
@@ -11,7 +11,7 @@ import {
   type SceneSnapshotPatch,
 } from '../inworld/scene_snapshot';
 
-export type SceneDeltaSource = 'heuristic' | 'intent';
+export type SceneDeltaSource = 'heuristic' | 'referee' | 'intent';
 
 export interface EngineSceneDelta {
   patch: SceneSnapshotPatch;
@@ -147,29 +147,77 @@ export function extractSceneDeltaFromIntent(
   return {};
 }
 
+/** Map referee sceneHints → scene patch (declarative setting / constraints). */
+export function extractSceneDeltaFromSceneHints(
+  hints: RefereeSceneHints | undefined,
+): Partial<SceneSnapshotPatch> & { venueSlug?: string | null } {
+  if (!hints) return {};
+
+  const patch: Partial<SceneSnapshotPatch> & { venueSlug?: string | null } = {};
+
+  if (hints.playerMobility === 'free' || hints.playerMobility === 'restrained' || hints.playerMobility === 'incapacitated') {
+    patch.playerMobility = hints.playerMobility;
+  }
+  if (hints.playerVoice === 'free' || hints.playerVoice === 'gagged' || hints.playerVoice === 'muted') {
+    patch.playerVoice = hints.playerVoice;
+  }
+  if (hints.playerNotes?.trim()) {
+    patch.playerNotes = hints.playerNotes.trim().slice(0, 240);
+  }
+
+  const phrase = hints.locationPhrase?.trim();
+  if (phrase) {
+    const slug = resolveVenueSlug(phrase);
+    if (slug) {
+      patch.venueSlug = slug;
+      patch.location = getLocation(slug)?.name ?? phrase;
+    } else {
+      patch.location = phrase.slice(0, 200);
+    }
+  }
+  if (hints.coPresent !== undefined) patch.coPresent = hints.coPresent;
+
+  return patch;
+}
+
+type PartialPatch = Partial<SceneSnapshotPatch> & { venueSlug?: string | null };
+
 function mergePartialPatches(
-  heuristic: Partial<SceneSnapshotPatch> & { venueSlug?: string | null },
-  intent: Partial<SceneSnapshotPatch> & { venueSlug?: string | null },
+  heuristic: PartialPatch,
+  referee: PartialPatch,
+  intent: PartialPatch,
   allowLocationChange: boolean,
 ): SceneSnapshotPatch & { venueSlug?: string | null } {
   const out: SceneSnapshotPatch & { venueSlug?: string | null } = {};
 
-  if (heuristic.playerMobility) out.playerMobility = heuristic.playerMobility;
-  if (heuristic.playerVoice) out.playerVoice = heuristic.playerVoice;
-  if (intent.playerMobility && !out.playerMobility) out.playerMobility = intent.playerMobility;
-  if (intent.playerVoice && !out.playerVoice) out.playerVoice = intent.playerVoice;
+  out.playerMobility = heuristic.playerMobility ?? referee.playerMobility ?? intent.playerMobility;
+  out.playerVoice = heuristic.playerVoice ?? referee.playerVoice ?? intent.playerVoice;
+  out.playerNotes = heuristic.playerNotes ?? referee.playerNotes ?? intent.playerNotes;
 
   if (allowLocationChange) {
-    const loc = intent.location ?? heuristic.location;
-    const co = intent.coPresent ?? heuristic.coPresent;
+    out.location = intent.location ?? referee.location ?? heuristic.location;
+    out.coPresent =
+      intent.coPresent ?? referee.coPresent ?? heuristic.coPresent;
     const venue =
-      intent.venueSlug !== undefined ? intent.venueSlug : heuristic.venueSlug;
-    if (loc) out.location = loc;
-    if (co !== undefined) out.coPresent = co;
+      intent.venueSlug !== undefined
+        ? intent.venueSlug
+        : referee.venueSlug !== undefined
+          ? referee.venueSlug
+          : heuristic.venueSlug;
     if (venue !== undefined) out.venueSlug = venue;
   }
 
+  // Strip undefined keys so empty merge stays empty.
+  for (const k of Object.keys(out) as (keyof typeof out)[]) {
+    if (out[k] === undefined) delete out[k];
+  }
   return out;
+}
+
+function patchHasContent(p: PartialPatch, allowLocation: boolean): boolean {
+  if (p.playerMobility || p.playerVoice || p.playerNotes) return true;
+  if (!allowLocation) return false;
+  return Boolean(p.location || p.coPresent !== undefined || p.venueSlug !== undefined);
 }
 
 function lockedFieldsForPatch(
@@ -178,10 +226,15 @@ function lockedFieldsForPatch(
   venueSlug?: string | null,
 ): (keyof SceneSnapshotPatch)[] {
   const locked: (keyof SceneSnapshotPatch)[] = [];
-  if (patch.playerMobility) locked.push('playerMobility');
-  if (patch.playerVoice) locked.push('playerVoice');
+  if (patch.playerMobility && (sources.includes('heuristic') || sources.includes('referee'))) {
+    locked.push('playerMobility');
+  }
+  if (patch.playerVoice && (sources.includes('heuristic') || sources.includes('referee'))) {
+    locked.push('playerVoice');
+  }
+  if (patch.playerNotes && sources.includes('referee')) locked.push('playerNotes');
   if (patch.location || patch.coPresent !== undefined || venueSlug !== undefined) {
-    if (sources.includes('intent') || sources.includes('heuristic')) {
+    if (sources.includes('intent') || sources.includes('referee') || sources.includes('heuristic')) {
       if (patch.location) locked.push('location');
       if (patch.coPresent !== undefined) locked.push('coPresent');
     }
@@ -189,10 +242,11 @@ function lockedFieldsForPatch(
   return locked;
 }
 
-/** Combines heuristic + intent deltas into one engine apply unit. */
+/** Combines heuristic + referee hints + intent deltas into one engine apply unit. */
 export function buildEngineSceneDelta(opts: {
   message: string;
   intent: PlayerIntent;
+  sceneHints?: RefereeSceneHints;
   prior: SceneSnapshot | null;
   world: WorldState;
   /** When false (e.g. active arc anchor), skip location/coPresent/venue changes. */
@@ -200,22 +254,28 @@ export function buildEngineSceneDelta(opts: {
 }): EngineSceneDelta | null {
   const allowLocation = opts.allowLocationChange !== false;
   const heuristicRaw = extractSceneDeltaFromMessage(opts.message, opts.prior);
+  const refereeRaw = allowLocation
+    ? extractSceneDeltaFromSceneHints(opts.sceneHints)
+    : extractSceneDeltaFromSceneHints(
+        opts.sceneHints
+          ? {
+              playerMobility: opts.sceneHints.playerMobility,
+              playerVoice: opts.sceneHints.playerVoice,
+              playerNotes: opts.sceneHints.playerNotes,
+            }
+          : undefined,
+      );
   const intentRaw = allowLocation
     ? extractSceneDeltaFromIntent(opts.intent, opts.world)
-    : extractSceneDeltaFromIntent({ ...opts.intent, type: 'observation' }, opts.world);
+    : {};
 
-  const merged = mergePartialPatches(heuristicRaw, intentRaw, allowLocation);
+  const merged = mergePartialPatches(heuristicRaw, refereeRaw, intentRaw, allowLocation);
   const { venueSlug, ...patch } = merged as SceneSnapshotPatch & { venueSlug?: string | null };
 
   const sources: SceneDeltaSource[] = [];
-  const hasHeuristic =
-    Boolean(heuristicRaw.playerMobility || heuristicRaw.playerVoice) ||
-    (allowLocation && Boolean(heuristicRaw.location || heuristicRaw.coPresent !== undefined || heuristicRaw.venueSlug !== undefined));
-  const hasIntent =
-    allowLocation &&
-    Boolean(intentRaw.location || intentRaw.coPresent !== undefined || intentRaw.venueSlug !== undefined);
-  if (hasHeuristic) sources.push('heuristic');
-  if (hasIntent) sources.push('intent');
+  if (patchHasContent(heuristicRaw, allowLocation)) sources.push('heuristic');
+  if (patchHasContent(refereeRaw, allowLocation)) sources.push('referee');
+  if (patchHasContent(intentRaw, allowLocation)) sources.push('intent');
 
   if (Object.keys(patch).length === 0 && venueSlug === undefined) return null;
 
@@ -246,5 +306,6 @@ export function engineDeltaLogLine(delta: EngineSceneDelta): string {
   if (delta.venueSlug !== undefined) parts.push(`venueSlug=${delta.venueSlug ?? 'home'}`);
   if (delta.patch.playerMobility) parts.push(`mobility=${delta.patch.playerMobility}`);
   if (delta.patch.playerVoice) parts.push(`voice=${delta.patch.playerVoice}`);
+  if (delta.patch.playerNotes) parts.push(`notes=${delta.patch.playerNotes.slice(0, 40)}`);
   return parts.join(' ');
 }

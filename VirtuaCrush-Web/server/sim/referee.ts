@@ -48,6 +48,14 @@ Neutral chitchat with no clear positive or negative intent is "observation" (sub
 Reserve "transaction" for explicit purchases, gifts, or tips only.
 Positive bonding (compliments, comfort, flirting) belongs in "social" or "romance".
 
+SCENE HINTS (optional "sceneHints" object — include ONLY when the player clearly establishes or changes physical setting/constraints this turn; do NOT invent):
+- locationPhrase: short place name if they moved or declared where they are (e.g. "the basement", "the mall")
+- coPresent: true if they are physically with the companion; false if separated/remote/captive elsewhere
+- playerMobility: "free" | "restrained" | "incapacitated" when their ability to move is clearly stated or implied
+- playerVoice: "free" | "gagged" | "muted" when speech is clearly constrained or restored
+- playerNotes: one short phrase for durable player condition (e.g. "tied to a chair in the basement")
+Omit "sceneHints" entirely when nothing about place or constraints changed.
+
 INPUT CONVENTION: text wrapped in *asterisks* is a physical ACTION the player performs; other text is them speaking aloud.
 
 CURRENT SCENE: phase=${input.scene.phase}, location=${input.scene.where}. Companion: ${companion}. Present: ${present}.
@@ -60,7 +68,8 @@ Respond with ONLY this JSON (no prose, no code fences):
   "interpretation": "<one plain sentence describing what the player did>",
   "intent": { "type": "<category>", "subtype": "<short label>", "target": "<npc id, 'venue', or omit>", "magnitude": "<modest|big|lavish or omit>", "detail": "<optional>" },
   "affectedNpcs": ["<npc id>"],
-  "npcIntentHints": [ { "npc": "<npc id>", "wants": "<what they might want to do in response>" } ]
+  "npcIntentHints": [ { "npc": "<npc id>", "wants": "<what they might want to do in response>" } ],
+  "sceneHints": { "locationPhrase": "<optional>", "coPresent": <optional boolean>, "playerMobility": "<optional>", "playerVoice": "<optional>", "playerNotes": "<optional>" }
 }`
   );
 }

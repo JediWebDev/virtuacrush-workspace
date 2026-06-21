@@ -756,6 +756,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     engineSceneDelta = buildEngineSceneDelta({
       message,
       intent: effIntent!,
+      sceneHints: refereeOut.sceneHints,
       prior: priorSceneSnapshot,
       world: world!,
       allowLocationChange: !activeArc?.sceneAnchor,

@@ -26,11 +26,23 @@ export interface PlayerIntent {
   detail?: string;
 }
 
+export interface RefereeSceneHints {
+  /** Where the player says they are / the scene moved, e.g. "the basement". */
+  locationPhrase?: string;
+  coPresent?: boolean;
+  playerMobility?: string;
+  playerVoice?: string;
+  /** Short note on player condition the engine should track, e.g. "held captive". */
+  playerNotes?: string;
+}
+
 export interface RefereeOutput {
   interpretation: string;
   intent: PlayerIntent;
   affectedNpcs: string[];
   npcIntentHints: { npc: string; wants: string }[];
+  /** Optional scene-setting hints when the player clearly establishes or changes place/constraints. */
+  sceneHints?: RefereeSceneHints;
 }
 
 // --- Canonical subtype sets + synonym normalization (engine-owned) -----------
@@ -93,6 +105,25 @@ export function validateIntent(raw: unknown): PlayerIntent | null {
   };
 }
 
+const VALID_MOBILITY = new Set(['free', 'restrained', 'incapacitated']);
+const VALID_VOICE = new Set(['free', 'gagged', 'muted']);
+
+function parseSceneHints(raw: unknown): RefereeSceneHints | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const o = raw as Record<string, unknown>;
+  const hints: RefereeSceneHints = {};
+  const loc = str(o.locationPhrase);
+  if (loc) hints.locationPhrase = loc.slice(0, 200);
+  if (typeof o.coPresent === 'boolean') hints.coPresent = o.coPresent;
+  const mob = str(o.playerMobility);
+  if (VALID_MOBILITY.has(mob)) hints.playerMobility = mob;
+  const voice = str(o.playerVoice);
+  if (VALID_VOICE.has(voice)) hints.playerVoice = voice;
+  const notes = str(o.playerNotes);
+  if (notes) hints.playerNotes = notes.slice(0, 240);
+  return Object.keys(hints).length ? hints : undefined;
+}
+
 export function parseRefereeOutput(raw: string | { text?: string; content?: string }): RefereeOutput {
   const fallback: RefereeOutput = {
     interpretation: '', intent: { type: 'observation', subtype: 'wait' }, affectedNpcs: [], npcIntentHints: [],
@@ -111,5 +142,6 @@ export function parseRefereeOutput(raw: string | { text?: string; content?: stri
         return { npc: str(ho.npc), wants: str(ho.wants) };
       }).filter((h) => h.npc && h.wants)
     : [];
-  return { interpretation: str(obj.interpretation), intent, affectedNpcs, npcIntentHints };
+  const sceneHints = parseSceneHints(obj.sceneHints);
+  return { interpretation: str(obj.interpretation), intent, affectedNpcs, npcIntentHints, sceneHints };
 }

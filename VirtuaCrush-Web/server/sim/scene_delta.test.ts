@@ -5,6 +5,7 @@ import {
   buildEngineSceneDelta,
   extractSceneDeltaFromMessage,
   extractSceneDeltaFromIntent,
+  extractSceneDeltaFromSceneHints,
   reapplyEngineLocks,
 } from './scene_delta';
 import { emptySceneSnapshot } from '../inworld/scene_snapshot';
@@ -57,6 +58,38 @@ test('extractSceneDeltaFromIntent: movement go with slug target', () => {
   );
   assert.equal(d.venueSlug, 'the_grind');
   assert.equal(d.coPresent, true);
+});
+
+test('extractSceneDeltaFromSceneHints: declarative captive scene', () => {
+  const d = extractSceneDeltaFromSceneHints({
+    locationPhrase: 'the basement',
+    coPresent: false,
+    playerMobility: 'restrained',
+    playerNotes: 'tied to a pipe',
+  });
+  assert.equal(d.location, 'the basement');
+  assert.equal(d.coPresent, false);
+  assert.equal(d.playerMobility, 'restrained');
+  assert.equal(d.playerNotes, 'tied to a pipe');
+});
+
+test('buildEngineSceneDelta: referee hints fill gaps heuristics miss', () => {
+  const delta = buildEngineSceneDelta({
+    message: "I'm tied up in the basement and you can't reach me",
+    intent: { type: 'observation', subtype: 'wait' },
+    sceneHints: {
+      locationPhrase: 'the basement',
+      coPresent: false,
+      playerMobility: 'restrained',
+    },
+    prior: emptySceneSnapshot(),
+    world: {} as never,
+  });
+  assert.ok(delta);
+  assert.ok(delta!.sources.includes('referee'));
+  assert.equal(delta!.patch.location, 'the basement');
+  assert.equal(delta!.patch.coPresent, false);
+  assert.equal(delta!.patch.playerMobility, 'restrained');
 });
 
 test('buildEngineSceneDelta: heuristic mobility + intent location', () => {

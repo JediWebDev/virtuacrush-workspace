@@ -18,6 +18,8 @@ test('buildRefereePrompt lists all categories + schema keys + scene + message', 
   assert.ok(p.includes('"intent"'));
   assert.ok(p.includes('"affectedNpcs"'));
   assert.ok(p.includes('"npcIntentHints"'));
+  assert.ok(p.includes('"sceneHints"'));
+  assert.ok(p.includes('SCENE HINTS'));
   assert.ok(p.includes('CLASSIFY'));
   assert.ok(p.toLowerCase().includes('do not decide consequences'));
   assert.ok(p.includes('Classify hostility accurately'));
@@ -36,6 +38,27 @@ test('extractIntent: parses an injected JSON completion into a typed intent', as
   assert.equal(out.intent.subtype, 'threaten'); // 'menace' normalized by SYNONYMS
   assert.deepEqual(out.affectedNpcs, ['becca']);
   assert.equal(out.npcIntentHints[0].wants, 'call police');
+});
+
+test('extractIntent: parses sceneHints from referee JSON', async () => {
+  const fakeComplete = async () =>
+    JSON.stringify({
+      interpretation: 'declares they are captive in the basement',
+      intent: { type: 'observation', subtype: 'share' },
+      affectedNpcs: [],
+      npcIntentHints: [],
+      sceneHints: {
+        locationPhrase: 'the basement',
+        coPresent: false,
+        playerMobility: 'restrained',
+        playerNotes: 'tied to a pipe',
+      },
+    });
+  const out = await extractIntent(input, fakeComplete);
+  assert.equal(out.sceneHints?.locationPhrase, 'the basement');
+  assert.equal(out.sceneHints?.coPresent, false);
+  assert.equal(out.sceneHints?.playerMobility, 'restrained');
+  assert.equal(out.sceneHints?.playerNotes, 'tied to a pipe');
 });
 
 test('extractIntent: a thrown completion fails soft to observation', async () => {
