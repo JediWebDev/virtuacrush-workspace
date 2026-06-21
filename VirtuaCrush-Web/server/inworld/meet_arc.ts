@@ -108,7 +108,8 @@ export function formatMeetArcPacingBlock(): string {
   return (
     `\nMEET-CUTE PACING (first meeting only — keep it SHORT):\n` +
     `- Target 4–8 player turns total, not a full date. Escalate connection, then LAND the meet.\n` +
-    `- Once names are exchanged and there is a real connection beat (film talk, phone swap, plans to hang out, etc.), stop re-introducing the scene and let the moment settle.\n` +
+    `- When completion criteria are satisfied — names exchanged AND a real connection beat (film talk, phone swap, plans to hang out, etc.) — you MUST set arcStatus "completed" on THIS turn with earnedBadge. Do not keep bantering once the meet has clearly landed.\n` +
+    `- After arcStatus "completed", leave "choices" empty []. Do not suggest more moves.\n` +
     `- NEVER re-open the scene with a fresh intro or reset to the collision — follow the conversation history forward only.`
   );
 }

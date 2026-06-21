@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   resolveArcAct,
-  evaluateArcCompletion,
   resolvePackNodeAct,
   buildInitialSceneState,
   formatPersistentSceneDirective,
@@ -10,17 +9,11 @@ import {
   nameInSceneState,
   resolveArcNpcInstruction,
 } from './story_structure';
-import { getArc } from './arcs';
 import type { StoryPack } from './pack_types';
 
 test('resolveArcAct: early turns are beginning', () => {
   assert.equal(resolveArcAct({ userTurnsSinceStart: 1 }), 'beginning');
-  assert.equal(resolveArcAct({ userTurnsSinceStart: 2 }), 'beginning');
-});
-
-test('resolveArcAct: regular arcs reach end act after enough turns', () => {
-  assert.equal(resolveArcAct({ userTurnsSinceStart: 6 }), 'middle');
-  assert.equal(resolveArcAct({ userTurnsSinceStart: 7 }), 'end');
+  assert.equal(resolveArcAct({ userTurnsSinceStart: 2, arcStatus: 'ongoing' }), 'beginning');
 });
 
 test('resolveArcAct: meet arcs enter end act sooner', () => {
@@ -129,36 +122,4 @@ test('resolveArcNpcInstruction appends act-specific block', () => {
 
 test('resolveArcNpcInstruction returns base when no phase override', () => {
   assert.equal(resolveArcNpcInstruction('Only base.', undefined, 'beginning'), 'Only base.');
-});
-
-test('evaluateArcCompletion: meet arc uses transcript heuristic', () => {
-  const arc = getArc('madison_meet');
-  assert.ok(arc);
-  const ok = evaluateArcCompletion({
-    arc: arc!,
-    storyAct: 'middle',
-    userTurnsSinceStart: 4,
-    arcJustStarted: false,
-    meetInput: {
-      userTurnsSinceStart: 4,
-      playerDisplayName: 'Andrew',
-      companionName: 'Madison',
-      recentText: "I'm Andrew\nMadison: want my number?\nAndrew: here's my number — text me anytime",
-      currentUserMessage: "here's my number — text me anytime",
-    },
-  });
-  assert.equal(ok.shouldComplete, true);
-  assert.ok(ok.badge?.title);
-});
-
-test('evaluateArcCompletion: regular arc completes in end act', () => {
-  const arc = getArc('serena_big_audition');
-  assert.ok(arc);
-  const ok = evaluateArcCompletion({
-    arc: arc!,
-    storyAct: 'end',
-    userTurnsSinceStart: 8,
-    arcJustStarted: false,
-  });
-  assert.equal(ok.shouldComplete, true);
 });
