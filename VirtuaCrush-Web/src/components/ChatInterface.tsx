@@ -6,7 +6,8 @@ import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw, Zap } from "lucide-react";
+import { Send, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw, Zap, ListChecks } from "lucide-react";
+import { readShowReplyChoices, writeShowReplyChoices } from "../lib/chatPreferences";
 import ChatAvatar from "./ChatAvatar";
 import { Character } from "../types/character";
 import type { UserTier } from "../types/subscription";
@@ -131,7 +132,16 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [meetArcComplete, setMeetArcComplete] = useState(() => isCustomCharacterId(character.id));
   const [devResetEnabled, setDevResetEnabled] = useState(false);
   const [devResetting, setDevResetting] = useState(false);
+  const [showReplyChoices, setShowReplyChoices] = useState(() => readShowReplyChoices());
   const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const toggleReplyChoices = () => {
+    setShowReplyChoices((prev) => {
+      const next = !prev;
+      writeShowReplyChoices(next);
+      return next;
+    });
+  };
 
   useEffect(() => {
     fetchProfile()
@@ -841,11 +851,26 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                     </div>
                 </div>
             </div>
-            <div className="flex shrink-0 items-center gap-1.5 lg:hidden">
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={toggleReplyChoices}
+                className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-2 text-xs font-semibold transition-all ${
+                  showReplyChoices
+                    ? 'border-accent/35 bg-accent/10 text-accent'
+                    : 'border-black/10 text-stone-500 hover:border-black/15 hover:text-stone-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-200'
+                }`}
+                aria-label={showReplyChoices ? 'Hide reply suggestions' : 'Show reply suggestions'}
+                aria-pressed={showReplyChoices}
+                title={showReplyChoices ? 'Hide reply suggestions' : 'Show reply suggestions'}
+              >
+                <ListChecks size={16} />
+                <span className="hidden sm:inline">{showReplyChoices ? 'Suggestions on' : 'Suggestions off'}</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setProfileOpen(true)}
-                className="rounded-xl border border-black/10 p-2 text-stone-600 transition-all hover:border-accent/30 hover:text-stone-800 dark:border-white/10 dark:text-stone-300 dark:hover:text-stone-100"
+                className="rounded-xl border border-black/10 p-2 text-stone-600 transition-all hover:border-accent/30 hover:text-stone-800 dark:border-white/10 dark:text-stone-300 dark:hover:text-stone-100 lg:hidden"
                 aria-label="View profile"
               >
                 <Info size={18} />
@@ -853,7 +878,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               <button
                 type="button"
                 onClick={() => setFeedOpen(true)}
-                className="flex items-center gap-1.5 rounded-xl border border-black/10 bg-black/[0.04] px-2.5 py-2 text-xs font-semibold text-stone-600 transition-all hover:border-accent/30 hover:text-stone-800 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-300 dark:hover:text-stone-100"
+                className="flex items-center gap-1.5 rounded-xl border border-black/10 bg-black/[0.04] px-2.5 py-2 text-xs font-semibold text-stone-600 transition-all hover:border-accent/30 hover:text-stone-800 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-300 dark:hover:text-stone-100 lg:hidden"
               >
                 <LayoutGrid size={16} />
                 <span className="hidden sm:inline">Feed</span>
@@ -1188,7 +1213,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           )}
         </div>
 
-        {activeThread === 'freeRoam' && !archiveDay && !isLoading && replyChoices.length > 0 && (
+        {activeThread === 'freeRoam' && !archiveDay && !isLoading && showReplyChoices && replyChoices.length > 0 && (
           <ChoiceButtons
             title="What do you say or do?"
             choices={replyChoices.map((c, i) => ({ id: `rc_${i}`, label: c.label, userMessage: c.userMessage, next: '' }))}
@@ -1207,7 +1232,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             />
           </div>
         ) : null}
-        {activeThread === 'pack' && !packCompleted && packChoices && packChoices.length > 0 && !packLoading && (
+        {activeThread === 'pack' && !packCompleted && showReplyChoices && packChoices && packChoices.length > 0 && !packLoading && (
           <ChoiceButtons choices={packChoices} onChoice={handlePackChoice} disabled={packLoading} />
         )}
         {activeThread === 'pack' && packCompleted && (
