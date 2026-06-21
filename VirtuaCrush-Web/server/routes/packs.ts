@@ -49,7 +49,7 @@ import {
 } from '../db/story_memory';
 import {
   buildInitialSceneSnapshot,
-  formatSceneSnapshotBlock,
+  formatSceneSnapshotBody,
   snapshotToSceneState,
   applySceneContinuityUpdate,
 } from '../inworld/scene_snapshot';
@@ -525,9 +525,9 @@ router.post('/session/:sid/turn', requireAuth, async (req: Request, res: Respons
   }
 
   const priorSceneBlock = priorSnapshot
-    ? formatSceneSnapshotBlock(priorSnapshot)
+    ? formatSceneSnapshotBody(priorSnapshot)
     : session.sceneState
-      ? `\n\n=== SCENE SO FAR (authoritative continuity — honor this; it persists beyond the recent messages) ===\n${session.sceneState}`
+      ? session.sceneState
       : '';
   const priorSceneState = priorSceneBlock;
 

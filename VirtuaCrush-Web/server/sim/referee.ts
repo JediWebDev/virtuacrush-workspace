@@ -26,6 +26,13 @@ const CATEGORY_GUIDE: Record<string, string> = {
 
 const MAX_HISTORY = 3;
 
+/** One compact line for referee context — avoids dumping full tagged director output. */
+function formatRefereeHistoryLine(m: { role: 'user' | 'assistant'; content: string }): string {
+  if (m.role === 'user') return `PLAYER: ${m.content.slice(0, 160)}`;
+  const first = m.content.split('\n').map((l) => l.trim()).find(Boolean) ?? m.content;
+  return `SCENE: ${first.slice(0, 160)}`;
+}
+
 /** Pure: builds the referee classification prompt from a compact world view. */
 export function buildRefereePrompt(input: RefereeInput): string {
   const categories = INTENT_CATEGORIES.map((c) => `- ${c}: ${CATEGORY_GUIDE[c] ?? ''}`).join('\n');
@@ -34,7 +41,7 @@ export function buildRefereePrompt(input: RefereeInput): string {
   const roster = input.roster.length ? input.roster.map((a) => `${a.id} (${a.name})`).join(', ') : 'none';
   const history = (input.history ?? [])
     .slice(-MAX_HISTORY)
-    .map((m) => `${m.role === 'user' ? 'PLAYER' : 'SCENE'}: ${m.content}`)
+    .map(formatRefereeHistoryLine)
     .join('\n');
 
   return (

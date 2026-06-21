@@ -263,6 +263,11 @@ export function registerUserCharacter(character: Character): void {
   USER_CHARACTERS.set(character.id, character);
 }
 
+/** True for Story Studio custom personas (`user:<id>`). */
+export function isUserCharacter(id: string): boolean {
+  return id.startsWith('user:');
+}
+
 /** Look up a character by id (built-in or a preloaded user character). Throws
  *  for unknown ids so callers fail loudly. */
 export function getCharacter(id: string): Character {

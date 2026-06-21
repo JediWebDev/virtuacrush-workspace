@@ -62,7 +62,7 @@ export function directorDisciplineDirective(characterName: string): string {
     `${characterName}, an NPC, or the world doing it — goes in a [NARRATOR] line. The narrator is a NEUTRAL, ` +
     `invisible third-person observer: grounded and plain, no first person, no opinions, no dialogue. When the ` +
     `companion or an NPC reacts or moves, narrate it: e.g. [NARRATOR] *She sets the cup down and leans back.*\n` +
-    `• NPC lines (e.g. [URIK]) likewise contain ONLY that NPC's spoken words; their actions and reactions are ` +
+    `• NPC lines (e.g. [HANA]) likewise contain ONLY that NPC's spoken words; their actions and reactions are ` +
     `narrated by [NARRATOR] too.\n` +
     `• Never write the player's words or actions for them — this includes the [NARRATOR] line. The narrator ` +
     `narrates ONLY ${characterName}, the NPCs, and the environment, NEVER the player's body, hands, or choices. ` +

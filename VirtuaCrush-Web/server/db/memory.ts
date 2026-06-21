@@ -132,6 +132,8 @@ export async function extractAndStoreFacts(params: {
 export async function retrieveRelevantMemories(params: {
   userId: string;
   queryText: string;
+  /** When set, only facts from this companion (or global user facts) are returned. */
+  characterId?: string;
   k?: number;
 }): Promise<string[]> {
   try {
@@ -139,8 +141,11 @@ export async function retrieveRelevantMemories(params: {
     if (!queryEmbedding) return [];
 
     const { rows } = await pool.query<{ fact: string; embedding: number[] }>(
-      `SELECT fact, embedding FROM user_memory WHERE user_id = $1`,
-      [params.userId],
+      params.characterId
+        ? `SELECT fact, embedding FROM user_memory
+           WHERE user_id = $1 AND (source_character_id IS NULL OR source_character_id = $2)`
+        : `SELECT fact, embedding FROM user_memory WHERE user_id = $1`,
+      params.characterId ? [params.userId, params.characterId] : [params.userId],
     );
     if (rows.length === 0) return [];
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { inferDiaryBeatWeight, rankPinnedBeats, STORY_BEAT_WEIGHT } from './story_memory';
+import { inferDiaryBeatWeight, rankPinnedBeats, STORY_BEAT_WEIGHT, dedupeStoryBeats, sanitizeBeatSummary } from './story_memory';
 import type { StoryBeat } from './story_memory';
 
 test('inferDiaryBeatWeight: high salience beats score higher', () => {
@@ -20,4 +20,15 @@ test('rankPinnedBeats: weight first, then recency', () => {
 
 test('STORY_BEAT_WEIGHT: secret beats outrank disruption', () => {
   assert.ok(STORY_BEAT_WEIGHT.secret > STORY_BEAT_WEIGHT.disruption);
+});
+
+test('dedupeStoryBeats: collapses overlapping kidnapping/rescue beats', () => {
+  const beats: StoryBeat[] = [
+    { at: 100, summary: 'You were kidnapped and tied up in your kitchen.', weight: 82, source: 'memorable' },
+    { at: 110, summary: 'You were kidnapped and tied up in the kitchen.', weight: 80, source: 'memorable' },
+    { at: 120, summary: 'Blair rescued Andrew from being bound and gagged.', weight: 78, source: 'memorable' },
+  ];
+  const deduped = dedupeStoryBeats(beats);
+  assert.ok(deduped.length < beats.length);
+  assert.match(sanitizeBeatSummary('user:3 paid'), /the player paid/);
 });

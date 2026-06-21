@@ -15,7 +15,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { toNodeHandler } from 'better-auth/node';
-import { selectProviderName } from './server/llm';
+import { selectProviderName, isPromptLoggingEnabled } from './server/llm';
 import { applyMigrations } from './server/db/applyMigrations';
 
 import { auth } from './server/lib/auth';
@@ -50,6 +50,12 @@ if (!process.env.INWORLD_API_KEY?.trim()) {
   console.warn('[startup] INWORLD_API_KEY unset — long-term memory (embeddings) is disabled; it fails soft');
 }
 console.log(`[startup] LLM provider: ${LLM_PROVIDER}`);
+if (isPromptLoggingEnabled()) {
+  console.log(
+    '[startup] LLM_LOG_PROMPTS enabled — prompts go to Railway logs (search llm:prompt) ' +
+      'and GET /api/dev/llm-prompts while logged in',
+  );
+}
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);

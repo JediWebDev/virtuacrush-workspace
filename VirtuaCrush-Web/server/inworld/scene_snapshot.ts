@@ -83,9 +83,17 @@ export function buildFreeRoamSceneSnapshot(opts: {
   situationNote?: string;
 }): SceneSnapshot {
   const snap = emptySceneSnapshot();
-  snap.location = opts.location?.trim() || 'unspecified location';
+  const namedLocation = opts.location?.trim();
   snap.coPresent = opts.coPresent;
-  snap.present = ['you', opts.companionName, ...(opts.extraPresent ?? [])];
+  snap.location = namedLocation
+    ? namedLocation
+    : opts.coPresent
+      ? 'unspecified location'
+      : `${opts.companionName}'s place (remote)`;
+  // Remote/texting: player is not in the companion's physical space.
+  snap.present = opts.coPresent
+    ? ['you', opts.companionName, ...(opts.extraPresent ?? [])]
+    : [opts.companionName, ...(opts.extraPresent ?? [])];
   if (opts.situationNote?.trim()) snap.openThreads = [opts.situationNote.trim().slice(0, 200)];
   return snap;
 }
@@ -239,9 +247,12 @@ export function readSceneSnapshot(knowledge: Record<string, unknown> | undefined
   const companionRaw = o.companion;
   const compObj = companionRaw && typeof companionRaw === 'object' ? (companionRaw as Record<string, unknown>) : {};
 
-  const present = Array.isArray(o.present)
+  const coPresent = o.coPresent !== false;
+
+  let present = Array.isArray(o.present)
     ? o.present.map((x) => (typeof x === 'string' ? x.trim() : '')).filter(Boolean)
     : [];
+  if (!coPresent) present = present.filter((n) => n.toLowerCase() !== 'you');
 
   const openThreads = Array.isArray(o.openThreads)
     ? o.openThreads.map((x) => (typeof x === 'string' ? x.trim() : '')).filter(Boolean).slice(0, MAX_THREADS)
@@ -249,7 +260,7 @@ export function readSceneSnapshot(knowledge: Record<string, unknown> | undefined
 
   return {
     location: typeof o.location === 'string' ? o.location : '',
-    coPresent: o.coPresent !== false,
+    coPresent,
     present,
     player: {
       mobility: mob,
@@ -269,7 +280,11 @@ export function writeSceneSnapshot(snap: SceneSnapshot): Record<string, unknown>
 
 /** Prose fallback stored in sceneState / pack_sessions.scene_state. */
 export function snapshotToSceneState(snap: SceneSnapshot): string {
-  const present = snap.present.length ? snap.present.join('; ') : 'companion and player';
+  const present = snap.present.length
+    ? snap.present.join('; ')
+    : snap.coPresent
+      ? 'companion and player'
+      : 'companion only';
   const prox = snap.coPresent
     ? 'Companion and player are physically together.'
     : 'Companion and player are NOT in the same physical space (remote/texting).';
@@ -287,10 +302,14 @@ export function snapshotToSceneState(snap: SceneSnapshot): string {
   );
 }
 
-/** Prompt block — authoritative structured continuity. */
-export function formatSceneSnapshotBlock(snap: SceneSnapshot | null): string {
+/** Prose lines for prompt injection (no section header). */
+export function formatSceneSnapshotBody(snap: SceneSnapshot | null): string {
   if (!snap) return '';
-  const present = snap.present.length ? snap.present.join(', ') : 'companion and player';
+  const withCompanion = snap.present.length
+    ? snap.present.join(', ')
+    : snap.coPresent
+      ? 'companion and player'
+      : 'companion only';
   const playerParts = [
     snap.player.mobility !== 'free' ? snap.player.mobility : '',
     snap.player.voice !== 'free' ? snap.player.voice : '',
@@ -299,15 +318,24 @@ export function formatSceneSnapshotBlock(snap: SceneSnapshot | null): string {
   const playerLine = playerParts.length ? playerParts.join('; ') : 'free';
   const lines = [
     `Location: ${snap.location || 'unspecified'}`,
-    snap.coPresent ? 'Proximity: together in the same place.' : 'Proximity: remote / not co-located.',
-    `Present: ${present}`,
+    snap.coPresent
+      ? 'Proximity: together in the same place.'
+      : 'Proximity: remote / not co-located (text or call — player is elsewhere).',
+    snap.coPresent ? `Present: ${withCompanion}` : `With companion (player is remote): ${withCompanion}`,
     `Player condition (DO NOT drop until explicitly cleared in narration): ${playerLine}`,
   ];
   if (snap.companion.notes.trim()) lines.push(`Companion condition/notes: ${snap.companion.notes.trim()}`);
   if (snap.openThreads.length) lines.push(`Open threads: ${snap.openThreads.map((t) => `- ${t}`).join(' ')}`);
+  return lines.join('\n');
+}
+
+/** Prompt block — authoritative structured continuity. */
+export function formatSceneSnapshotBlock(snap: SceneSnapshot | null): string {
+  const body = formatSceneSnapshotBody(snap);
+  if (!body) return '';
   return (
     `\n\n=== SCENE SNAPSHOT (ENGINE — authoritative; update via "sceneSnapshot" in your JSON reply) ===\n` +
-    lines.join('\n')
+    body
   );
 }
 

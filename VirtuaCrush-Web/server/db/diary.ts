@@ -6,7 +6,7 @@ import { pool } from './pool';
 import { completePrompt } from '../llm';
 import { getCharacter } from '../inworld/characters';
 import { parseFacts } from './memory_util';
-import { appendCharacterStoryBeat, inferDiaryBeatWeight } from './story_memory';
+import { appendCharacterStoryBeat, inferDiaryBeatWeight, HIGH_SALIENCE_RE } from './story_memory';
 
 export interface DiaryEntry {
   id: string;
@@ -61,6 +61,10 @@ async function summarizeOne(userId: string, characterId: string, since: string |
     [userId, characterId, since],
   );
   if (rows.length < MIN_NEW_MESSAGES) return;
+
+  const blob = rows.map((r) => r.content).join('\n');
+  // Skip the LLM when the window is pure banter with no plot signals.
+  if (!HIGH_SALIENCE_RE.test(blob) && !rows.some((r) => r.content.trim().length > 100)) return;
 
   let displayName = characterId;
   try { displayName = getCharacter(characterId).displayName; } catch { /* keep id */ }

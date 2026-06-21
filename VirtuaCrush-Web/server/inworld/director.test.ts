@@ -110,7 +110,7 @@ test('buildDirectorPrompt: choices are player tap-to-send, separate from lines',
     userMessage: 'hi',
   });
   assert.ok(p.includes('FROM THE PLAYER'));
-  assert.ok(/never use second-person "You/i.test(p));
+  assert.ok(/Never use narrator "You/i.test(p));
   assert.ok(p.includes('address them as "you"'));
 });
 

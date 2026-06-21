@@ -28,6 +28,20 @@ test('buildRefereePrompt lists all categories + schema keys + scene + message', 
   assert.ok(p.includes('PLAYER: *I tie up Becca and empty the register*'));
 });
 
+test('buildRefereePrompt: truncates assistant history to first line', () => {
+  const long = buildRefereePrompt({
+    ...input,
+    history: [
+      {
+        role: 'assistant',
+        content: '[BLAIR] Oh my god you got my attention.\n[NARRATOR] *She laughs.*\n[BLAIR] You should be so lucky.',
+      },
+    ],
+  });
+  assert.ok(long.includes('SCENE: [BLAIR] Oh my god you got my attention.'));
+  assert.ok(!long.includes('[NARRATOR]'));
+});
+
 test('extractIntent: parses an injected JSON completion into a typed intent', async () => {
   // 'crime' was folded into 'conflict' (+ the separate detectWorldEvent path);
   // the referee now classifies aggression as conflict.

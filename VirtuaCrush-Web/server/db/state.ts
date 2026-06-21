@@ -94,27 +94,38 @@ async function generateAndStore(
   return rows[0];
 }
 
+const inflightRegen = new Map<string, Promise<StateRow>>();
+
 /** Ensures a fresh (today's) state row exists, regenerating if stale. Never throws. */
 async function ensureFreshRow(userId: string, characterId: string): Promise<StateRow> {
   const today = utcDateString();
   const row = await readRow(userId, characterId);
   if (row && !isStale(row.state_date, today)) return row;
-  try {
-    return await generateAndStore(userId, characterId, row, today);
-  } catch (err) {
-    console.warn('[state] generate failed; serving prior/empty state:', err);
-    return (
-      row ?? {
-        character_id: characterId,
-        state_date: today,
-        activity: '',
-        mood: '',
-        headline: '',
-        goal_progress: 0,
-        scene_location: null,
-      }
-    );
-  }
+  const key = `${userId}:${characterId}`;
+  const pending = inflightRegen.get(key);
+  if (pending) return pending;
+  const work = (async () => {
+    try {
+      return await generateAndStore(userId, characterId, row, today);
+    } catch (err) {
+      console.warn('[state] generate failed; serving prior/empty state:', err);
+      return (
+        row ?? {
+          character_id: characterId,
+          state_date: today,
+          activity: '',
+          mood: '',
+          headline: '',
+          goal_progress: 0,
+          scene_location: null,
+        }
+      );
+    } finally {
+      inflightRegen.delete(key);
+    }
+  })();
+  inflightRegen.set(key, work);
+  return work;
 }
 
 /** Ensures a character_state row exists so arc/scene updates never no-op. */

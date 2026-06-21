@@ -6,6 +6,9 @@ import {
   parseSceneSnapshotPatch,
   snapshotToSceneState,
   emptySceneSnapshot,
+  buildFreeRoamSceneSnapshot,
+  formatSceneSnapshotBody,
+  readSceneSnapshot,
 } from './scene_snapshot';
 
 test('mergeSceneSnapshot: player restraint persists until cleared', () => {
@@ -59,4 +62,38 @@ test('snapshotToSceneState includes player condition', () => {
   snap.player.mobility = 'restrained';
   const prose = snapshotToSceneState(snap);
   assert.match(prose, /mobility: restrained/);
+});
+
+test('buildFreeRoamSceneSnapshot: remote omits player from present list', () => {
+  const snap = buildFreeRoamSceneSnapshot({
+    companionName: 'Blair',
+    coPresent: false,
+    extraPresent: ['Hana'],
+  });
+  assert.equal(snap.coPresent, false);
+  assert.deepEqual(snap.present, ['Blair', 'Hana']);
+  assert.match(snap.location, /Blair's place \(remote\)/);
+});
+
+test('formatSceneSnapshotBody: remote wording is not contradictory', () => {
+  const snap = buildFreeRoamSceneSnapshot({ companionName: 'Blair', coPresent: false });
+  const body = formatSceneSnapshotBody(snap);
+  assert.match(body, /remote/);
+  assert.doesNotMatch(body, /Present: you, Blair/);
+  assert.match(body, /With companion/);
+});
+
+test('readSceneSnapshot: strips player from present when remote', () => {
+  const snap = readSceneSnapshot({
+    sceneSnapshot: {
+      location: 'home',
+      coPresent: false,
+      present: ['you', 'Blair'],
+      player: { mobility: 'free', voice: 'free', notes: '' },
+      companion: { notes: '' },
+      openThreads: [],
+    },
+  });
+  assert.ok(snap);
+  assert.deepEqual(snap!.present, ['Blair']);
 });

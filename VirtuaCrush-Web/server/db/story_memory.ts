@@ -17,7 +17,7 @@ export interface StoryBeat {
 const MAX_STORED = 40;
 const DEFAULT_PINNED = 5;
 
-const HIGH_SALIENCE_RE =
+export const HIGH_SALIENCE_RE =
   /\b(kidnap\w*|abduct\w*|rescued?|confess\w*|secret|revealed|attack\w*|injured|hurt|betray\w*|arrest\w*|gun|knife|hostage|escape\w*|trapped|bound|gagged|captured|confession|milestone|first kiss|proposal|breakup|death|died|killed|fire|explosion|crash)\b/i;
 const LOW_SALIENCE_RE = /\b(banter|small talk|flirt|joke|laughed|chatted|texted|swipe|notification|refill|muted the tv)\b/i;
 
@@ -58,9 +58,56 @@ function parseMemoriesColumn(raw: unknown): StoryBeat[] {
   return raw.map(normalizeBeat).filter((b): b is StoryBeat => b != null);
 }
 
+/** Normalizes a beat summary for display and dedup. */
+export function sanitizeBeatSummary(summary: string): string {
+  return summary
+    .trim()
+    .replace(/\buser:\d+\b/gi, 'the player')
+    .replace(/\s+/g, ' ')
+    .slice(0, 300);
+}
+
+function beatFingerprint(summary: string): string {
+  return sanitizeBeatSummary(summary).toLowerCase().replace(/[^\w\s]/g, '');
+}
+
+function tokenSet(summary: string): Set<string> {
+  return new Set((beatFingerprint(summary).match(/\b\w{4,}\b/g) ?? []));
+}
+
+function beatsOverlap(a: string, b: string): boolean {
+  const ta = tokenSet(a);
+  const tb = tokenSet(b);
+  if (!ta.size || !tb.size) return false;
+  let shared = 0;
+  for (const t of ta) if (tb.has(t)) shared++;
+  const ratio = shared / Math.min(ta.size, tb.size);
+  if (ratio >= 0.55) return true;
+  const fa = beatFingerprint(a);
+  const fb = beatFingerprint(b);
+  return fa.includes(fb) || fb.includes(fa);
+}
+
+/** Drop near-duplicate beats (same event phrased twice, or heavily overlapping). */
+export function dedupeStoryBeats(beats: StoryBeat[]): StoryBeat[] {
+  const ranked = [...beats].sort((a, b) => {
+    if (b.weight !== a.weight) return b.weight - a.weight;
+    return b.at - a.at;
+  });
+  const kept: StoryBeat[] = [];
+  for (const b of ranked) {
+    const summary = sanitizeBeatSummary(b.summary);
+    const fp = beatFingerprint(summary);
+    if (!fp) continue;
+    if (kept.some((k) => beatsOverlap(k.summary, summary))) continue;
+    kept.push({ ...b, summary });
+  }
+  return kept;
+}
+
 /** Top beats by weight, then recency (option B). */
 export function rankPinnedBeats(beats: StoryBeat[], limit = DEFAULT_PINNED): StoryBeat[] {
-  return [...beats]
+  return dedupeStoryBeats(beats)
     .sort((a, b) => {
       if (b.weight !== a.weight) return b.weight - a.weight;
       return b.at - a.at;

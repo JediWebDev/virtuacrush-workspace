@@ -38,7 +38,7 @@ import {
   writeSceneSnapshot,
   buildInitialSceneSnapshot,
   buildFreeRoamSceneSnapshot,
-  formatSceneSnapshotBlock,
+  formatSceneSnapshotBody,
   snapshotToSceneState,
   applySceneContinuityUpdate,
   type SceneSnapshot,
@@ -50,7 +50,7 @@ import {
   engineDeltaLogLine,
   type EngineSceneDelta,
 } from '../sim/scene_delta';
-import { getCharacter, type CharacterId } from '../inworld/characters';
+import { getCharacter, isUserCharacter, type CharacterId } from '../inworld/characters';
 import { getLocation } from '../inworld/locations';
 import {
   formatSceneNpcBlock,
@@ -377,6 +377,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   const memoriesPromise = retrieveRelevantMemories({
     userId: req.user!.id,
     queryText: message,
+    characterId,
   });
   const storyBeatsPromise = getCharacterStoryBeats(req.user!.id, characterId);
   // Current situation = daily story state + dating scene (on a date or at home).
@@ -709,6 +710,16 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       );
     }
 
+    const lore = getLore(characterId);
+    const lorePromptExtras = isUserCharacter(characterId)
+      ? revealSecretNow
+        ? `\n\nThe player has earned your trust and is asking directly — reveal your secret now, in your own voice.`
+        : secretDiscovered
+          ? `\n\nYour secret is already known to the player; you can speak about it openly.`
+          : ''
+      : formatCharacterFactsBlock(lore) +
+        formatPersonaTraitsBlock(lore, { discovered: secretDiscovered, revealNow: revealSecretNow });
+
     const directives =
       // Priority order for the CURRENT SETTING block:
       // 1. Arc sceneAnchor (meet arcs, story arcs with their own physical scene)
@@ -721,8 +732,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           : formatSituationBlock(situation.state, scene, displayName, affinity)) +
       sceneFacts +
       sceneNpcBlock +
-      formatCharacterFactsBlock(getLore(characterId)) +
-      formatPersonaTraitsBlock(getLore(characterId), { discovered: secretDiscovered, revealNow: revealSecretNow }) +
+      lorePromptExtras +
       ROLEPLAY_INPUT_DIRECTIVE +
       directorDisciplineDirective(displayName) +
       playerKnown +
@@ -775,7 +785,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     }
 
     priorSceneStateForValidation = priorSceneSnapshot
-      ? formatSceneSnapshotBlock(priorSceneSnapshot).trim()
+      ? formatSceneSnapshotBody(priorSceneSnapshot).trim()
       : (() => {
           let prior = (companionEntity?.knowledge.sceneState as string | undefined) ?? '';
           if ((arcJustStarted || arcSceneInit) && activeArc?.sceneAnchor && !prior.trim() && sceneValidationInput) {

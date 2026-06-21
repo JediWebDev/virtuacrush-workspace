@@ -4,6 +4,7 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { requireAuth } from '../middleware/auth';
 import { isDevResetEnabled, resetCharacterDevState } from '../db/dev_reset';
 import { ensureUserCharacterLoaded } from '../db/user_characters';
+import { getRecentPrompts, isPromptLoggingEnabled } from '../llm';
 
 const router = Router();
 
@@ -16,6 +17,14 @@ function devOnly(_req: Request, res: Response, next: NextFunction) {
 
 router.get('/enabled', (_req, res) => {
   res.json({ enabled: isDevResetEnabled() });
+});
+
+/** Last LLM prompts (referee, director, etc.) when LLM_LOG_PROMPTS is set. Auth required. */
+router.get('/llm-prompts', requireAuth, (req, res) => {
+  if (!isPromptLoggingEnabled()) {
+    return res.status(404).json({ error: 'not_found' });
+  }
+  return res.json({ prompts: getRecentPrompts() });
 });
 
 router.post('/reset-character/:characterId', requireAuth, devOnly, async (req: Request, res: Response) => {
