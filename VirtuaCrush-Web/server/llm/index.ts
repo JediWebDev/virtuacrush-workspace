@@ -15,9 +15,22 @@ export function getProvider(): LlmProvider {
   return selectProviderName() === 'openai' ? openAiProvider : inworldProvider;
 }
 
+/** When LLM_LOG_PROMPTS=1, prints the full prompt sent to the model (dev/debug). */
+function logPrompt(kind: 'complete' | 'stream', prompt: string, opts?: CompleteOpts): void {
+  if (process.env.LLM_LOG_PROMPTS !== '1') return;
+  const provider = getProvider().name;
+  const sep = '─'.repeat(72);
+  const jsonNote = opts?.json ? ' json=true' : '';
+  console.log(
+    `\n[llm:prompt] ${kind} provider=${provider} chars=${prompt.length}${jsonNote}\n${sep}\n${prompt}\n${sep}\n`,
+  );
+}
+
 export function completePrompt(prompt: string, opts?: CompleteOpts): Promise<string> {
+  logPrompt('complete', prompt, opts);
   return getProvider().complete(prompt, opts);
 }
-export function streamPrompt(prompt: string): AsyncGenerator<string> {
-  return getProvider().stream(prompt);
+export async function* streamPrompt(prompt: string): AsyncGenerator<string> {
+  logPrompt('stream', prompt);
+  yield* getProvider().stream(prompt);
 }
