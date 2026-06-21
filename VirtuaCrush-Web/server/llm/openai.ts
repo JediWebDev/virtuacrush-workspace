@@ -6,7 +6,7 @@
 // Includes retry-with-backoff + a per-attempt timeout so transient 429/5xx and
 // serverless cold-starts (RunPod spinning a worker up) auto-recover instead of
 // surfacing as a failed message.
-import type { LlmProvider, CompleteOpts } from './types';
+import type { LlmProvider, CompleteOpts, StreamResult } from './types';
 
 export interface OpenAiCfg {
   baseUrl: string;
@@ -51,21 +51,52 @@ export function openAiConfig(env: NodeJS.ProcessEnv = process.env): OpenAiCfg {
 }
 
 /** Pure: the chat-completions request body. */
-export function buildChatBody(prompt: string, cfg: OpenAiCfg, json = false) {
+export function buildChatBody(
+  promptOrMessages: string | { role: string; content: string }[],
+  cfg: OpenAiCfg,
+  json = false,
+  overrides?: { model?: string; maxTokens?: number; temperature?: number; stream?: boolean },
+) {
+  const messages =
+    typeof promptOrMessages === 'string'
+      ? [{ role: 'user' as const, content: promptOrMessages }]
+      : promptOrMessages;
+  const model = overrides?.model ?? cfg.model;
+  const maxTokens = overrides?.maxTokens ?? cfg.maxTokens;
+  const temperature = overrides?.temperature ?? cfg.temperature;
   return {
-    model: cfg.model,
-    messages: [{ role: 'user', content: prompt }],
-    temperature: cfg.temperature,
-    max_tokens: cfg.maxTokens,
-    // Only sent when explicitly configured — some providers mishandle them.
+    model,
+    messages,
+    temperature,
+    max_tokens: maxTokens,
+    ...(overrides?.stream ? { stream: true } : {}),
     ...(cfg.frequencyPenalty ? { frequency_penalty: cfg.frequencyPenalty } : {}),
     ...(cfg.presencePenalty ? { presence_penalty: cfg.presencePenalty } : {}),
-    // JSON mode (OpenAI/DeepSeek-compatible): constrains output to one valid
-    // JSON object. Used by callers that pass { json: true }. Kill switch:
-    // LLM_JSON_MODE=0 for providers that reject response_format.
     ...(json && process.env.LLM_JSON_MODE !== '0'
       ? { response_format: { type: 'json_object' as const } }
       : {}),
+  };
+}
+
+function resolveMessages(
+  prompt: string,
+  opts?: { system?: string; user?: string },
+): { role: string; content: string }[] {
+  if (opts?.system?.trim()) {
+    return [
+      { role: 'system', content: opts.system },
+      { role: 'user', content: (opts.user ?? prompt).trim() },
+    ];
+  }
+  return [{ role: 'user', content: (opts?.user ?? prompt).trim() }];
+}
+
+function cfgWithOpts(cfg: OpenAiCfg, opts?: import('./types').CompleteOpts): OpenAiCfg {
+  return {
+    ...cfg,
+    model: opts?.model?.trim() || cfg.model,
+    maxTokens: opts?.maxTokens ?? cfg.maxTokens,
+    temperature: opts?.temperature ?? cfg.temperature,
   };
 }
 
@@ -146,27 +177,38 @@ function backoffMs(attempt: number): number {
 let loggedConfig = false;
 
 async function complete(prompt: string, opts?: CompleteOpts): Promise<string> {
-  const cfg = openAiConfig();
+  const baseCfg = openAiConfig();
+  const cfg = cfgWithOpts(baseCfg, opts);
   if (!loggedConfig) {
     loggedConfig = true;
-    // One-time masked diagnostic: confirms what actually reached the runtime so
-    // a wrong/blank key is obvious without ever printing the secret.
-    const k = cfg.apiKey;
+    const k = baseCfg.apiKey;
     const masked = k ? `${k.slice(0, 8)}…(len ${k.length})` : '(empty)';
-    console.log(`[llm] openai-compatible config: baseUrl=${cfg.baseUrl} model=${cfg.model} key=${masked}`);
+    const ref = clean(process.env.LLM_REFEREE_MODEL);
+    console.log(
+      `[llm] openai-compatible config: baseUrl=${baseCfg.baseUrl} model=${baseCfg.model}` +
+        (ref ? ` referee=${ref}` : '') +
+        ` key=${masked}`,
+    );
   }
-  if (!cfg.apiKey) {
+  if (!baseCfg.apiKey) {
     throw new Error(
       '[llm] LLM_API_KEY is empty after trimming — set it on your host with no quotes or spaces.',
     );
   }
 
-  const url = `${cfg.baseUrl}/chat/completions`;
-  const body = JSON.stringify(buildChatBody(prompt, cfg, Boolean(opts?.json)));
+  const url = `${baseCfg.baseUrl}/chat/completions`;
+  const messages = resolveMessages(prompt, opts);
+  const body = JSON.stringify(
+    buildChatBody(messages, cfg, Boolean(opts?.json), {
+      model: cfg.model,
+      maxTokens: cfg.maxTokens,
+      temperature: cfg.temperature,
+    }),
+  );
   const headers = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${cfg.apiKey}`,
-    'HTTP-Referer': clean(process.env.PUBLIC_APP_URL), // OpenRouter likes these (harmless elsewhere)
+    Authorization: `Bearer ${baseCfg.apiKey}`,
+    'HTTP-Referer': clean(process.env.PUBLIC_APP_URL),
     'X-Title': 'VirtuaCrush',
   };
   const maxRetries = Math.max(0, Number(process.env.LLM_MAX_RETRIES ?? 3));
@@ -231,13 +273,99 @@ async function complete(prompt: string, opts?: CompleteOpts): Promise<string> {
   throw lastErr instanceof Error ? lastErr : new Error('[llm] request failed after retries');
 }
 
+async function* streamOpenAi(prompt: string, opts?: CompleteOpts): AsyncGenerator<string> {
+  const baseCfg = openAiConfig();
+  const cfg = cfgWithOpts(baseCfg, opts);
+  if (!baseCfg.apiKey) throw new Error('[llm] LLM_API_KEY is empty');
+
+  const url = `${baseCfg.baseUrl}/chat/completions`;
+  const messages = resolveMessages(prompt, opts);
+  const body = JSON.stringify(
+    buildChatBody(messages, cfg, Boolean(opts?.json), {
+      model: cfg.model,
+      maxTokens: cfg.maxTokens,
+      temperature: cfg.temperature,
+      stream: true,
+    }),
+  );
+  const timeoutMs = Math.max(1000, Number(process.env.LLM_TIMEOUT_MS ?? 120_000));
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${baseCfg.apiKey}`,
+        'HTTP-Referer': clean(process.env.PUBLIC_APP_URL),
+        'X-Title': 'VirtuaCrush',
+      },
+      body,
+      signal: ac.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => '');
+    throw new Error(`[llm] ${cfg.model} stream HTTP ${res.status}: ${errBody.slice(0, 300)}`);
+  }
+  if (!res.body) throw new Error('[llm] stream response has no body');
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let usage: ChatUsage | null = null;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+        const payload = trimmed.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+        try {
+          const json = JSON.parse(payload) as {
+            choices?: { delta?: { content?: string } }[];
+            usage?: {
+              prompt_tokens?: number;
+              completion_tokens?: number;
+              prompt_tokens_details?: { cached_tokens?: number };
+              prompt_cache_hit_tokens?: number;
+            };
+          };
+          const delta = json.choices?.[0]?.delta?.content;
+          if (delta) yield delta;
+          if (json.usage) usage = parseChatUsage({ usage: json.usage });
+        } catch {
+          /* ignore malformed SSE chunks */
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (usage) recordUsage(usage);
+}
+
+async function streamCollectOpenAi(prompt: string, opts?: CompleteOpts): Promise<StreamResult> {
+  let text = '';
+  for await (const delta of streamOpenAi(prompt, opts)) text += delta;
+  return { text, usage: { promptTokens: 0, completionTokens: 0, cachedTokens: 0 } };
+}
+
 export const openAiProvider: LlmProvider = {
   name: 'openai-compatible',
   complete,
-  async *stream(prompt: string) {
-    // Non-streaming for simplicity/robustness: yield the full reply at once. The
-    // Director path uses complete() anyway; yield the full reply at once.
-    const text = await complete(prompt);
-    if (text) yield text;
-  },
+  stream: streamOpenAi,
+  streamCollect: streamCollectOpenAi,
 };

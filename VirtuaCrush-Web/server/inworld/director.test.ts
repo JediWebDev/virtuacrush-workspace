@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDirectorPrompt, companionTagFor, parseDirectorTurns, parseScene, parseDirectorOutput, sanitizeReplyChoices, turnsToTranscript } from './director';
+import { buildDirectorPrompt, buildDirectorPromptParts, companionTagFor, parseDirectorTurns, parseScene, parseDirectorOutput, sanitizeReplyChoices, turnsToTranscript } from './director';
 
 test('companionTagFor uppercases a name', () => {
   assert.equal(companionTagFor('Serena'), 'SERENA');
@@ -17,13 +17,30 @@ test('buildDirectorPrompt asks for JSON and lists speakers, no tag rules', () =>
     history: [{ role: 'user', content: 'hi' }],
     userMessage: '*dumps soap in the fountain*',
   });
-  assert.ok(p.includes('JSON object'));
+  assert.ok(p.includes('"lines"'));
   assert.ok(p.includes('"Serena"'));
-  assert.ok(p.includes('"narrator"'));
-  assert.ok(p.includes('"Security"'));
-  assert.ok(p.includes('Output ONLY the JSON object'));
-  assert.ok(p.includes('ALWAYS include at least one'));
+  assert.ok(p.includes('narrator'));
+  assert.ok(p.includes('Security'));
+  assert.ok(p.includes('Output JSON only'));
+  assert.ok(p.includes('Include ≥1'));
   assert.ok(p.includes('User: *dumps soap in the fountain*'));
+});
+
+test('buildDirectorPromptParts: stable system vs variable user for caching', () => {
+  const stage = {
+    companionSystem: 'You are Serena.\n\nROLEPLAY rules here.',
+    companionTag: 'SERENA',
+    companionName: 'Serena',
+    npcs: [] as const,
+    directives: '\n\nAt the mall.',
+    history: [{ role: 'user' as const, content: 'hi' }],
+    userMessage: 'hello',
+  };
+  const { system, user } = buildDirectorPromptParts(stage);
+  assert.equal(system, stage.companionSystem);
+  assert.ok(user.includes('At the mall.'));
+  assert.ok(user.includes('User: hello'));
+  assert.ok(!user.startsWith(stage.companionSystem));
 });
 
 test('parseDirectorTurns: clean JSON array', () => {
@@ -109,9 +126,8 @@ test('buildDirectorPrompt: choices are player tap-to-send, separate from lines',
     history: [],
     userMessage: 'hi',
   });
-  assert.ok(p.includes('FROM THE PLAYER'));
-  assert.ok(/Never use narrator "You/i.test(p));
-  assert.ok(p.includes('address them as "you"'));
+  assert.ok(p.includes('PLAYER tap-messages'));
+  assert.ok(p.includes('never "Serena" lines'));
 });
 
 test('parseDirectorOutput: drops companion dialogue and narrator-style choices', () => {

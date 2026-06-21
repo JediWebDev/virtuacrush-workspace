@@ -19,6 +19,16 @@ test('formatSituationBlock: apart places them at home, remote', () => {
   assert.ok(b.toLowerCase().includes('texting'));
 });
 
+test('formatSituationBlock: away daily activity is sanitized for at-home baseline', () => {
+  const b = formatSituationBlock(
+    { activity: 'swiping a silk scarf from a department store', mood: 'prickly' },
+    scene,
+    'Lexi',
+  );
+  assert.ok(b.includes('hanging out at home'));
+  assert.ok(!b.includes('department store'));
+});
+
 test('scenePhase: home when remote, on_date when at a venue', () => {
   assert.equal(scenePhase({ location: null }), 'home');
   assert.equal(scenePhase({ location: 'the_grind' }), 'on_date');

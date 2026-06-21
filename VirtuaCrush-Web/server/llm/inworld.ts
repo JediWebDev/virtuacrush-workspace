@@ -36,7 +36,7 @@ export const inworldProvider: LlmProvider = {
       throw err;
     }
   },
-  async *stream(prompt) {
+  async *stream(prompt, _opts?: CompleteOpts) {
     const { llm } = await lowLevel();
     if (typeof llm.generateContentStream === 'function') {
       for await (const raw of llm.generateContentStream({ prompt })) { const t = extractText(raw); if (t) yield t; }

@@ -19,9 +19,9 @@ export interface HistoryBudgetOpts {
 }
 
 const DEFAULTS: Required<HistoryBudgetOpts> = {
-  keepFullTail: 4,
-  maxCharsPerOldTurn: 220,
-  maxTotalChars: 2200,
+  keepFullTail: 3,
+  maxCharsPerOldTurn: 180,
+  maxTotalChars: 1600,
 };
 
 function truncate(text: string, max: number): string {

@@ -1,6 +1,7 @@
 // Pure helpers for the scene system: prompt formatting and phase type.
 import type { DailyState } from './story_util';
 import { getLocation } from '../inworld/locations';
+import { sanitizeHomeBaselineActivity } from '../sim/scene_prompt';
 
 export type ScenePhase = 'home' | 'on_date';
 
@@ -36,7 +37,7 @@ export function formatSituationBlock(
   affinity?: number,
 ): string {
   const closeness = closenessNote(affinity);
-  const activity = state.activity ? state.activity : 'taking it easy';
+  const activity = state.activity ? sanitizeHomeBaselineActivity(state.activity) : 'taking it easy';
   return (
     `\n\n=== SETTING (default baseline) ===\n` +
     `DEFAULT, when nothing else is going on: you are at your OWN place, ${activity} (mood: ${state.mood || 'easy'}), ` +

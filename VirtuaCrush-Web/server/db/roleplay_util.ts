@@ -50,6 +50,26 @@ export function formatRoleplayDirectives(characterName: string): string {
  * pure dialogue and routes all "*she steps closer*"-style beats to one neutral
  * narrating voice.
  */
+/**
+ * Shorter voice-discipline block for the director hot path (latency + cache size).
+ * Full rules live in directorDisciplineDirective when LLM_FULL_DISCIPLINE=1.
+ */
+export function directorDisciplineCompact(characterName: string): string {
+  const tag = characterName.toUpperCase();
+  return (
+    `\n\nVOICE (strict): "${characterName}" lines = first-person speech ONLY. ` +
+    `"narrator" = neutral third-person actions/scene (*asterisks*). ` +
+    `NPC tags like [HANA] = speech only. Never write the player's actions. ` +
+    `Tag companion dialogue as "${characterName}" in JSON — not [${tag}] in strings.`
+  );
+}
+
+export function directorDisciplineForPrompt(characterName: string): string {
+  return process.env.LLM_FULL_DISCIPLINE === '1'
+    ? directorDisciplineDirective(characterName)
+    : directorDisciplineCompact(characterName);
+}
+
 export function directorDisciplineDirective(characterName: string): string {
   const TAG = characterName.toUpperCase();
   return (

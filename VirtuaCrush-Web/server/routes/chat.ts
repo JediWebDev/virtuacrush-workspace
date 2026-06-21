@@ -8,8 +8,8 @@
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { enforceMessageQuota } from '../middleware/rateLimit';
-import { streamChat, completePrompt, type ChatMessage } from '../inworld/chat';
-import { buildDirectorPrompt, parseDirectorOutput, parseDirectorTurns, companionTagFor, turnsToTranscript, type Actor, type ArcContext, type ReplyChoice } from '../inworld/director';
+import { streamChat, completePrompt, streamPrompt, type ChatMessage } from '../inworld/chat';
+import { buildDirectorPrompt, buildDirectorPromptParts, parseDirectorOutput, parseDirectorTurns, companionTagFor, turnsToTranscript, type Actor, type ArcContext, type ReplyChoice } from '../inworld/director';
 import { selectArc, getArc, type SceneAnchor, type StoryArc } from '../inworld/arcs';
 import { getUserStory } from '../db/user_stories';
 import { userStoryToArc } from '../inworld/user_arc';
@@ -44,6 +44,12 @@ import {
   type SceneSnapshot,
 } from '../inworld/scene_snapshot';
 import { applyEngineSceneDelta } from '../db/scene_apply';
+import {
+  inferSceneDeltaFromConversation,
+  shouldSuppressHomeBaseline,
+  formatActiveSceneDirective,
+  reconcileSceneSnapshotForPrompt,
+} from '../sim/scene_prompt';
 import {
   buildEngineSceneDelta,
   reapplyEngineLocks,
@@ -86,7 +92,7 @@ import { buildSceneContext } from '../sim/scene_context';
 import { planChaosTurn, chaosUiHint, formatChaosPromptBlock, chaosRequiredActors, type ChaosUiHint } from '../sim/chaos_engine';
 import { npcEntityIdFromName } from '../sim/world_npcs';
 import { formatSituationBlock, formatLocationBlock } from '../db/scene_util';
-import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineDirective } from '../db/roleplay_util';
+import { ROLEPLAY_INPUT_DIRECTIVE, directorDisciplineForPrompt } from '../db/roleplay_util';
 import { assembleWorld } from '../db/sim_world';
 import type { PlayerIntent } from '../sim/intent';
 import { validateIntent } from '../sim/intent';
@@ -99,6 +105,8 @@ import { describeKnownPlayer, observePlayer, describeAppearance } from '../sim/p
 import { describeLastSeenOutfit, itemsById, wornItems, describeOutfit, describeGrooming } from '../sim/wardrobe';
 import { upsertNpcState } from '../db/npc_state';
 import { looksDegenerate } from '../llm/quality';
+import { refereeCompleteOpts, directorCompleteOpts } from '../llm/models';
+import { streamingDirectorTranscript } from '../llm/stream_director';
 import { budgetHistory } from '../llm/budget';
 import {
   formatPersistentSceneDirective,
@@ -117,7 +125,7 @@ import {
 // RAG memory (db/memory.ts), not from replaying a long transcript.
 // Bigger window = the model can see (and is told to avoid) its own recent
 // phrasing, which is the main lever against verbatim self-repetition.
-const RECENT_TURNS_FOR_PROMPT = 20;
+const RECENT_TURNS_FOR_PROMPT = 14;
 
 
 /** Formats a SceneAnchor as the authoritative "current setting" block, replacing
@@ -485,6 +493,10 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   const scene = situation.scene;
 
   let directorPrompt: string | undefined;
+  let directorSystem = '';
+  let chatDirectives = '';
+  let npcs: Actor[] = [];
+  let chaosPromptBlock = '';
   let priorSceneStateForValidation = '';
   let priorSceneSnapshot: SceneSnapshot | null = null;
   let sceneSnapshotSeed: SceneSnapshot | null = null;
@@ -510,7 +522,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     priorSceneSnapshot = readSceneSnapshot(companionEntity?.knowledge as unknown as Record<string, unknown> | undefined);
     const authority = 'the authorities';
 
-    const npcs: Actor[] = [];
+    npcs = [];
 
     // Composed scene: authoritative time/setting/outfit facts + anyone else
     // present (e.g. her friend) registered as a voiceable actor. Fail-soft.
@@ -655,13 +667,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
     // What the companion knows about the player (perception-gated).
     const playerKnown = companionEntity ? describeKnownPlayer(world.user.profile, companionEntity) : '';
-    let lookNote = '';
-    if (companionEntity) {
-      const lastOutfit = describeLastSeenOutfit(companionEntity.knowledge.lastSeenOutfit, 'player', itemsById(world.user.inventory));
-      lookNote = lastOutfit
-        ? `\n\nLAST TIME YOU SAW THE PLAYER they were wearing ${lastOutfit}; you do not know if that has changed. Do NOT invent a different outfit.`
-        : `\n\nYou are apart and cannot see the player — do NOT invent what they are wearing.`;
-    }
 
     const secretDiscovered = Boolean(companionEntity?.knowledge.secretDiscovered);
     revealSecretNow = shouldRevealSecret({ affinity, discovered: secretDiscovered, message });
@@ -683,9 +688,26 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     const driveReaction = (companionEntity?.knowledge.pendingDriveReaction as string | undefined) || '';
 
     // Step 1 — Referee: classify the player's action (cheap, fast LLM call).
+    const conversationScenePatch = inferSceneDeltaFromConversation(turns, message, priorSceneSnapshot);
+    const refereeInput = refereeInputFromWorld(world, message, turns);
+    const refSceneWhere =
+      conversationScenePatch.location ??
+      (priorSceneSnapshot?.location && !/\(remote\)$/i.test(priorSceneSnapshot.location)
+        ? priorSceneSnapshot.location
+        : null);
+    if (refSceneWhere) {
+      refereeInput.scene = {
+        ...refereeInput.scene,
+        where: refSceneWhere,
+        phase:
+          conversationScenePatch.coPresent || priorSceneSnapshot?.coPresent
+            ? 'on_date'
+            : refereeInput.scene.phase,
+      };
+    }
     const refereeOut = await extractIntent(
-      refereeInputFromWorld(world, message, turns),
-      (prompt) => completePrompt(prompt, { json: true }),
+      refereeInput,
+      (prompt) => completePrompt(prompt, refereeCompleteOpts()),
     );
     effIntent = validateIntent(refereeOut.intent) ?? { type: 'observation', subtype: 'wait' };
     effectPlan = planEffects(consequencesFor(effIntent, world));
@@ -720,29 +742,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       : formatCharacterFactsBlock(lore) +
         formatPersonaTraitsBlock(lore, { discovered: secretDiscovered, revealNow: revealSecretNow });
 
-    const directives =
-      // Priority order for the CURRENT SETTING block:
-      // 1. Arc sceneAnchor (meet arcs, story arcs with their own physical scene)
-      // 2. Player travel location (player has moved to a city venue with companion)
-      // 3. Default home/remote block (player and companion are texting from apart)
-      (activeArc?.sceneAnchor
-        ? formatAnchorBlock(activeArc.sceneAnchor, displayName, sceneCast)
-        : situation.scene.location
-          ? formatLocationBlock(situation.scene.location, displayName, affinity)
-          : formatSituationBlock(situation.state, scene, displayName, affinity)) +
-      sceneFacts +
-      sceneNpcBlock +
-      lorePromptExtras +
-      ROLEPLAY_INPUT_DIRECTIVE +
-      directorDisciplineDirective(displayName) +
-      playerKnown +
-      lookNote +
-      emotionTone +
-      (driveReaction ? `\n\n${driveReaction}` : '') +
-      engineFacts +
-      formatMemoryBlock(memories) +
-      formatCharacterStoryBlock(displayName, storyBeats);
-
     if (activeArc?.sceneAnchor) {
       sceneValidationInput = sceneDirectiveFromAnchor(
         activeArc.sceneAnchor,
@@ -769,6 +768,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       sceneHints: refereeOut.sceneHints,
       prior: priorSceneSnapshot,
       world: world!,
+      conversation: conversationScenePatch,
       allowLocationChange: !activeArc?.sceneAnchor,
     });
     if (engineSceneDelta) {
@@ -784,6 +784,53 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       );
     }
 
+    if (priorSceneSnapshot) {
+      priorSceneSnapshot = reconcileSceneSnapshotForPrompt(priorSceneSnapshot, turns, message);
+    }
+
+    const suppressHomeBaseline = shouldSuppressHomeBaseline({
+      prior: priorSceneSnapshot,
+      history: turns,
+      message,
+      storyBeats,
+    });
+    const settingBlock = suppressHomeBaseline
+      ? formatActiveSceneDirective(priorSceneSnapshot)
+      : activeArc?.sceneAnchor
+        ? formatAnchorBlock(activeArc.sceneAnchor, displayName, sceneCast)
+        : situation.scene.location
+          ? formatLocationBlock(situation.scene.location, displayName, affinity)
+          : formatSituationBlock(situation.state, scene, displayName, affinity);
+
+    let lookNote = '';
+    if (companionEntity) {
+      const coPresentNow = priorSceneSnapshot?.coPresent ?? false;
+      const lastOutfit = describeLastSeenOutfit(companionEntity.knowledge.lastSeenOutfit, 'player', itemsById(world.user.inventory));
+      if (coPresentNow && lastOutfit) {
+        lookNote = `\n\nLAST TIME YOU SAW THE PLAYER they were wearing ${lastOutfit}; you do not know if that has changed. Do NOT invent a different outfit.`;
+      } else if (!coPresentNow) {
+        lookNote = `\n\nYou are apart and cannot see the player — do NOT invent what they are wearing.`;
+      }
+    }
+
+    directorSystem =
+      getCharacter(characterId).systemPrompt +
+      ROLEPLAY_INPUT_DIRECTIVE +
+      directorDisciplineForPrompt(displayName);
+
+    chatDirectives =
+      settingBlock +
+      (suppressHomeBaseline ? '' : sceneFacts) +
+      sceneNpcBlock +
+      lorePromptExtras +
+      playerKnown +
+      lookNote +
+      emotionTone +
+      (driveReaction ? `\n\n${driveReaction}` : '') +
+      engineFacts +
+      formatMemoryBlock(memories) +
+      formatCharacterStoryBlock(displayName, storyBeats);
+
     priorSceneStateForValidation = priorSceneSnapshot
       ? formatSceneSnapshotBody(priorSceneSnapshot).trim()
       : (() => {
@@ -794,18 +841,18 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           return prior;
         })();
 
-    const chaosPromptBlock = formatChaosPromptBlock(
+    chaosPromptBlock = formatChaosPromptBlock(
       chaosDirective,
       displayName,
       chaosRequiredActors(chaos, characterId, resolvedSceneNpcs).map((a) => a.name),
     );
 
     directorPrompt = buildDirectorPrompt({
-      companionSystem: getCharacter(characterId).systemPrompt,
+      companionSystem: directorSystem,
       companionTag: companionTagFor(displayName),
       companionName: displayName,
       npcs,
-      directives,
+      directives: chatDirectives,
       history: turns,
       userMessage: message,
       playerName: world?.user.profile.displayName ?? '',
@@ -838,10 +885,46 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       // facts are injected into the prompt). Degenerate output triggers one retry.
       const badReply = (lines: { text: string }[]) =>
         lines.length === 0 || lines.some((t) => looksDegenerate(t.text));
-      const raw1 = await completePrompt(directorPrompt!, { json: true });
+      const dirParts = buildDirectorPromptParts({
+        companionSystem: directorSystem,
+        companionTag: companionTagFor(displayName),
+        companionName: displayName,
+        npcs,
+        directives: chatDirectives,
+        history: turns,
+        userMessage: message,
+        playerName: world?.user.profile.displayName ?? '',
+        priorSceneState: priorSceneStateForValidation,
+        arcContext,
+        chaosDirective: chaosPromptBlock || undefined,
+      });
+      const dirOpts = {
+        ...directorCompleteOpts(),
+        system: dirParts.system,
+        user: dirParts.user,
+      };
+
+      let raw1 = '';
+      let streamedChars = 0;
+      try {
+        for await (const delta of streamPrompt('', dirOpts)) {
+          if (abortController.signal.aborted) break;
+          raw1 += delta;
+          const partial = sanitizeRoleplayTranscript(streamingDirectorTranscript(raw1, displayName));
+          if (partial.length > streamedChars) {
+            send('chunk', { text: partial.slice(streamedChars) });
+            streamedChars = partial.length;
+          }
+        }
+      } catch (streamErr) {
+        console.warn('[chat] director stream failed; falling back to complete:', streamErr);
+        raw1 = await completePrompt('', dirOpts);
+      }
+      if (!raw1.trim()) raw1 = await completePrompt('', dirOpts);
+
       let dirOut = parseDirectorOutput(raw1, displayName);
       if (badReply(dirOut.turns)) {
-        const raw2 = await completePrompt(directorPrompt!, { json: true });
+        const raw2 = await completePrompt('', dirOpts);
         dirOut = parseDirectorOutput(raw2, displayName);
         if (badReply(dirOut.turns)) {
           console.warn(
@@ -875,8 +958,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         });
         if (!check.ok) {
           const rawFix = await completePrompt(
-            directorPrompt! + formatSceneValidationRetryHint(check),
-            { json: true },
+            '',
+            { ...dirOpts, user: dirOpts.user + formatSceneValidationRetryHint(check) },
           );
           dirOut = parseDirectorOutput(rawFix, displayName);
           const fixNarrator = dirOut.turns
@@ -989,11 +1072,21 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           void resetAbandonmentStrikes(req.user!.id, characterId).catch(() => {});
         }
       }
-      if (!abortController.signal.aborted) send('chunk', { text: assistantFull });
+      if (!abortController.signal.aborted) {
+        const finalTranscript = sanitizeRoleplayTranscript(turnsToTranscript(replyTurns));
+        if (finalTranscript.length > streamedChars) {
+          send('chunk', { text: finalTranscript.slice(streamedChars) });
+        }
+      }
 
       // Perception update for NEXT turn: companion learns name/bio, and outfit when co-present.
       if (companionEntity) {
-        const learnedFacts = observePlayer({ coPresent: activeArc?.sceneAnchor?.coPresent ?? false, message, profile: world!.user.profile, existingFacts: companionEntity.knowledge.knownPlayerFacts });
+        const learnedFacts = observePlayer({
+          coPresent: priorSceneSnapshot?.coPresent ?? activeArc?.sceneAnchor?.coPresent ?? false,
+          message,
+          profile: world!.user.profile,
+          existingFacts: companionEntity.knowledge.knownPlayerFacts,
+        });
         const lastSeenOutfit = companionEntity.knowledge.lastSeenOutfit;
         const knowledgePatch: Record<string, unknown> = {
           ...companionEntity.knowledge,

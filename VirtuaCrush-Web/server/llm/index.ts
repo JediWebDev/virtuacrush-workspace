@@ -37,10 +37,26 @@ function logPrompt(kind: 'complete' | 'stream', prompt: string, opts?: CompleteO
 }
 
 export function completePrompt(prompt: string, opts?: CompleteOpts): Promise<string> {
-  logPrompt('complete', prompt, opts);
+  logPrompt('complete', promptForLog(prompt, opts), opts);
   return getProvider().complete(prompt, opts);
 }
-export async function* streamPrompt(prompt: string): AsyncGenerator<string> {
-  logPrompt('stream', prompt);
-  yield* getProvider().stream(prompt);
+
+function promptForLog(prompt: string, opts?: CompleteOpts): string {
+  if (opts?.system) {
+    return `[system ${opts.system.length} chars]\n${opts.system}\n\n[user ${(opts.user ?? prompt).length} chars]\n${opts.user ?? prompt}`;
+  }
+  return prompt;
+}
+
+export async function* streamPrompt(prompt: string, opts?: CompleteOpts): AsyncGenerator<string> {
+  logPrompt('stream', promptForLog(prompt, opts), opts);
+  yield* getProvider().stream(prompt, opts);
+}
+
+/** Collect a full streamed reply (used by the director path). */
+export async function streamCollectPrompt(prompt: string, opts?: CompleteOpts): Promise<string> {
+  if (getProvider().streamCollect) return (await getProvider().streamCollect!(prompt, opts)).text;
+  let out = '';
+  for await (const d of streamPrompt(prompt, opts)) out += d;
+  return out;
 }

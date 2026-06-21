@@ -83,7 +83,7 @@ export interface DirectorOutput {
   memorable: string | null;
 }
 
-const MAX_HISTORY_TURNS = 30;
+const MAX_HISTORY_TURNS = 14;
 
 export function companionTagFor(displayName: string): string {
   return (displayName || 'YOU').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'YOU';
@@ -160,17 +160,23 @@ function salvageIntent(raw: string): PlayerIntent | null {
 }
 
 /**
+ * Cache-friendly split: stable system (persona + rules) vs variable user context.
+ * Identical system strings across turns enable provider prefix caching.
+ */
+export function buildDirectorPromptParts(stage: DirectorStage): { system: string; user: string } {
+  const full = buildDirectorPrompt(stage);
+  const system = stage.companionSystem.trim();
+  const user = full.startsWith(system) ? full.slice(system.length).trimStart() : full;
+  return { system, user };
+}
+
+/**
  * Builds the director prompt.
  * When stage.arcContext is provided, the output schema gains arcStatus and
  * earnedBadge fields so the director evaluates arc progress each turn.
  */
 export function buildDirectorPrompt(stage: DirectorStage): string {
   const turns = stage.history.slice(-MAX_HISTORY_TURNS).map((m) => (m.role === 'user' ? `User: ${m.content}` : m.content)).join('\n');
-  const speakerLines = [
-    `- "${stage.companionName}" — you, speaking ONLY your own spoken words in the FIRST person. Never put actions, gestures, expressions, or reactions in this line.`,
-    `- "narrator" — ${NARRATOR_BRIEF} It owns EVERY action and reaction in the scene (yours, the NPCs', and the world's); wrap physical actions in *asterisks*. No dialogue.`,
-    ...stage.npcs.map((n) => `- "${n.name}" — ${n.brief ?? 'present in the scene'}. Speaks ONLY their own words; their actions and reactions are narrated by "narrator".`),
-  ].join('\n');
 
   const arcBlock = stage.arcContext ? `
 
@@ -192,44 +198,19 @@ PACING: ${stage.arcContext.isMeetArc
     ? `\n\n=== SCENE CONTINUITY (engine-authoritative — honor this; persists beyond recent messages) ===\n${stage.priorSceneState}`
     : '';
 
-const SCENE_SNAPSHOT_SCHEMA = `
-  "sceneSnapshot": {
-    "location": "<optional location update>",
-    "present": ["<names physically here>"],
-    "departed": ["<names who left this turn>"],
-    "playerMobility": "free" | "restrained" | "incapacitated",
-    "playerVoice": "free" | "gagged" | "muted",
-    "playerNotes": "<optional player condition detail>",
-    "companionNotes": "<optional companion state>",
-    "addThreads": ["<new open plot thread, max 1-2>"]
-  },`;
-
   const outputSchema = stage.arcContext
-    ? `Reply as a JSON object:
-{
-  "lines": [ { "speaker": "<name>", "text": "<their words or *action*>" } ],
-  "choices": [ { "label": "<short button: a move the PLAYER could make next>", "userMessage": "<what the player says/does if they tap it>" } ],
-  "sceneState": "<short prose fallback of current scene>",
-  ${SCENE_SNAPSHOT_SCHEMA}
-  "memorable": "<a durable one-line beat worth remembering in future sessions, or null>",
-  "arcStatus": "ongoing" | "climax" | "completed" | "abandoned",
-  "earnedBadge": { "title": "<2-4 word title>", "description": "<1-sentence recap>" } or null
-}
-Set earnedBadge only when arcStatus is "completed"; otherwise null.`
-    : `Reply as a JSON object: { "lines": [ { "speaker": "<name>", "text": "<their words or *action*>" } ], "choices": [ { "label": "<short player move>", "userMessage": "<what the player says/does if tapped>" } ], "sceneState": "<short prose fallback>", ${SCENE_SNAPSHOT_SCHEMA} "memorable": "<a durable beat to remember, or null>" }`;
+    ? `JSON: { "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable", "arcStatus", "earnedBadge" }`
+    : `JSON: { "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable" }`;
 
   return (
 `${stage.companionSystem}${stage.directives}${arcBlock}${sceneSoFar}
 
 === HOW TO REPLY ===
-This is a live scene that may include more than just you. ${outputSchema}
-Allowed speakers in "lines" (use these names exactly):
-${speakerLines}
-
-Guidance for "lines": ALWAYS include at least one "${stage.companionName}" line with their spoken reply so the player gets an answer. Put ANY physical action, reaction, expression, or scene beat in a "narrator" line — characters NEVER narrate themselves, so most turns also include a "narrator" line. (Only a pure, wordless reaction may be a "narrator" line alone.) Keep it short. Never write a line for the player in "lines". When ${stage.companionName} speaks TO the player in a "lines" entry, address them as "you" (second person) — never call them "the user" or "the player".
-SUGGESTED MOVES ("choices"): 2–3 short, DISTINCT tap-to-send messages FROM THE PLAYER (first person or *actions*), never from ${stage.companionName}. Never use narrator "You …" voice, placeholders, or moves that repeat something already established. Fit the player's CURRENT situation (remote, restrained, etc.).${stage.playerName ? ` Player name: "${stage.playerName}".` : ''}
-SCENE CONTINUITY: Always return "sceneSnapshot" with the CURRENT authoritative state. Player mobility/voice persist until you explicitly change them or narration clears them — never drop "restrained" or "gagged" silently. Update "present" and "departed" when cast changes. Also return "sceneState" as a short prose summary. Set "memorable" only when something genuinely durable happened that's worth recalling in a FUTURE conversation (a confession, a milestone, a kidnapping, a rescue); otherwise null.
-Output ONLY the JSON object — no preamble, no code fences, no commentary.
+${outputSchema}
+Speakers: ${stage.companionName} (speech only), narrator (actions/scene), ${stage.npcs.map((n) => n.name).join(', ') || 'NPCs as listed'}.
+Include ≥1 "${stage.companionName}" line. Keep lines short. Output JSON only.
+Choices: 2–3 PLAYER tap-messages (first person / *actions*), never "${stage.companionName}" lines.${stage.playerName ? ` Player: "${stage.playerName}".` : ''}
+Return sceneSnapshot with current location, present, player mobility/voice (persist until cleared).
 
 ${turns ? turns + '\n' : ''}${stage.chaosDirective?.trim() ? `${stage.chaosDirective.trim()}\n` : ''}User: ${stage.userMessage}
 

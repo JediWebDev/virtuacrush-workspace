@@ -242,13 +242,15 @@ function lockedFieldsForPatch(
   return locked;
 }
 
-/** Combines heuristic + referee hints + intent deltas into one engine apply unit. */
+/** Combines heuristic + referee hints + intent + conversation deltas into one engine apply unit. */
 export function buildEngineSceneDelta(opts: {
   message: string;
   intent: PlayerIntent;
   sceneHints?: RefereeSceneHints;
   prior: SceneSnapshot | null;
   world: WorldState;
+  /** Inferred from recent transcript (coPresent / location when story moved). */
+  conversation?: Partial<SceneSnapshotPatch>;
   /** When false (e.g. active arc anchor), skip location/coPresent/venue changes. */
   allowLocationChange?: boolean;
 }): EngineSceneDelta | null {
@@ -268,14 +270,26 @@ export function buildEngineSceneDelta(opts: {
   const intentRaw = allowLocation
     ? extractSceneDeltaFromIntent(opts.intent, opts.world)
     : {};
+  const conversationRaw = allowLocation ? (opts.conversation ?? {}) : {};
 
   const merged = mergePartialPatches(heuristicRaw, refereeRaw, intentRaw, allowLocation);
+  // Conversation fills coPresent/location when the story moved but DB snapshot is stale.
+  if (allowLocation) {
+    if (conversationRaw.coPresent !== undefined) merged.coPresent = conversationRaw.coPresent;
+    if (conversationRaw.location) {
+      const priorLoc = opts.prior?.location ?? '';
+      const stale = !priorLoc.trim() || /\(remote\)$/i.test(priorLoc) || /^unspecified location$/i.test(priorLoc);
+      if (stale || !merged.location) merged.location = conversationRaw.location;
+    }
+  }
+
   const { venueSlug, ...patch } = merged as SceneSnapshotPatch & { venueSlug?: string | null };
 
   const sources: SceneDeltaSource[] = [];
   if (patchHasContent(heuristicRaw, allowLocation)) sources.push('heuristic');
   if (patchHasContent(refereeRaw, allowLocation)) sources.push('referee');
   if (patchHasContent(intentRaw, allowLocation)) sources.push('intent');
+  if (conversationRaw.coPresent !== undefined || conversationRaw.location) sources.push('heuristic');
 
   if (Object.keys(patch).length === 0 && venueSlug === undefined) return null;
 
