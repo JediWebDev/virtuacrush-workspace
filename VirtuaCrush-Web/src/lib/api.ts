@@ -1,5 +1,6 @@
 // Thin fetch wrapper that includes credentials (for Better Auth cookies)
 // and throws structured errors the UI can switch on.
+import type { ScenePresentation } from '../types/scenePresentation';
 const BASE = import.meta.env.VITE_API_URL ?? '';
 
 export class ApiError extends Error {
@@ -31,6 +32,7 @@ export async function fetchGreeting(
   activeStoryArc?: { id: string; title: string };
   arcActive?: boolean;
   meetArcComplete?: boolean;
+  presentation?: ScenePresentation | null;
 }> {
   const res = await fetch('/api/chat/greet', {
     method: 'POST',
@@ -84,6 +86,7 @@ export interface CharacterState {
   sceneLocation?: string | null;
   /** False until the roster character's built-in meet-cute arc is completed. */
   meetArcComplete?: boolean;
+  presentation?: ScenePresentation | null;
 }
 
 // Current story-engine state (what the character is "doing" today) for the

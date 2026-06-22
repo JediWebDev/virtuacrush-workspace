@@ -22,6 +22,8 @@ import ChoiceButtons from "./ChoiceButtons";
 import { getActivePackSession, greetPackSession, abandonPackSession, fetchPackStories, fetchPackTranscript, type PackSession, type PackChoice, type PackStory } from "../lib/api";
 import NoticeToast from "./NoticeToast";
 import AchievementToast, { type AchievementToastData } from "./AchievementToast";
+import StageView from "./StageView";
+import { isScenePresentation } from "../types/scenePresentation";
 
 function formatHistoryDate(day: string): string {
   // day is YYYY-MM-DD; anchor at noon to avoid timezone date shifts.
@@ -41,7 +43,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [userAvatarSrc, setUserAvatarSrc] = useState(() => customAvatar("You"));
   const [quotaToast, setQuotaToast] = useState(false);
   const [quotaLimit, setQuotaLimit] = useState<number | null>(null);
-  const { messages, setMessages, send: sendMessage, streaming: isLoading, replyChoices, clearReplyChoices } = useChat({
+  const { messages, setMessages, send: sendMessage, streaming: isLoading, replyChoices, clearReplyChoices, presentation, setPresentation } = useChat({
     characterId: character.id,
     initialMessages: [],
     onAffinityUpdate: (score) => {
@@ -75,6 +77,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
         .then((st) => {
           setStoryState(st);
           if (typeof st.meetArcComplete === 'boolean') setMeetArcComplete(st.meetArcComplete);
+          if (isScenePresentation(st.presentation)) setPresentation(st.presentation);
         })
         .catch(() => { /* non-fatal */ });
     },
@@ -243,6 +246,9 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
         if (typeof result.meetArcComplete === 'boolean') {
           setMeetArcComplete(result.meetArcComplete);
         }
+        if (isScenePresentation(result.presentation)) {
+          setPresentation(result.presentation);
+        }
 
         // Scene header only when there is no transcript yet (Play seeds intro into history).
         const sceneMsgs =
@@ -293,7 +299,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
 
     initGreeting();
     return () => { cancelled = true; };
-  }, [character.id, setMessages, clearReplyChoices]);
+  }, [character.id, setMessages, clearReplyChoices, setPresentation]);
 
   // Fetch the character's current story-engine state for the status strip.
   useEffect(() => {
@@ -304,6 +310,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
         if (!cancelled) {
           setStoryState(s);
           if (typeof s.meetArcComplete === 'boolean') setMeetArcComplete(s.meetArcComplete);
+          if (isScenePresentation(s.presentation)) setPresentation(s.presentation);
         }
       })
       .catch((err) => console.error('[state] fetch failed:', err));
@@ -615,6 +622,9 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
       }
       if (typeof result.meetArcComplete === 'boolean') {
         setMeetArcComplete(result.meetArcComplete);
+      }
+      if (isScenePresentation(result.presentation)) {
+        setPresentation(result.presentation);
       }
       const sceneMsgs =
         !result.hasHistory && result.sceneHeader
@@ -1015,6 +1025,13 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               </div>
             )}
           </div>
+        )}
+        {activeThread === 'freeRoam' && !showHistoryView && !archiveDay && (
+          <StageView
+            presentation={presentation}
+            companionPortraitFallback={character.image}
+            playerPortraitSrc={userAvatarSrc}
+          />
         )}
         {/* Status strip removed: the daily-engine activity rarely matched the
             live conversation. The scene header narration owns scene-setting now. */}

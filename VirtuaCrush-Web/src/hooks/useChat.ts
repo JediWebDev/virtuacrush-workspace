@@ -12,6 +12,8 @@
 //   - quotaExceeded: true if the server returned 402 (cap hit)
 //   - stop():        abort the in-flight stream
 import { useCallback, useRef, useState } from 'react';
+import type { ScenePresentation } from '../types/scenePresentation';
+import { isScenePresentation } from '../types/scenePresentation';
 
 export type Role = 'user' | 'assistant';
 export interface Message {
@@ -34,7 +36,8 @@ export interface ChatDoneInfo {
   earnedBadge?: { title: string; description: string } | null;
   meetArcComplete?: boolean;
   /** World/chaos engine beat the player should notice this turn. */
-  chaos?: { title: string; detail: string; tone: 'subtle' | 'major' };
+  /** Engine-owned stage layout (background, actors, poses). */
+  presentation?: ScenePresentation | null;
 }
 
 interface UseChatOptions {
@@ -102,6 +105,7 @@ export function useChat({
   const [quotaExceeded, setQuotaExceeded] = useState(false);
   const [affinityScore, setAffinityScore] = useState<number | null>(null);
   const [replyChoices, setReplyChoices] = useState<ReplyChoice[]>([]);
+  const [presentation, setPresentation] = useState<ScenePresentation | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const stop = useCallback(() => {
@@ -188,7 +192,9 @@ export function useChat({
                       tone: d.chaos.tone === 'subtle' ? 'subtle' : 'major',
                     }
                   : undefined,
+              presentation: isScenePresentation(d.presentation) ? d.presentation : undefined,
             });
+            if (isScenePresentation(d.presentation)) setPresentation(d.presentation);
             if (typeof d.affinityScore === 'number') {
               setAffinityScore(d.affinityScore);
               onAffinityUpdate?.(d.affinityScore);
@@ -215,5 +221,5 @@ export function useChat({
   const clearQuotaFlag = useCallback(() => setQuotaExceeded(false), []);
   const clearReplyChoices = useCallback(() => setReplyChoices([]), []);
 
-  return { messages, setMessages, send, stop, streaming, error, quotaExceeded, clearQuotaFlag, affinityScore, replyChoices, clearReplyChoices };
+  return { messages, setMessages, send, stop, streaming, error, quotaExceeded, clearQuotaFlag, affinityScore, replyChoices, clearReplyChoices, presentation, setPresentation };
 }

@@ -67,6 +67,9 @@ import {
   mergeCompanionConditionPatches,
 } from '../inworld/scene_companion_condition';
 import { formatStatusDirectiveBlock, enforceStatusOnTurns } from '../sim/status_effects';
+import { resolvePresentation } from '../sim/scene_presentation';
+import { loadSessionPresentation } from '../db/scene_presentation_load';
+import { getUserCharacter } from '../db/user_characters';
 import { getCharacter, isUserCharacter, type CharacterId } from '../inworld/characters';
 import { getLocation, resolveVenueSlug } from '../inworld/locations';
 import {
@@ -257,6 +260,7 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
           history = await ensureMeetIntroPersisted(userId, characterId, introLine, history);
         }
       }
+      const presentation = await loadSessionPresentation(userId, characterId).catch(() => null);
       return res.json({
         hasHistory: true,
         history,
@@ -264,12 +268,14 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
         activeStoryArc,
         arcActive: meetArcComplete && !!activeArc?.sceneAnchor,
         meetArcComplete,
+        presentation,
       });
     }
 
     // First contact with no history: skip the meet-cute greeting when a Studio arc is active.
     if (meetArcComplete && activeArc?.sceneAnchor) {
-      return res.json({ hasHistory: false, sceneHeader, activeStoryArc, arcActive: true, meetArcComplete });
+      const presentation = await loadSessionPresentation(userId, characterId).catch(() => null);
+      return res.json({ hasHistory: false, sceneHeader, activeStoryArc, arcActive: true, meetArcComplete, presentation });
     }
 
     const character = getCharacter(characterId);
@@ -290,7 +296,8 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
       [userId, characterId, greetingText],
     );
 
-    return res.json({ hasHistory: false, greeting: greetingText, sceneHeader, activeStoryArc, meetArcComplete });
+    const presentation = await loadSessionPresentation(userId, characterId).catch(() => null);
+    return res.json({ hasHistory: false, greeting: greetingText, sceneHeader, activeStoryArc, meetArcComplete, presentation });
   } catch (err) {
     console.error('[chat] greet error:', err);
     return res.status(500).json({ error: 'greet_failed' });
@@ -885,6 +892,9 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
   let assistantFull = '';
   let replyChoices: ReplyChoice[] = [];
+  const venueSlugBefore = priorSceneSnapshot?.venueSlug ?? null;
+  const roomIdBefore = priorSceneSnapshot?.roomId ?? null;
+  let finalSceneSnapshot: SceneSnapshot | null = priorSceneSnapshot;
   const abortController = new AbortController();
   req.on('close', () => abortController.abort());
 
@@ -956,6 +966,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       continuity.snapshot = reapplyEngineLocks(continuity.snapshot, engineSceneDelta);
       continuity.sceneState = snapshotToSceneState(continuity.snapshot);
       dirOut.sceneState = continuity.sceneState;
+      finalSceneSnapshot = continuity.snapshot;
 
       effIntent = validateIntent(dirOut.intent) ?? { type: 'observation', subtype: 'wait' };
       effectPlan = planEffects(consequencesFor(effIntent, world!));
@@ -978,6 +989,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         continuity.sceneState = snapshotToSceneState(continuity.snapshot);
         dirOut.sceneState = continuity.sceneState;
         priorSceneSnapshot = continuity.snapshot;
+        finalSceneSnapshot = continuity.snapshot;
       }
 
       // Scene-state validation for structured stories (active arc with scene anchor).
@@ -1010,6 +1022,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           fixContinuity.sceneState = snapshotToSceneState(fixContinuity.snapshot);
           dirOut.sceneState = fixContinuity.sceneState;
           continuity = fixContinuity;
+          finalSceneSnapshot = continuity.snapshot;
           check = validateSceneStateUpdate({
             priorSceneState: priorSceneStateForValidation,
             nextSceneState: dirOut.sceneState,
@@ -1215,6 +1228,24 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       remaining = Math.max(0, FREE_TIER_DAILY_LIMIT - used);
     }
 
+    let companionPortraitKey: string | null = null;
+    if (characterId.startsWith('user:')) {
+      const custom = await getUserCharacter(characterId.slice('user:'.length));
+      if (custom?.ownerUserId === req.user!.id) companionPortraitKey = custom.imageKey;
+    }
+
+    const presentation = resolvePresentation({
+      snapshot: finalSceneSnapshot,
+      characterId,
+      companionName: displayName,
+      emotions,
+      companionPortraitKey,
+      chaosTone: chaosHint?.tone ?? null,
+      venueChanged:
+        (finalSceneSnapshot?.venueSlug ?? null) !== venueSlugBefore ||
+        (finalSceneSnapshot?.roomId ?? null) !== roomIdBefore,
+    });
+
     send('done', {
       remaining,
       affinityScore: newAffinityScore,
@@ -1224,6 +1255,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       choices: replyChoices,
       posted,
       chaos: chaosHint,
+      presentation,
     });
 
     res.end();

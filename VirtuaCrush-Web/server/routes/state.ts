@@ -13,6 +13,7 @@ import { initEmotions, topEmotions, pendingEventFromEmotions, type EmotionState 
 import { SECRET_REVEAL_AFFINITY, secretTrustProgress } from '../progression';
 import { getCharacter } from '../inworld/characters';
 import { ensureUserCharacterLoaded } from '../db/user_characters';
+import { loadSessionPresentation } from '../db/scene_presentation_load';
 
 const router = Router();
 
@@ -46,6 +47,8 @@ router.get('/:characterId', requireAuth, async (req: Request, res: Response) => 
     const secretDiscovered = affinity >= SECRET_REVEAL_AFFINITY;
     const secretProgress = secretTrustProgress(affinity);
 
+    const presentation = await loadSessionPresentation(req.user!.id, characterId).catch(() => null);
+
     res.json({
       characterId,
       activity: state.activity,
@@ -65,6 +68,7 @@ router.get('/:characterId', requireAuth, async (req: Request, res: Response) => 
       pendingEvent,
       sceneLocation: scene.location ?? null,
       meetArcComplete: hasCompletedMeetArc(characterId, completedArcIds),
+      presentation,
     });
   } catch (err) {
     console.error('[state] get failed:', err);
