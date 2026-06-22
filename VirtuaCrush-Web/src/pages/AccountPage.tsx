@@ -399,12 +399,6 @@ export default function AccountPage() {
                     </p>
                   ) : null}
 
-                  <Link
-                    to="/how-it-works"
-                    className="rounded-xl border border-black/10 px-5 py-2.5 text-sm font-semibold text-stone-700 transition-colors hover:border-brand-aqua/40 hover:text-brand-aqua dark:border-white/10 dark:text-white dark:hover:text-brand-aqua"
-                  >
-                    View plans
-                  </Link>
                 </div>
               </div>
             )}

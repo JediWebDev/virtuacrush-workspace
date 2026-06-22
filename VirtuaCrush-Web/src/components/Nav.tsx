@@ -20,7 +20,6 @@ export default function Nav() {
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   const browseActive = pathname === "/characters";
-  const howItWorksActive = pathname === "/how-it-works";
   const avatarActive = pathname === "/avatar";
   const studioActive = pathname === "/studio";
   const communityActive = pathname === "/community";
@@ -66,9 +65,6 @@ export default function Nav() {
           <nav className="hidden items-center gap-5 md:flex">
             <Link to="/characters" className={navLinkClass(browseActive)}>
               Browse Characters
-            </Link>
-            <Link to="/how-it-works" className={navLinkClass(howItWorksActive)}>
-              How It Works
             </Link>
             <Link to="/avatar" className={navLinkClass(avatarActive)}>
               Avatar
@@ -130,13 +126,6 @@ export default function Nav() {
             className={`rounded-xl px-4 py-3 transition-all duration-200 hover:scale-[1.01] hover:bg-black/[0.04] dark:bg-white/[0.04] active:scale-[0.99] ${navLinkClass(browseActive)}`}
           >
             Browse Characters
-          </Link>
-          <Link
-            to="/how-it-works"
-            onClick={closeMobileMenu}
-            className={`rounded-xl px-4 py-3 transition-all duration-200 hover:scale-[1.01] hover:bg-black/[0.04] dark:bg-white/[0.04] active:scale-[0.99] ${navLinkClass(howItWorksActive)}`}
-          >
-            How It Works
           </Link>
           <Link
             to="/avatar"

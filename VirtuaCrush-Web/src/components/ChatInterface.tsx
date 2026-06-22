@@ -753,13 +753,13 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
       initial={{ opacity: 0, scale: 1.02 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.98 }}
-      className="relative flex h-[calc(100vh-104px)] w-full flex-col overflow-hidden bg-stone-50 dark:bg-surface lg:grid lg:grid-cols-[300px_1fr_350px] lg:grid-rows-1 lg:flex-none"
+      className="relative flex h-screen w-full flex-col overflow-hidden bg-stone-50 dark:bg-surface lg:grid lg:grid-cols-[300px_1fr_350px] lg:grid-rows-1 lg:flex-none"
     >
       <UpgradeToast
         open={quotaToast}
         limit={quotaLimit}
         onClose={() => setQuotaToast(false)}
-        onUpgrade={() => { setQuotaToast(false); navigate("/how-it-works"); }}
+        onUpgrade={() => { setQuotaToast(false); navigate("/account"); }}
       />
       <AchievementToast
         open={achievementToast.open}

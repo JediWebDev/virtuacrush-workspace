@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Sparkles, Shield, Check } from "lucide-react";
+import { Sparkles, Check } from "lucide-react";
 import { CHARACTERS, Character } from "../types/character";
 import { matchesCharacterName, SPOTLIGHT_CHARS, type UserTier } from "../types/subscription";
 import CompanionCard from "../components/CompanionCard";
@@ -97,13 +97,6 @@ export default function HomePage({ onSelect, userTier }: HomePageProps) {
               >
                 <Sparkles size={18} />
                 Try Now
-              </Link>
-              <Link
-                to="/how-it-works"
-                className="glass flex items-center gap-2 rounded-2xl border-stone-500/15 px-8 py-4 font-semibold text-stone-900 transition-all hover:bg-black/[0.06] active:scale-95 dark:text-stone-100 dark:hover:bg-white/[0.07]"
-              >
-                <Shield size={18} />
-                How it Works
               </Link>
             </div>
           </div>
