@@ -132,11 +132,13 @@ class WorldScene extends Phaser.Scene {
   }
 
   private walkToNpc(def: GameNpc, node: Phaser.GameObjects.Container) {
+    // Walk the player toward the character for the RPG feel, but open the
+    // dialogue immediately on tap so the interaction always registers
+    // (especially on touch devices).
     this.moveTarget = { x: node.x - 44, y: node.y };
-    this.onArrive = () => {
-      const cb = this.registry.get("onInteract") as ((id: string) => void) | undefined;
-      cb?.(def.id);
-    };
+    this.onArrive = null;
+    const cb = this.registry.get("onInteract") as ((id: string) => void) | undefined;
+    cb?.(def.id);
   }
 
   update(_time: number, delta: number) {

@@ -6,8 +6,8 @@ import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw, Zap, ListChecks, Hand, MapPin, MessageCircle } from "lucide-react";
-import { readShowReplyChoices, writeShowReplyChoices } from "../lib/chatPreferences";
+import { Send, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw, Zap, MapPin, MessageCircle } from "lucide-react";
+import { readShowReplyChoices } from "../lib/chatPreferences";
 import ChatAvatar from "./ChatAvatar";
 import { Character } from "../types/character";
 import type { UserTier } from "../types/subscription";
@@ -22,8 +22,6 @@ import ChoiceButtons from "./ChoiceButtons";
 import { getActivePackSession, greetPackSession, abandonPackSession, fetchPackStories, fetchPackTranscript, type PackSession, type PackChoice, type PackStory } from "../lib/api";
 import NoticeToast from "./NoticeToast";
 import AchievementToast, { type AchievementToastData } from "./AchievementToast";
-import StageView from "./StageView";
-import ActionsPanel from "./ActionsPanel";
 import CityMap from "./CityMap";
 import GameCanvas, { type GameNpc } from "./GameCanvas";
 import { isScenePresentation } from "../types/scenePresentation";
@@ -54,11 +52,8 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     streaming: isLoading,
     replyChoices,
     clearReplyChoices,
-    presentation,
     setPresentation,
-    availableActions,
     mapLocations,
-    progressDetail,
     hydrateRpgState,
   } = useChat({
     characterId: character.id,
@@ -155,8 +150,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [meetArcComplete, setMeetArcComplete] = useState(() => isCustomCharacterId(character.id));
   const [devResetEnabled, setDevResetEnabled] = useState(false);
   const [devResetting, setDevResetting] = useState(false);
-  const [showReplyChoices, setShowReplyChoices] = useState(() => readShowReplyChoices());
-  const [showActionsPanel, setShowActionsPanel] = useState(true);
+  const [showReplyChoices] = useState(() => readShowReplyChoices());
   // Dialogue overlay: the LLM is only engaged when the player walks up to a
   // character in the Phaser world and opens this. The world itself (movement,
   // NPC actions, statuses) is owned by the backend sim engine, not the LLM.
@@ -167,14 +161,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   );
   const handleInteract = useCallback((_npcId: string) => setDialogueOpen(true), []);
   const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const toggleReplyChoices = () => {
-    setShowReplyChoices((prev) => {
-      const next = !prev;
-      writeShowReplyChoices(next);
-      return next;
-    });
-  };
 
   useEffect(() => {
     fetchProfile()
@@ -840,35 +826,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               </button>
               <button
                 type="button"
-                onClick={() => setShowActionsPanel((v) => !v)}
-                className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-2 text-xs font-semibold transition-all ${
-                  showActionsPanel
-                    ? 'border-accent/35 bg-accent/10 text-accent'
-                    : 'border-black/10 text-stone-500 hover:border-black/15 hover:text-stone-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-200'
-                }`}
-                aria-pressed={showActionsPanel}
-                title={showActionsPanel ? 'Hide actions panel' : 'Show actions panel'}
-              >
-                <Hand size={16} />
-                <span className="hidden sm:inline">Actions</span>
-              </button>
-              <button
-                type="button"
-                onClick={toggleReplyChoices}
-                className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-2 text-xs font-semibold transition-all ${
-                  showReplyChoices
-                    ? 'border-accent/35 bg-accent/10 text-accent'
-                    : 'border-black/10 text-stone-500 hover:border-black/15 hover:text-stone-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-200'
-                }`}
-                aria-label={showReplyChoices ? 'Hide reply suggestions' : 'Show reply suggestions'}
-                aria-pressed={showReplyChoices}
-                title={showReplyChoices ? 'Hide reply suggestions' : 'Show reply suggestions'}
-              >
-                <ListChecks size={16} />
-                <span className="hidden sm:inline">{showReplyChoices ? 'Suggestions on' : 'Suggestions off'}</span>
-              </button>
-              <button
-                type="button"
                 onClick={() => setShowHistoryView((v) => !v)}
                 className={`rounded-xl border p-2 transition-all ${
                   showHistoryView
@@ -906,20 +863,21 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           {dialogueOpen && (
             <motion.div
               key="dialogue"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 z-40 flex flex-col bg-stone-50/97 backdrop-blur-xl dark:bg-surface/97"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 280 }}
+              className="absolute inset-x-0 bottom-0 z-40 flex h-[55%] max-h-[460px] flex-col overflow-hidden rounded-t-3xl border-t border-black/10 bg-stone-50/95 shadow-[0_-12px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-surface/95"
             >
-              <div className="flex shrink-0 items-center justify-between border-b border-black/[0.06] px-4 py-2.5 dark:border-white/[0.06]">
-                <span className="flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-200">
-                  <img src={character.image} alt="" className="h-7 w-7 rounded-full object-cover object-top" />
-                  Talking with {character.name}
-                </span>
+              <div className="flex shrink-0 items-center gap-3 border-b border-black/[0.06] px-4 py-2.5 dark:border-white/[0.06]">
+                <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl ring-2 ring-accent/30">
+                  <img src={character.image} alt="" className="h-full w-full object-cover object-top" />
+                </div>
+                <p className="min-w-0 flex-1 truncate font-serif text-base font-bold text-stone-900 dark:text-stone-50">{character.name}</p>
                 <button
                   type="button"
                   onClick={() => setDialogueOpen(false)}
-                  className="rounded-lg p-1.5 text-stone-500 transition-colors hover:bg-black/[0.06] hover:text-stone-800 dark:hover:bg-white/[0.06] dark:hover:text-stone-100"
+                  className="shrink-0 rounded-lg p-1.5 text-stone-500 transition-colors hover:bg-black/[0.06] hover:text-stone-800 dark:hover:bg-white/[0.06] dark:hover:text-stone-100"
                   aria-label="Close conversation"
                 >
                   <X size={18} />
@@ -1054,22 +1012,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               </div>
             )}
           </div>
-        )}
-        {activeThread === 'freeRoam' && !showHistoryView && !archiveDay && (
-          <StageView
-            presentation={presentation}
-            companionPortraitFallback={character.image}
-            playerPortraitSrc={userAvatarSrc}
-          />
-        )}
-        {activeThread === 'freeRoam' && !showHistoryView && !archiveDay && showActionsPanel && (
-          <ActionsPanel
-            actions={availableActions}
-            mapLocations={mapLocations}
-            progress={progressDetail}
-            onAction={sendAction}
-            disabled={isLoading}
-          />
         )}
         {/* Status strip removed: the daily-engine activity rarely matched the
             live conversation. The scene header narration owns scene-setting now. */}
