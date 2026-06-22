@@ -53,7 +53,8 @@ const VOICE = new Set<PlayerVoice>(['free', 'gagged', 'muted']);
 const MAX_THREADS = 5;
 const CLEAR_MOBILITY_RE =
   /\b(released|untied|unbound|escaped|loose|wriggled?\s+free|broke\s+free|can move|wrists?\s+(?:are|were)\s+free)\b/i;
-const CLEAR_VOICE_RE = /\b(ungagged|can speak|spit(s)? out|removed the gag|free to talk)\b/i;
+const CLEAR_VOICE_RE =
+  /\b(ungagged|can speak|spit(s)? out|removed the gag|free to talk|peel(s|ed)? (the )?tape|rip(s|ped)? (the )?tape|pull(s|ed)? (the )?(tape|gag) off|take(s|ing)? (the )?gag off|remove(s|d)? (the )?(tape|gag)|ungag)\b/i;
 const RESTRAINED_RE = /\b(tied|bound|restrained|cuffed|handcuffed|zip-?tied|ropes?)\b/i;
 const GAGGED_RE = /\b(gag(ged)?|muzzled|can't speak|cannot speak)\b/i;
 

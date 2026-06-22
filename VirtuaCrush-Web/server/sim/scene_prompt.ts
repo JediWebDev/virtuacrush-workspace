@@ -93,6 +93,20 @@ export function isCrisisScene(snapshot: SceneSnapshot | null, history: HistoryLi
   return conversationHasPhysicalScene(history, message);
 }
 
+/** Suppress earthquakes, car crashes, etc. during co-present roleplay or companion restraint. */
+export function shouldSuppressEnvironmentalChaos(
+  snapshot: SceneSnapshot | null,
+  history: HistoryLine[],
+  message: string,
+): boolean {
+  if (isCrisisScene(snapshot, history, message)) return true;
+  if (conversationHasPhysicalScene(history, message)) return true;
+  if (!snapshot) return false;
+  if (snapshot.coPresent) return true;
+  if (snapshot.companion.mobility !== 'free' || snapshot.companion.voice !== 'free') return true;
+  return false;
+}
+
 export function shouldSuppressHomeBaseline(opts: {
   prior: SceneSnapshot | null;
   history: HistoryLine[];

@@ -21,6 +21,8 @@ export interface SceneContext {
   companionId: string;
   companionName: string;
   suppressAmbientDisruptions: boolean;
+  /** Skip earthquakes, car crashes, etc. — NPC chaos still allowed. */
+  suppressEnvironmentalChaos: boolean;
   coPresent: boolean;
   firedNpcChaos: string[];
 }
@@ -39,6 +41,7 @@ export interface BuildSceneContextInput {
   arcTags?: NarrativeTag[];
   coPresent?: boolean;
   suppressAmbientDisruptions?: boolean;
+  suppressEnvironmentalChaos?: boolean;
   /** NPC chaos keys already fired this scene/session. */
   firedNpcChaos?: string[];
 }
@@ -48,6 +51,7 @@ export function buildSceneContext(input: BuildSceneContextInput): SceneContext {
     (input.coPresent ?? Boolean(input.activeArc?.sceneAnchor?.coPresent)) || input.atVenue;
   const arcTags = input.arcTags ?? input.activeArc?.arcTags ?? [];
   const suppressAmbientDisruptions = input.suppressAmbientDisruptions ?? false;
+  const suppressEnvironmentalChaos = input.suppressEnvironmentalChaos ?? suppressAmbientDisruptions;
   const firedNpcChaos = input.firedNpcChaos ?? input.composition?.firedNpcChaos ?? [];
   return {
     mode: input.mode ?? (input.activeArc ? 'arc' : 'freeRoam'),
@@ -60,6 +64,7 @@ export function buildSceneContext(input: BuildSceneContextInput): SceneContext {
     companionId: input.companionId,
     companionName: input.companionName,
     suppressAmbientDisruptions,
+    suppressEnvironmentalChaos,
     coPresent,
     firedNpcChaos,
   };

@@ -26,7 +26,7 @@ export interface EngineSceneDelta {
 const GO_HOME_RE =
   /\b(head(ing)?\s+(back\s+)?home|go(ing)?\s+home|leave|left|exit(ed)?|depart(ed)?|I'm\s+out\s+of\s+here|back\s+to\s+(my|the)\s+place)\b/i;
 const GO_VENUE_RE =
-  /\b(let'?s\s+(?:go|head|hit|meet)|go(?:ing)?\s+to|head(?:ing)?\s+to|take\s+me\s+to|meet\s+me\s+at|meet\s+at|walk\s+to|drive\s+to|swing\s+by)\s+(?:the\s+)?(.+?)(?:[.!?,]|$)/i;
+  /\b(let'?s\s+(?:go|head|hit|meet)|go(?:ing)?\s+to(?!\s+(?:take|get|have|try|need|want|make|see|pull|remove|drink|untie|cut|bring|give|tell|ask|be|start|finish|keep|let))\s+|head(?:ing)?\s+to|take\s+me\s+to|meet\s+me\s+at|meet\s+at|walk\s+to|drive\s+to|swing\s+by)\s+(?:the\s+)?(.+?)(?:[.!?,]|$)/i;
 const AT_LOCATION_RE =
   /\b(I'?m|we'?re|we\s+are)\s+(?:already\s+)?(?:at|in|inside)\s+(?:the\s+)?(.+?)(?:[.!?,]|$)/i;
 
@@ -67,11 +67,25 @@ function voiceFromText(text: string): PlayerVoice | undefined {
   return undefined;
 }
 
+function isPlausibleLocationPhrase(phrase: string): boolean {
+  const t = phrase.trim().toLowerCase();
+  if (!t || t.length < 3) return false;
+  if (/\b(gag|tape|mouth|lips|restraints?|zip\s*-?\s*ties?|drink|scotch|understood)\b/.test(t)) return false;
+  if (/^(take|pull|remove|get|have|try|need|want|make|see|cut|untie)\b/.test(t)) return false;
+  return true;
+}
+
 function locationPhraseFromMessage(message: string): string | null {
   const go = GO_VENUE_RE.exec(message);
-  if (go?.[2]?.trim()) return go[2].trim();
+  if (go?.[2]?.trim()) {
+    const phrase = go[2].trim();
+    return isPlausibleLocationPhrase(phrase) ? phrase : null;
+  }
   const at = AT_LOCATION_RE.exec(message);
-  if (at?.[2]?.trim()) return at[2].trim();
+  if (at?.[2]?.trim()) {
+    const phrase = at[2].trim();
+    return isPlausibleLocationPhrase(phrase) ? phrase : null;
+  }
   return null;
 }
 
@@ -306,9 +320,11 @@ export function buildEngineSceneDelta(opts: {
   const conversationRaw = allowLocation ? (opts.conversation ?? {}) : {};
 
   const merged = mergePartialPatches(heuristicRaw, refereeRaw, intentRaw, allowLocation);
-  // Conversation fills coPresent/location when the story moved but DB snapshot is stale.
-  if (conversationRaw.companionMobility) merged.companionMobility = conversationRaw.companionMobility;
-  if (conversationRaw.companionVoice) merged.companionVoice = conversationRaw.companionVoice;
+  // Heuristic user actions beat transcript inference (e.g. ungag after muffled history).
+  if (heuristicRaw.companionMobility) merged.companionMobility = heuristicRaw.companionMobility;
+  else if (conversationRaw.companionMobility) merged.companionMobility = conversationRaw.companionMobility;
+  if (heuristicRaw.companionVoice) merged.companionVoice = heuristicRaw.companionVoice;
+  else if (conversationRaw.companionVoice) merged.companionVoice = conversationRaw.companionVoice;
   if (allowLocation) {
     if (conversationRaw.coPresent !== undefined) merged.coPresent = conversationRaw.coPresent;
     if (conversationRaw.location) {

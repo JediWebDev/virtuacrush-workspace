@@ -47,6 +47,7 @@ export interface ChaosExtraActor {
 
 const NPC_CHAOS_MIN_TURN = 3;
 const EPHEMERAL_MIN_TURN = 4;
+const EPHEMERAL_CHANCE = 0.14;
 
 const CHAOS_MANDATORY =
   'MANDATORY: The companion MUST react on-screen this turn. Do not ignore, deflect, or continue as if nothing happened.';
@@ -317,7 +318,7 @@ export function planChaosTurn(ctx: SceneContext, opts: PlanChaosOpts = {}): Chao
 
   if (ctx.composition && !ctx.suppressAmbientDisruptions) {
     const due = nextDueDisruption(ctx.composition, ctx.turn);
-    if (due) {
+    if (due && !(due.kind === 'disaster' && ctx.suppressEnvironmentalChaos)) {
       const full = renderDisruptionDirective(due, ctx.companionName, ctx.companionId);
       directiveBlock = full.replace(/^\n+=== CHAOS EVENT[^=]*===\n+/i, '').trim();
       firedDisruption = due;
@@ -336,10 +337,10 @@ export function planChaosTurn(ctx: SceneContext, opts: PlanChaosOpts = {}): Chao
     return { directiveBlock, firedDisruption, firedNpcChaosKey, agencyActions, residues };
   }
 
-  if (ctx.turn >= EPHEMERAL_MIN_TURN && r() < 0.24 * intensity) {
+  if (ctx.turn >= EPHEMERAL_MIN_TURN && r() < EPHEMERAL_CHANCE * intensity) {
     const planOpts = chaosPlanOpts(ctx);
     if (!planOpts.firstMeeting) {
-      const spec = pickEphemeralChaosEvent(r, planOpts);
+      const spec = pickEphemeralChaosEvent(r, planOpts, !ctx.suppressEnvironmentalChaos);
       if (spec) {
         directiveBlock = renderEphemeralDirective(spec.poolId, spec.kind, ctx.companionName, ctx.companionId);
         firedDisruption = { id: 'ephemeral', poolId: spec.poolId, kind: spec.kind, atTurn: ctx.turn };

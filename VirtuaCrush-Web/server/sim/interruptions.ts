@@ -182,6 +182,12 @@ function pickSpec(pool: ChaosEventSpec[], opts: PlanOpts, r: () => number): Chao
   return ok.length ? pickFrom(ok, r) : null;
 }
 
+/** NPC entrances are preferred; environmental disasters are rare spice. */
+function pickPlannedChaosEvent(opts: PlanOpts, r: () => number): ChaosEventSpec | null {
+  if (r() < 0.88) return pickSpec(NPC_EVENTS, opts, r);
+  return pickSpec(DISASTERS, opts, r);
+}
+
 /**
  * Pre-rolls substantive chaos for a scene: one NPC or disaster event mid-scene,
  * optionally a second later. No textures or ignorable pings. Skipped on first
@@ -196,13 +202,12 @@ export function planDisruptions(r: () => number, opts: PlanOpts): PlannedDisrupt
 
   if (opts.firstMeeting) return out;
 
-  const pool = [...NPC_EVENTS, ...DISASTERS];
   const event1Turn = 5 + Math.floor(r() * 4);
-  push(pickSpec(pool, opts, r), event1Turn);
+  push(pickPlannedChaosEvent(opts, r), event1Turn);
 
   if (r() < 0.65) {
     const event2Turn = event1Turn + 7 + Math.floor(r() * 5);
-    push(pickSpec(pool, opts, r), event2Turn);
+    push(pickPlannedChaosEvent(opts, r), event2Turn);
   }
 
   return out.sort((a, b) => a.atTurn - b.atTurn);
@@ -281,11 +286,18 @@ export function disruptionResidue(
 export function pickEphemeralChaosEvent(
   r: () => number,
   opts: PlanOpts,
+  allowDisasters = true,
 ): ChaosEventSpec | null {
-  const pool = ALL_SPECS.filter(
+  const pool = (allowDisasters ? ALL_SPECS : NPC_EVENTS).filter(
     (s) => (s.phase === 'any' || s.phase === opts.phase) && (!s.requiresFriend || opts.hasFriend),
   );
-  return pool.length ? pickFrom(pool, r) : null;
+  if (!pool.length) return null;
+  if (!allowDisasters) return pickFrom(pool, r);
+  if (r() < 0.9) {
+    const npcOnly = pool.filter((s) => s.kind === 'npc_event');
+    if (npcOnly.length) return pickFrom(npcOnly, r);
+  }
+  return pickFrom(pool, r);
 }
 
 /** Player-facing toast copy — states what happened, not meta "read the reply". */

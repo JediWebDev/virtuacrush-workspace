@@ -51,6 +51,7 @@ import {
   formatActiveSceneDirective,
   reconcileSceneSnapshotForPrompt,
   isCrisisScene,
+  shouldSuppressEnvironmentalChaos,
 } from '../sim/scene_prompt';
 import {
   buildEngineSceneDelta,
@@ -59,6 +60,7 @@ import {
   type EngineSceneDelta,
 } from '../sim/scene_delta';
 import {
+  extractCompanionConditionFromMessage,
   inferCompanionConditionFromBeats,
   inferCompanionConditionFromConversation,
   mergeCompanionConditionPatches,
@@ -635,6 +637,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       atVenue: Boolean(situation.scene.location),
       coPresent: priorSceneSnapshot?.coPresent ?? !!situation.scene.location,
       suppressAmbientDisruptions: isCrisisScene(priorSceneSnapshot, turns, message),
+      suppressEnvironmentalChaos: shouldSuppressEnvironmentalChaos(priorSceneSnapshot, turns, message),
     });
     const worldEvent = detectWorldEvent(message);
     const chaos = planChaosTurn(sceneCtx, { worldEvent });
@@ -697,11 +700,16 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     }
     const driveReaction = (companionEntity?.knowledge.pendingDriveReaction as string | undefined) || '';
 
+    const messageCompanionPatch = extractCompanionConditionFromMessage(message, displayName);
     const conversationScenePatch = {
       ...inferSceneDeltaFromConversation(turns, message, priorSceneSnapshot),
       ...mergeCompanionConditionPatches(
-        inferCompanionConditionFromBeats(storyBeats, displayName),
+        inferCompanionConditionFromBeats(storyBeats, displayName, {
+          skipIfCleared:
+            messageCompanionPatch.companionVoice === 'free' || messageCompanionPatch.companionMobility === 'free',
+        }),
         inferCompanionConditionFromConversation(turns, message, displayName, priorSceneSnapshot),
+        messageCompanionPatch,
       ),
     };
 

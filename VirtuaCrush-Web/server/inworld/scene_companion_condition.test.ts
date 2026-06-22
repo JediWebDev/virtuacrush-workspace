@@ -5,6 +5,7 @@ import {
   inferCompanionConditionFromBeats,
   enforceCompanionSpeechConstraints,
   looksMuffledSpeech,
+  mergeCompanionConditionPatches,
 } from './scene_companion_condition';
 import { emptySceneSnapshot, mergeSceneSnapshot } from './scene_snapshot';
 
@@ -39,6 +40,24 @@ test('mergeSceneSnapshot: companion gag persists until narrator clears', () => {
   assert.equal(merged.companion.mobility, 'restrained');
 });
 
+test('extractCompanionConditionFromMessage: pull tape off clears gag', () => {
+  const p = extractCompanionConditionFromMessage('*pull the tape off slowly, watching her expression*', 'Lexi');
+  assert.equal(p.companionVoice, 'free');
+});
+
+test('extractCompanionConditionFromMessage: cut zip ties clears bind', () => {
+  const p = extractCompanionConditionFromMessage("*cut the zip ties carefully* She's not bolting tonight.", 'Lexi');
+  assert.equal(p.companionMobility, 'free');
+});
+
+test('mergeCompanionConditionPatches: explicit free beats stale gagged', () => {
+  const p = mergeCompanionConditionPatches(
+    { companionVoice: 'gagged' },
+    { companionVoice: 'free' },
+  );
+  assert.equal(p.companionVoice, 'free');
+});
+
 test('enforceCompanionSpeechConstraints: muffles clear companion lines when gagged', () => {
   const snap = emptySceneSnapshot();
   snap.companion.voice = 'gagged';
@@ -52,6 +71,17 @@ test('enforceCompanionSpeechConstraints: muffles clear companion lines when gagg
   );
   assert.equal(out[0].text, 'mmf mmf mmf!');
   assert.equal(out[1].text, '*lights flicker*');
+});
+
+test('enforceCompanionSpeechConstraints: no-op when companion voice is free', () => {
+  const snap = emptySceneSnapshot();
+  snap.companion.voice = 'free';
+  const out = enforceCompanionSpeechConstraints(
+    [{ speaker: 'Lexi', text: 'Finally — you took your sweet time.' }],
+    'Lexi',
+    snap,
+  );
+  assert.equal(out[0].text, 'Finally — you took your sweet time.');
 });
 
 test('looksMuffledSpeech: recognizes mmf lines', () => {

@@ -67,6 +67,38 @@ describe('world_npcs', () => {
 });
 
 describe('chaos_engine', () => {
+  it('skips planned disaster when environmental chaos suppressed', () => {
+    const comp: SceneComposition = {
+      composedAt: new Date().toISOString(),
+      forDate: '2026-01-01',
+      phase: 'home',
+      locationSlug: null,
+      timeLabel: 'evening',
+      weather: 'clear',
+      setting: 'at home',
+      details: [],
+      outfit: 'casual',
+      activity: 'scrolling',
+      cast: [],
+      disruptions: [{ id: 'd1', poolId: 'earthquake_tremor', kind: 'disaster', atTurn: 1 }],
+      firedDisruptions: [],
+    };
+    const ctx = buildSceneContext({
+      world: baseWorld(),
+      composition: comp,
+      resolvedNpcs: [],
+      activeArc: null,
+      turn: 1,
+      companionId: 'mina',
+      companionName: 'Mina',
+      atVenue: false,
+      suppressEnvironmentalChaos: true,
+    });
+    const result = planChaosTurn(ctx);
+    assert.equal(result.firedDisruption, null);
+    assert.equal(result.directiveBlock, '');
+  });
+
   it('fires planned disaster when due', () => {
     const comp: SceneComposition = {
       composedAt: new Date().toISOString(),

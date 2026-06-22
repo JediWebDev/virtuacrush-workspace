@@ -4,11 +4,14 @@
 import type { DirectorTurn } from './director';
 import type { PlayerMobility, PlayerVoice, SceneSnapshot, SceneSnapshotPatch } from './scene_snapshot';
 
-const CLEAR_VOICE_RE = /\b(ungagged|can speak|spit(s)? out|removed the gag|free to talk|peel(s|ed)? (the )?tape|rip(s|ped)? (the )?tape)\b/i;
+const CLEAR_VOICE_RE =
+  /\b(ungagged|can speak|spit(s)? out|removed the gag|free to talk|peel(s|ed)? (the )?tape|rip(s|ped)? (the )?tape|pull(s|ed)? (the )?(tape|gag) off|take(s|ing)? (the )?gag off|remove(s|d)? (the )?(tape|gag)|ungag)\b/i;
+const REMOVE_GAG_ACTION_RE =
+  /\b(pull|peel|rip|remove|take)\b.*\b(tape|gag)\b.*\b(off|away|free)\b|\b(tape|gag)\b.*\b(off|removed|away)\b|\bungag\b/i;
+const CLEAR_MOBILITY_RE =
+  /\b(released|untied|unbound|escaped|loose|wriggled?\s+free|broke\s+free|can move|wrists?\s+(?:are|were)\s+free|cut\s+(the\s+)?(zip\s*-?\s*ties?|restraints?|rope)|get\s+(you|her|him)\s+loose)\b/i;
 const GAGGED_RE = /\b(gag(ged|ging)?|muzzled|can't speak|cannot speak|duct\s+tape)\b/i;
 const RESTRAINED_RE = /\b(tied|bound|restrained|cuffed|handcuffed|zip-?tied|ropes?|tied\s+up)\b/i;
-const CLEAR_MOBILITY_RE =
-  /\b(released|untied|unbound|escaped|loose|wriggled?\s+free|broke\s+free|can move|wrists?\s+(?:are|were)\s+free)\b/i;
 
 const COMPANION_GAG_ACTION_RE =
   /\b(tape|gag|ball\s+gag|duct\s+tape|muzzle)\b.*\b(mouth|lips|gag)\b|\b(mouth|lips)\b.*\b(tape|gag|duct\s+tape)\b|\b(slap|press|stick|put|place|over)\b.*\b(tape|gag)\b/i;
@@ -42,11 +45,49 @@ function targetsPlayer(text: string): boolean {
   );
 }
 
+/** User message or action explicitly removes companion gag/bind this turn. */
+export function companionConditionClearFromMessage(
+  message: string,
+  companionName: string,
+): Pick<SceneSnapshotPatch, 'companionMobility' | 'companionVoice'> {
+  const patch: Pick<SceneSnapshotPatch, 'companionMobility' | 'companionVoice'> = {};
+  const actions = [...message.matchAll(/\*([^*]+)\*/g)].map((m) => m[1]?.trim() ?? '').filter(Boolean);
+  const segments = actions.length ? actions : [message];
+
+  for (const seg of segments) {
+    if (targetsPlayer(seg)) continue;
+    const onCompanion = targetsCompanion(seg, companionName) || (!targetsPlayer(seg) && !/\bmy\s+(mouth|lips)\b/i.test(seg));
+
+    if (onCompanion && (REMOVE_GAG_ACTION_RE.test(seg) || (CLEAR_VOICE_RE.test(seg) && !GAGGED_RE.test(seg)))) {
+      patch.companionVoice = 'free';
+    }
+    if (
+      onCompanion &&
+      (CLEAR_MOBILITY_RE.test(seg) || /\bcut\s+(the\s+)?(zip\s*-?\s*ties?|restraints?)\b/i.test(seg)) &&
+      !RESTRAINED_RE.test(seg)
+    ) {
+      patch.companionMobility = 'free';
+    }
+  }
+
+  // Spoken promise to ungag soon — not a clear yet, but don't mis-parse as location elsewhere.
+  if (!patch.companionVoice && /\b(take|pull|remove)\s+(the\s+)?gag\s+off\b/i.test(message) && !actions.length) {
+    return patch;
+  }
+
+  return patch;
+}
+
 /** Heuristic pass on user message — companion gag/bind when player acts on them. */
 export function extractCompanionConditionFromMessage(
   message: string,
   companionName: string,
 ): Pick<SceneSnapshotPatch, 'companionMobility' | 'companionVoice'> {
+  const cleared = companionConditionClearFromMessage(message, companionName);
+  if (cleared.companionVoice === 'free' || cleared.companionMobility === 'free') {
+    return cleared;
+  }
+
   const patch: Pick<SceneSnapshotPatch, 'companionMobility' | 'companionVoice'> = {};
   const actions = [...message.matchAll(/\*([^*]+)\*/g)].map((m) => m[1]?.trim() ?? '').filter(Boolean);
   const segments = actions.length ? actions : [message];
@@ -71,11 +112,13 @@ export interface StoryBeatLine {
   summary: string;
 }
 
-/** Pinned beats survive history trim — recover gag/bind from them. */
+/** Pinned beats survive history trim — recover gag/bind only when nothing cleared this turn. */
 export function inferCompanionConditionFromBeats(
   beats: StoryBeatLine[],
   companionName: string,
+  opts: { skipIfCleared?: boolean } = {},
 ): Pick<SceneSnapshotPatch, 'companionMobility' | 'companionVoice'> {
+  if (opts.skipIfCleared) return {};
   const patch: Pick<SceneSnapshotPatch, 'companionMobility' | 'companionVoice'> = {};
   const blob = beats.map((b) => b.summary).join('\n');
   const name = companionName.trim();
@@ -86,10 +129,14 @@ export function inferCompanionConditionFromBeats(
     /\b(her|him|companion|she)\b/i.test(blob);
 
   if (mentionsCompanion && /\b(gag(ged)?|duct\s+tape|taped|ball\s+gag|muzzled)\b/i.test(blob)) {
-    patch.companionVoice = 'gagged';
+    if (!/\b(ungag|gag\s+off|tape\s+off|removed\s+the\s+gag|freed?\s+to\s+speak)\b/i.test(blob)) {
+      patch.companionVoice = 'gagged';
+    }
   }
   if (mentionsCompanion && /\b(restrained|bound|tied|wrists?|ankles?|tape.*wrists?)\b/i.test(blob)) {
-    patch.companionMobility = 'restrained';
+    if (!/\b(untied|cut\s+(the\s+)?(zip|restraints?)|loose|freed?|wrists?\s+free)\b/i.test(blob)) {
+      patch.companionMobility = 'restrained';
+    }
   }
   return patch;
 }
@@ -106,6 +153,11 @@ export function inferCompanionConditionFromConversation(
   companionName: string,
   prior: SceneSnapshot | null,
 ): Pick<SceneSnapshotPatch, 'companionMobility' | 'companionVoice'> {
+  const cleared = companionConditionClearFromMessage(message, companionName);
+  if (cleared.companionVoice === 'free' || cleared.companionMobility === 'free') {
+    return cleared;
+  }
+
   const patch: Pick<SceneSnapshotPatch, 'companionMobility' | 'companionVoice'> = {};
   const blob = [...history.slice(-14), { role: 'user' as const, content: message }]
     .map((m) => m.content)
@@ -175,6 +227,11 @@ export function mergeCompanionConditionPatches(
   for (const p of patches) {
     if (p.companionVoice) out.companionVoice = p.companionVoice;
     if (p.companionMobility) out.companionMobility = p.companionMobility;
+  }
+  // Explicit clears win over stale gagged/restrained from earlier patches.
+  for (const p of patches) {
+    if (p.companionVoice === 'free') out.companionVoice = 'free';
+    if (p.companionMobility === 'free') out.companionMobility = 'free';
   }
   return out;
 }

@@ -29,6 +29,22 @@ test('extractSceneDeltaFromMessage: duct tape on companion sets companionVoice',
   assert.equal(d.companionVoice, 'gagged');
 });
 
+test('extractSceneDeltaFromMessage: "going to take the gag off" is not a location', () => {
+  const d = extractSceneDeltaFromMessage(
+    "I'm going to take the gag off, you're going to drink some of this, and then I'm going to untie you. Understood?",
+    null,
+    'Lexi',
+  );
+  assert.equal(d.location, undefined);
+});
+
+test('extractSceneDeltaFromMessage: pull tape off clears companion gag', () => {
+  const prior = emptySceneSnapshot();
+  prior.companion.voice = 'gagged';
+  const d = extractSceneDeltaFromMessage('*pull the tape off slowly*', prior, 'Lexi');
+  assert.equal(d.companionVoice, 'free');
+});
+
 test('extractSceneDeltaFromMessage: travel phrase resolves venue', () => {
   const d = extractSceneDeltaFromMessage("let's go to the mall", null);
   assert.equal(d.venueSlug, 'westside_commons');
