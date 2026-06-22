@@ -6,7 +6,7 @@ import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw, Zap, ListChecks, Hand } from "lucide-react";
+import { Send, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw, Zap, ListChecks, Hand, MapPin } from "lucide-react";
 import { readShowReplyChoices, writeShowReplyChoices } from "../lib/chatPreferences";
 import ChatAvatar from "./ChatAvatar";
 import { Character } from "../types/character";
@@ -24,6 +24,7 @@ import NoticeToast from "./NoticeToast";
 import AchievementToast, { type AchievementToastData } from "./AchievementToast";
 import StageView from "./StageView";
 import ActionsPanel from "./ActionsPanel";
+import CityMap from "./CityMap";
 import { isScenePresentation } from "../types/scenePresentation";
 
 function formatHistoryDate(day: string): string {
@@ -753,7 +754,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
       initial={{ opacity: 0, scale: 1.02 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.98 }}
-      className="relative flex h-screen w-full flex-col overflow-hidden bg-stone-50 dark:bg-surface lg:grid lg:grid-cols-[300px_1fr_350px] lg:grid-rows-1 lg:flex-none"
+      className="relative flex h-screen w-full flex-col overflow-hidden bg-stone-50 dark:bg-surface lg:grid lg:grid-cols-[1fr_360px] lg:grid-rows-1 lg:flex-none"
     >
       <UpgradeToast
         open={quotaToast}
@@ -794,74 +795,6 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
       />
       <div className="pointer-events-none absolute inset-0 -z-10 ambient-accent" />
 
-      {/* Profile rail — dating / social profile feel */}
-      <motion.div className="hidden w-full flex-col border-b border-black/[0.06] p-6 glass backdrop-blur-2xl lg:flex lg:h-full lg:overflow-y-auto lg:border-b-0 lg:border-r dark:border-white/[0.06]">
-        <div className="mb-8 flex items-center justify-between">
-            <button
-            type="button"
-            onClick={handleBack}
-            className="flex items-center gap-2 text-sm font-medium text-stone-600 dark:text-stone-400 transition-colors hover:text-stone-800 dark:hover:text-stone-100"
-            >
-            <ArrowLeft size={16} />
-            Back
-            </button>
-            <button
-                type="button"
-                onClick={() => setShowHistoryView((v) => !v)}
-                className={`rounded-xl p-2 transition-all ${showHistoryView ? "bg-accent text-white" : "text-stone-600 dark:text-stone-400 hover:bg-black/[0.06] dark:hover:bg-white/[0.06] hover:text-stone-800 dark:hover:text-stone-100"}`}
-                aria-label="Toggle chat history"
-                aria-pressed={showHistoryView}
-            >
-                <History size={18} />
-            </button>
-        </div>
-
-        <div className="flex flex-col items-center text-center">
-          <motion.div 
-            whileHover={{ scale: 1.02 }}
-            className="relative mb-5 h-44 w-44 overflow-hidden rounded-[2rem] border border-black/10 dark:border-white/10 bg-stone-200 dark:bg-stone-800/40 p-1 shadow-xl shadow-black/20"
-          >
-            <img src={character.image} alt="" className="h-full w-full rounded-[1.75rem] object-cover object-top" />
-            <div className="absolute bottom-3 right-3 h-3.5 w-3.5 rounded-full border-2 border-stone-50 bg-emerald-400 dark:border-surface shadow-[0_0_0_2px_rgba(16,185,129,0.35)]" />
-          </motion.div>
-          
-          <h2 className="mb-1 font-serif text-2xl font-bold text-stone-900 dark:text-stone-50">{character.name}</h2>
-          <p className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-accent">{character.role}</p>
-          <span className="mb-5 inline-flex items-center rounded-full border border-black/10 dark:border-white/10 bg-black/[0.04] dark:bg-white/[0.04] px-3 py-1 text-[11px] font-semibold text-stone-600 dark:text-stone-300">
-            Affinity {affinity}%
-          </span>
-
-          {devResetEnabled ? (
-            <button
-              type="button"
-              onClick={() => void handleDevReset()}
-              disabled={devResetting || isLoading}
-              className="mb-5 flex w-full max-w-[220px] items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-500/15 disabled:opacity-50 dark:text-amber-200"
-            >
-              <RotateCcw size={14} className={devResetting ? 'animate-spin' : ''} />
-              {devResetting ? 'Resetting…' : 'Dev: reset character'}
-            </button>
-          ) : null}
-          
-          <PackList
-            characterId={character.id}
-            meetArcComplete={meetArcComplete}
-            activeSession={packCompleted ? null : activePackSession}
-            onSessionStart={handlePackStart}
-            onResume={handlePackResume}
-            onAbandon={handlePackAbandon}
-          />
-          <SecretCard secret={storyState?.secret} name={character.name} />
-          <ActivityLog characterId={character.id} name={character.name} />
-        </div>
-
-        <div className="mt-auto border-t border-black/[0.06] dark:border-white/[0.06] pt-6">
-            <p className="text-center text-[11px] leading-relaxed text-stone-900 dark:text-stone-500">
-              Private chat · Encrypted in transit
-            </p>
-        </div>
-      </motion.div>
-
       {/* Main chat */}
       <motion.div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-stone-100/80 dark:bg-surface-elevated/55">
         <div className="z-10 flex shrink-0 items-center justify-between gap-2 border-b border-black/[0.06] dark:border-white/[0.06] bg-stone-50/70 px-4 py-3 backdrop-blur-xl dark:bg-surface/70 md:px-8 md:py-5">
@@ -869,7 +802,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                 <button
                   type="button"
                   onClick={handleBack}
-                  className="mr-1 shrink-0 rounded-xl p-2 text-stone-600 transition-colors hover:bg-black/[0.06] hover:text-stone-800 dark:text-stone-400 dark:hover:bg-white/[0.06] dark:hover:text-stone-100 lg:hidden"
+                  className="mr-1 shrink-0 rounded-xl p-2 text-stone-600 transition-colors hover:bg-black/[0.06] hover:text-stone-800 dark:text-stone-400 dark:hover:bg-white/[0.06] dark:hover:text-stone-100"
                   aria-label="Back to home"
                 >
                   <ArrowLeft size={20} />
@@ -917,8 +850,22 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               </button>
               <button
                 type="button"
+                onClick={() => setShowHistoryView((v) => !v)}
+                className={`rounded-xl border p-2 transition-all ${
+                  showHistoryView
+                    ? 'border-accent/35 bg-accent/10 text-accent'
+                    : 'border-black/10 text-stone-500 hover:border-black/15 hover:text-stone-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-200'
+                }`}
+                aria-label="Toggle chat history"
+                aria-pressed={showHistoryView}
+                title={showHistoryView ? 'Hide chat history' : 'Show chat history'}
+              >
+                <History size={18} />
+              </button>
+              <button
+                type="button"
                 onClick={() => setProfileOpen(true)}
-                className="rounded-xl border border-black/10 p-2 text-stone-600 transition-all hover:border-accent/30 hover:text-stone-800 dark:border-white/10 dark:text-stone-300 dark:hover:text-stone-100 lg:hidden"
+                className="rounded-xl border border-black/10 p-2 text-stone-600 transition-all hover:border-accent/30 hover:text-stone-800 dark:border-white/10 dark:text-stone-300 dark:hover:text-stone-100"
                 aria-label="View profile"
               >
                 <Info size={18} />
@@ -1385,8 +1332,14 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           </>
         )}
       </motion.div>
-      {/* Desktop right panel — social feed */}
-      <div className="hidden min-h-0 flex-col border-l border-black/[0.06] dark:border-white/[0.06] lg:flex overflow-y-auto">
+      {/* Desktop right panel — map on top, social feed below */}
+      <div className="hidden min-h-0 flex-col border-l border-black/[0.06] dark:border-white/[0.06] lg:flex">
+        <div className="shrink-0 border-b border-black/[0.06] p-3 dark:border-white/[0.06]">
+          <div className="mb-2 flex items-center gap-1.5 px-1 text-[10px] font-semibold uppercase tracking-widest text-stone-400">
+            <MapPin size={12} /> Map
+          </div>
+          <CityMap locations={mapLocations} onTravel={sendAction} disabled={isLoading} />
+        </div>
         <SocialFeed character={characterWithAffinity} className="min-h-0 flex-1" isActive userTier={userTier} refreshKey={feedRefreshKey} />
       </div>
 
@@ -1431,7 +1384,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 z-[55] bg-black/50 backdrop-blur-sm lg:hidden"
+              className="absolute inset-0 z-[55] bg-black/50 backdrop-blur-sm"
               onClick={() => setProfileOpen(false)}
               aria-hidden
             />
@@ -1440,7 +1393,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", damping: 28, stiffness: 280 }}
-              className="absolute inset-y-0 left-0 z-[60] flex w-full max-w-[340px] flex-col overflow-y-auto bg-stone-50 dark:bg-surface shadow-2xl lg:hidden border-r border-black/[0.08] dark:border-white/[0.08]"
+              className="absolute inset-y-0 left-0 z-[60] flex w-full max-w-[340px] flex-col overflow-y-auto bg-stone-50 dark:bg-surface shadow-2xl border-r border-black/[0.08] dark:border-white/[0.08]"
             >
               <div className="flex shrink-0 items-center justify-between border-b border-black/[0.06] dark:border-white/[0.06] px-4 py-3">
                 <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">Profile</span>
@@ -1473,8 +1426,18 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                     {devResetting ? 'Resetting…' : 'Dev: reset character'}
                   </button>
                 ) : null}
-                      <SecretCard secret={storyState?.secret} name={character.name} />
-                <ActivityLog characterId={character.id} name={character.name} />
+                <div className="w-full text-left">
+                  <PackList
+                    characterId={character.id}
+                    meetArcComplete={meetArcComplete}
+                    activeSession={packCompleted ? null : activePackSession}
+                    onSessionStart={handlePackStart}
+                    onResume={handlePackResume}
+                    onAbandon={handlePackAbandon}
+                  />
+                  <SecretCard secret={storyState?.secret} name={character.name} />
+                  <ActivityLog characterId={character.id} name={character.name} />
+                </div>
               </div>
             </motion.div>
           </>

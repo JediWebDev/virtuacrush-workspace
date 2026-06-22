@@ -30,12 +30,13 @@ export default function ActionsPanel({
   const hasScene = sceneActions.length > 0;
   const hasItems = itemActions.length > 0;
 
-  const tabs: { id: Tab; label: string; icon: typeof Hand; show: boolean }[] = [
+  const allTabs: { id: Tab; label: string; icon: typeof Hand; show: boolean }[] = [
     { id: 'scene', label: 'Scene', icon: Hand, show: hasScene },
     { id: 'map', label: 'Map', icon: MapPin, show: true },
     { id: 'journal', label: 'Journal', icon: BookMarked, show: true },
     { id: 'items', label: 'Items', icon: Backpack, show: hasItems },
-  ].filter((t) => t.show);
+  ];
+  const tabs = allTabs.filter((t) => t.show);
 
   if (tabs.length === 0) return null;
 

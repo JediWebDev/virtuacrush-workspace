@@ -37,6 +37,7 @@ export interface ChatDoneInfo {
   earnedBadge?: { title: string; description: string } | null;
   meetArcComplete?: boolean;
   /** World/chaos engine beat the player should notice this turn. */
+  chaos?: { title: string; detail: string; tone: 'subtle' | 'major' };
   /** Engine-owned stage layout (background, actors, poses). */
   presentation?: ScenePresentation | null;
   availableActions?: PlayerAction[];
