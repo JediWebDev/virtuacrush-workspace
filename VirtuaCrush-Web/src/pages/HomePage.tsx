@@ -64,20 +64,6 @@ const PRICING_TIERS = [
       "All characters unlocked",
     ],
   },
-  {
-    name: "VIP",
-    price: "$29.99",
-    period: "/ month",
-    highlight: false,
-    features: [
-      "Personalized voice and text messages",
-      "Special character arcs",
-      "Seasonal story drops",
-      "Exclusive voice & video drops",
-      "Image generation integration",
-      "Create custom characters",
-    ],
-  },
 ];
 
 export default function HomePage({ onSelect, userTier }: HomePageProps) {
