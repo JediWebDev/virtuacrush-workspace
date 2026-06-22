@@ -9,6 +9,7 @@ import {
   buildFreeRoamSceneSnapshot,
   formatSceneSnapshotBody,
   readSceneSnapshot,
+  sanitizeDirectorSnapshotPatch,
 } from './scene_snapshot';
 
 test('mergeSceneSnapshot: companion gag persists until cleared', () => {
@@ -16,9 +17,10 @@ test('mergeSceneSnapshot: companion gag persists until cleared', () => {
   prior.companion.voice = 'gagged';
   prior.companion.mobility = 'restrained';
 
-  const merged = mergeSceneSnapshot(prior, { location: 'parking garage' }, { narratorTexts: [] });
+  const merged = mergeSceneSnapshot(prior, { venueSlug: 'westside_commons' }, { narratorTexts: [] });
   assert.equal(merged.companion.voice, 'gagged');
   assert.equal(merged.companion.mobility, 'restrained');
+  assert.equal(merged.venueSlug, 'westside_commons');
 });
 
 test('formatSceneSnapshotBody: includes companion condition line', () => {
@@ -40,10 +42,10 @@ test('mergeSceneSnapshot: player restraint persists until cleared', () => {
   prior.player.mobility = 'restrained';
   prior.player.voice = 'gagged';
 
-  const merged = mergeSceneSnapshot(prior, { location: 'warehouse back room' }, { narratorTexts: [] });
+  const merged = mergeSceneSnapshot(prior, { roomId: 'kitchen' }, { narratorTexts: [] });
   assert.equal(merged.player.mobility, 'restrained');
   assert.equal(merged.player.voice, 'gagged');
-  assert.equal(merged.location, 'warehouse back room');
+  assert.equal(merged.roomId, 'kitchen');
 });
 
 test('mergeSceneSnapshot: narrator can clear restraint', () => {
@@ -100,6 +102,41 @@ test('formatSceneSnapshotBody: remote wording is not contradictory', () => {
   assert.match(body, /remote/);
   assert.doesNotMatch(body, /Present: you, Blair/);
   assert.match(body, /With companion/);
+});
+
+test('sanitizeDirectorSnapshotPatch: strips spatial and condition fields', () => {
+  const safe = sanitizeDirectorSnapshotPatch({
+    location: 'mall',
+    venueSlug: 'westside_commons',
+    coPresent: true,
+    playerMobility: 'restrained',
+    companionVoice: 'gagged',
+    present: ['you', 'Lexi'],
+    addThreads: ['Urik is watching'],
+    playerNotes: 'nervous',
+  });
+  assert.ok(safe);
+  assert.deepEqual(safe!.present, ['you', 'Lexi']);
+  assert.deepEqual(safe!.addThreads, ['Urik is watching']);
+  assert.equal(safe!.playerNotes, 'nervous');
+  assert.equal(safe!.location, undefined);
+  assert.equal(safe!.playerMobility, undefined);
+  assert.equal(safe!.companionVoice, undefined);
+});
+
+test('readSceneSnapshot: migrates legacy location to venueSlug', () => {
+  const snap = readSceneSnapshot({
+    sceneSnapshot: {
+      location: 'Westside Commons',
+      coPresent: true,
+      present: ['you', 'Lexi'],
+      player: { mobility: 'free', voice: 'free', notes: '' },
+      companion: { mobility: 'free', voice: 'free', notes: '' },
+      openThreads: [],
+    },
+  });
+  assert.ok(snap);
+  assert.equal(snap!.venueSlug, 'westside_commons');
 });
 
 test('readSceneSnapshot: strips player from present when remote', () => {

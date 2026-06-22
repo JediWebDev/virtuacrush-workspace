@@ -18,11 +18,12 @@ import { hasCompletedMeetArc, meetArcIdFor, MEET_AFFINITY_REWARD, meetArcReadyTo
 import { resolveFreeRoamWindow, freeRoamWindowClause, type FreeRoamWindow } from '../db/chat_window';
 import { sanitizeRoleplayTranscript } from '../inworld/transcript_sanitize';
 import { ensureUserCharacterLoaded } from '../db/user_characters';
-import { getArcState, setArcActive, clearArc as clearArcState, incrementAbandonmentStrikes, resetAbandonmentStrikes, saveCompletedArc, getCompletedArcIds } from '../db/arc_state';
+import { setArcActive, clearArc as clearArcState, incrementAbandonmentStrikes, resetAbandonmentStrikes, saveCompletedArc, getCompletedArcIds } from '../db/arc_state';
+import { incrementAffinity } from '../db/affinity';
+import { loadPlayerProgress } from '../db/player_progress';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
 import { pool } from '../db/pool';
-import { getAffinity, incrementAffinity } from '../db/affinity';
 import {
   retrieveRelevantMemories,
   formatMemoryBlock,
@@ -64,11 +65,10 @@ import {
   inferCompanionConditionFromBeats,
   inferCompanionConditionFromConversation,
   mergeCompanionConditionPatches,
-  formatCompanionConditionDirective,
-  enforceCompanionSpeechConstraints,
 } from '../inworld/scene_companion_condition';
+import { formatStatusDirectiveBlock, enforceStatusOnTurns } from '../sim/status_effects';
 import { getCharacter, isUserCharacter, type CharacterId } from '../inworld/characters';
-import { getLocation } from '../inworld/locations';
+import { getLocation, resolveVenueSlug } from '../inworld/locations';
 import {
   formatSceneNpcBlock,
   mergeSceneNpcs,
@@ -401,19 +401,22 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   // Current situation = daily story state + dating scene (on a date or at home).
   // Lazily generated if it's a new day; never throws.
   const situationPromise = getSituation(req.user!.id, characterId);
-  const affinityPromise = getAffinity(req.user!.id, characterId);
-  const arcStatePromise = getArcState(req.user!.id, characterId);
-  const completedArcIdsPromise = getCompletedArcIds(req.user!.id, characterId);
+  const playerProgressPromise = loadPlayerProgress(req.user!.id, characterId);
 
   // Gate the prompt on these before streaming.
-  const [situation, memories, storyBeats, affinity, arcStateResult, completedArcIds] = await Promise.all([
+  const [situation, memories, storyBeats, playerProgress] = await Promise.all([
     situationPromise,
     memoriesPromise,
     storyBeatsPromise,
-    affinityPromise,
-    arcStatePromise,
-    completedArcIdsPromise,
+    playerProgressPromise,
   ]);
+
+  const affinity = playerProgress.affinity;
+  const arcStateResult = {
+    currentArcId: playerProgress.activeArcId,
+    activeArcStartedAt: playerProgress.activeArcStartedAt,
+  };
+  const completedArcIds = playerProgress.completedArcIds;
 
   let arcContext: ArcContext | undefined;
   let arcJustStarted = false;
@@ -757,6 +760,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       priorSceneSnapshot = buildFreeRoamSceneSnapshot({
         companionName: displayName,
         location: situation.scene.location ?? null,
+        venueSlug: situation.scene.location ? resolveVenueSlug(situation.scene.location) : null,
         coPresent: !!situation.scene.location,
         extraPresent: sceneCast.map((m) => m.name),
       });
@@ -830,7 +834,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       lorePromptExtras +
       playerKnown +
       lookNote +
-      formatCompanionConditionDirective(priorSceneSnapshot, displayName) +
+      formatStatusDirectiveBlock(priorSceneSnapshot, displayName) +
       emotionTone +
       (driveReaction ? `\n\n${driveReaction}` : '') +
       formatMemoryBlock(memories) +
@@ -1023,7 +1027,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       }
 
       let dturns = dirOut.turns.some((t) => looksDegenerate(t.text)) ? [] : dirOut.turns;
-      dturns = enforceCompanionSpeechConstraints(dturns, displayName, continuity.snapshot);
+      dturns = enforceStatusOnTurns(dturns, displayName, continuity.snapshot);
       const arcResult = arcContext ? dirOut.arc : null;
       replyChoices = dirOut.choices ?? [];
       if (dirOut.memorable) {

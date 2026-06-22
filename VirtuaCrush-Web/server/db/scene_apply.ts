@@ -26,7 +26,9 @@ export async function applyEngineSceneDelta(
     return { snapshot: base, sceneState: snapshotToSceneState(base) };
   }
 
-  const snapshot = mergeSceneSnapshot(base, delta.patch, { narratorTexts: [] });
+  const patch: SceneSnapshotPatch = { ...delta.patch };
+  if (delta.venueSlug !== undefined) patch.venueSlug = delta.venueSlug;
+  const snapshot = mergeSceneSnapshot(base, patch, { narratorTexts: [] });
 
   if (opts?.persistVenue !== false && delta.venueSlug !== undefined) {
     await setSceneLocation(userId, characterId, delta.venueSlug);

@@ -222,7 +222,7 @@ function buildPackDirectorPrompt(
     `  "advance": "stay" | "end" | "<a beat id below>",\n` +
     `  "choices": [ { "label": "short button text", "userMessage": "first-person line/action if the player picks it", "next": "<beat id> | dynamic | end" } ],\n` +
     `  "sceneState": "<short prose fallback of current scene>",\n` +
-    `  "sceneSnapshot": { "location": "...", "present": ["..."], "departed": ["..."], "playerMobility": "free"|"restrained"|"incapacitated", "playerVoice": "free"|"gagged"|"muted", "playerNotes": "...", "companionNotes": "...", "addThreads": ["..."] },\n` +
+    `  "sceneSnapshot"?: { "present": ["..."], "departed": ["..."], "playerNotes": "...", "companionNotes": "...", "addThreads": ["..."] },\n` +
     `  "memorable": "<a durable one-line beat worth remembering in future sessions, or null>",\n` +
     `  "arcStatus": "ongoing" | "climax" | "completed"\n` +
     `}\n\n` +
@@ -235,7 +235,7 @@ function buildPackDirectorPrompt(
     `- ONLY when the player clearly pulls the scene away from ALL the authored choices, return 2–3 NEW choices that fit the new direction (each "next":"dynamic", or a beat id if it rejoins the story) and steer back toward an ENDING.\n` +
     `- NEW choices must be PLAYER tap-to-send messages (first-person speech or *actions*), never ${name}'s dialogue and never second-person "You …" descriptions.\n\n` +
     `NARRATION: characters speak ONLY dialogue; "narrator" owns ALL action and reaction. Include at least one "${name}" line whenever ${name} speaks. Respond ONLY in English. Never write the player's words or actions.\n\n` +
-    `SCENE CONTINUITY: Honor the SCENE DIRECTIVE block and SCENE SNAPSHOT. Always return "sceneSnapshot" with authoritative location, present cast, and player mobility/voice (they persist until explicitly cleared). Also return "sceneState" as short prose. Set "memorable" only for a genuinely durable beat worth recalling in a FUTURE conversation; otherwise null.\n\n` +
+    `SCENE CONTINUITY: Honor the SCENE DIRECTIVE block and SCENE SNAPSHOT. Optional sceneSnapshot hints: present/departed cast, addThreads, notes only — engine owns location and conditions. Also return "sceneState" as short prose. Set "memorable" only for a genuinely durable beat worth recalling in a FUTURE conversation; otherwise null.\n\n` +
     `KEEP IT MOVING toward an ENDING — never loop the same beat. When the scene has resolved, set "advance":"end" and "arcStatus":"completed".\n\n` +
     `SPEAKERS (use the exact name in "speaker"):\n${speakerList}\n\n` +
     `THIS BEAT'S CHOICES (the player's options right now):\n${authoredChoices}\n\n` +

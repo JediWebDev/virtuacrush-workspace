@@ -4,6 +4,8 @@
 
 import type { SceneDirectiveInput } from './story_structure';
 import { nameInSceneState, requiredCastNames } from './story_structure';
+import { normalizeSnapshotSpatial } from '../sim/spatial';
+import { resolveVenueSlug } from './locations';
 
 export type PlayerMobility = 'free' | 'restrained' | 'incapacitated';
 export type PlayerVoice = 'free' | 'gagged' | 'muted';
@@ -21,7 +23,12 @@ export interface CompanionSnapshot {
 }
 
 export interface SceneSnapshot {
+  /** Engine-derived display label (from venueSlug + roomId). */
   location: string;
+  /** Registry slug — authoritative travel state. null = remote / not at a venue. */
+  venueSlug: string | null;
+  /** Room within venue (e.g. living_room). Optional. */
+  roomId: string | null;
   coPresent: boolean;
   present: string[];
   player: PlayerSnapshot;
@@ -32,9 +39,11 @@ export interface SceneSnapshot {
   firedNpcChaos?: string[];
 }
 
-/** Partial update the director may return each turn. */
+/** Partial update — engine-owned fields are set by scene_delta / spatial; director hints are sanitized. */
 export interface SceneSnapshotPatch {
   location?: string;
+  venueSlug?: string | null;
+  roomId?: string | null;
   coPresent?: boolean;
   present?: string[];
   departed?: string[];
@@ -69,6 +78,8 @@ export function defaultCompanionSnapshot(): CompanionSnapshot {
 export function emptySceneSnapshot(): SceneSnapshot {
   return {
     location: '',
+    venueSlug: null,
+    roomId: null,
     coPresent: true,
     present: [],
     player: defaultPlayerSnapshot(),
@@ -92,18 +103,27 @@ export function buildInitialSceneSnapshot(input: SceneDirectiveInput): SceneSnap
 export function buildFreeRoamSceneSnapshot(opts: {
   companionName: string;
   location?: string | null;
+  venueSlug?: string | null;
   coPresent: boolean;
   extraPresent?: string[];
   situationNote?: string;
 }): SceneSnapshot {
   const snap = emptySceneSnapshot();
-  const namedLocation = opts.location?.trim();
   snap.coPresent = opts.coPresent;
-  snap.location = namedLocation
-    ? namedLocation
-    : opts.coPresent
-      ? 'unspecified location'
-      : `${opts.companionName}'s place (remote)`;
+  snap.venueSlug = opts.venueSlug ?? null;
+  if (!snap.venueSlug && opts.location?.trim()) {
+    snap.venueSlug = resolveVenueSlug(opts.location);
+  }
+  if (snap.venueSlug) {
+    normalizeSnapshotSpatial(snap);
+  } else {
+    const namedLocation = opts.location?.trim();
+    snap.location = namedLocation
+      ? namedLocation
+      : opts.coPresent
+        ? 'unspecified location'
+        : `${opts.companionName}'s place (remote)`;
+  }
   // Remote/texting: player is not in the companion's physical space.
   snap.present = opts.coPresent
     ? ['you', opts.companionName, ...(opts.extraPresent ?? [])]
@@ -131,6 +151,10 @@ export function parseSceneSnapshotPatch(raw: unknown): SceneSnapshotPatch | null
   const patch: SceneSnapshotPatch = {};
 
   if (typeof o.location === 'string' && o.location.trim()) patch.location = o.location.trim().slice(0, 200);
+  if (typeof o.venueSlug === 'string') patch.venueSlug = o.venueSlug.trim() || null;
+  if (o.venueSlug === null) patch.venueSlug = null;
+  if (typeof o.roomId === 'string') patch.roomId = o.roomId.trim().slice(0, 80) || null;
+  if (o.roomId === null) patch.roomId = null;
   if (typeof o.coPresent === 'boolean') patch.coPresent = o.coPresent;
 
   const present = Array.isArray(o.present)
@@ -169,6 +193,24 @@ export function parseSceneSnapshotPatch(raw: unknown): SceneSnapshotPatch | null
   if (addThreads.length) patch.addThreads = addThreads.map((t) => t.slice(0, 200));
 
   return Object.keys(patch).length ? patch : null;
+}
+
+/**
+ * Strip engine-authoritative fields from director hints.
+ * Director may suggest cast/thread notes only; spatial + conditions are engine-owned.
+ */
+export function sanitizeDirectorSnapshotPatch(
+  patch: SceneSnapshotPatch | null,
+): SceneSnapshotPatch | null {
+  if (!patch) return null;
+  const safe: SceneSnapshotPatch = {};
+  if (patch.present?.length) safe.present = patch.present;
+  if (patch.departed?.length) safe.departed = patch.departed;
+  if (patch.openThreads?.length) safe.openThreads = patch.openThreads;
+  if (patch.addThreads?.length) safe.addThreads = patch.addThreads;
+  if (patch.playerNotes?.trim()) safe.playerNotes = patch.playerNotes;
+  if (patch.companionNotes?.trim()) safe.companionNotes = patch.companionNotes;
+  return Object.keys(safe).length ? safe : null;
 }
 
 function narratorClearsMobility(narratorTexts: string[]): boolean {
@@ -263,15 +305,25 @@ export function mergeSceneSnapshot(
 
   if (patch.companionNotes) companion.notes = patch.companionNotes;
 
-  return {
-    location: patch.location ?? prior.location,
+  const next: SceneSnapshot = {
+    venueSlug: patch.venueSlug !== undefined ? patch.venueSlug : prior.venueSlug,
+    roomId: patch.roomId !== undefined ? patch.roomId : prior.roomId,
     coPresent: patch.coPresent ?? prior.coPresent,
     present: mergePresent(prior.present, patch, required),
     player,
     companion,
     openThreads: mergeThreads(prior.openThreads, patch),
     updatedAt: new Date().toISOString(),
+    location: prior.location,
+    firedNpcChaos: prior.firedNpcChaos,
   };
+
+  if (patch.location && patch.venueSlug === undefined) {
+    const slug = resolveVenueSlug(patch.location);
+    if (slug) next.venueSlug = slug;
+  }
+  normalizeSnapshotSpatial(next);
+  return next;
 }
 
 /** Reads a snapshot stored in npc knowledge JSON. */
@@ -297,8 +349,10 @@ export function readSceneSnapshot(knowledge: Record<string, unknown> | undefined
     ? o.openThreads.map((x) => (typeof x === 'string' ? x.trim() : '')).filter(Boolean).slice(0, MAX_THREADS)
     : [];
 
-  return {
+  const snap: SceneSnapshot = {
     location: typeof o.location === 'string' ? o.location : '',
+    venueSlug: typeof o.venueSlug === 'string' ? o.venueSlug : o.venueSlug === null ? null : resolveVenueSlug(typeof o.location === 'string' ? o.location : '') ?? null,
+    roomId: typeof o.roomId === 'string' ? o.roomId : null,
     coPresent,
     present,
     player: {
@@ -314,6 +368,8 @@ export function readSceneSnapshot(knowledge: Record<string, unknown> | undefined
     openThreads,
     updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt : new Date().toISOString(),
   };
+  normalizeSnapshotSpatial(snap);
+  return snap;
 }
 
 /** Serializes snapshot for npc_state.knowledge.sceneSnapshot. */
@@ -371,7 +427,7 @@ export function formatSceneSnapshotBody(snap: SceneSnapshot | null): string {
   ].filter(Boolean);
   const compLine = compParts.length ? compParts.join('; ') : 'free';
   const lines = [
-    `Location: ${snap.location || 'unspecified'}`,
+    `Place: ${snap.location || 'unspecified'}${snap.venueSlug ? ` [venue=${snap.venueSlug}${snap.roomId ? `, room=${snap.roomId}` : ''}]` : ''}`,
     snap.coPresent
       ? 'Proximity: together in the same place.'
       : 'Proximity: remote / not co-located (text or call — player is elsewhere).',
@@ -391,7 +447,7 @@ export function formatSceneSnapshotBlock(snap: SceneSnapshot | null): string {
   const body = formatSceneSnapshotBody(snap);
   if (!body) return '';
   return (
-    `\n\n=== SCENE SNAPSHOT (ENGINE — authoritative; update via "sceneSnapshot" in your JSON reply) ===\n` +
+    `\n\n=== SCENE CONTINUITY (ENGINE — authoritative; do NOT change location or conditions in JSON) ===\n` +
     body
   );
 }
@@ -440,7 +496,9 @@ export function applySceneContinuityUpdate(opts: {
     opts.seedSnapshot ??
     emptySceneSnapshot();
 
-  let snapshot = mergeSceneSnapshot(base, opts.sceneSnapshotPatch, {
+  const directorPatch = sanitizeDirectorSnapshotPatch(opts.sceneSnapshotPatch);
+
+  let snapshot = mergeSceneSnapshot(base, directorPatch, {
     requiredNames: opts.requiredNames ?? [],
     narratorTexts: opts.narratorTexts,
     companionName: opts.companionName,
@@ -452,7 +510,7 @@ export function applySceneContinuityUpdate(opts: {
   }
 
   const sceneState =
-    opts.sceneSnapshotPatch || !opts.sceneStateProse.trim()
+    directorPatch || !opts.sceneStateProse.trim()
       ? snapshotToSceneState(snapshot)
       : opts.sceneStateProse.trim().slice(0, 1200);
 

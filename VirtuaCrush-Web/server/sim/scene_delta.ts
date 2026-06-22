@@ -11,6 +11,7 @@ import {
   type SceneSnapshotPatch,
 } from '../inworld/scene_snapshot';
 import { extractCompanionConditionFromMessage } from '../inworld/scene_companion_condition';
+import { formatSpatialLocation, resolveSpatialFromInput, VENUE_PLACES } from './spatial';
 
 export type SceneDeltaSource = 'heuristic' | 'referee' | 'intent';
 
@@ -92,7 +93,7 @@ function locationPhraseFromMessage(message: string): string | null {
 /** Regex/heuristic pass on raw user text (fast, no LLM). */
 export function extractSceneDeltaFromMessage(
   message: string,
-  _prior: SceneSnapshot | null,
+  prior: SceneSnapshot | null,
   companionName?: string,
 ): Partial<SceneSnapshotPatch> & { venueSlug?: string | null } {
   const patch: Partial<SceneSnapshotPatch> & { venueSlug?: string | null } = {};
@@ -112,37 +113,26 @@ export function extractSceneDeltaFromMessage(
     if (comp.companionVoice) patch.companionVoice = comp.companionVoice;
   }
 
-  // Muffled speech outside *actions* implies gag is still on.
   if (!patch.playerVoice && /\bmm+[mf]+(?:[!?.]|$|\s)/i.test(message)) {
     patch.playerVoice = 'gagged';
   }
   if (
     !patch.playerMobility &&
-    (_prior?.player.mobility === 'restrained' ||
+    (prior?.player.mobility === 'restrained' ||
       /\b(wrists?\s+(?:are|still)\s+tied|bound\s+behind|still\s+tied|tied\s+behind)\b/i.test(message))
   ) {
     patch.playerMobility = 'restrained';
   }
 
-  if (GO_HOME_RE.test(message)) {
-    patch.venueSlug = null;
-    patch.coPresent = false;
-    patch.location = getLocation('player_home')?.name ?? 'Your Place';
-    return patch;
-  }
-
-  const phrase = locationPhraseFromMessage(message);
-  if (phrase) {
-    const slug = resolveVenueSlug(phrase);
-    if (slug) {
-      patch.venueSlug = slug;
-      patch.location = getLocation(slug)?.name ?? phrase;
-      patch.coPresent = true;
-    } else {
-      patch.location = phrase.slice(0, 200);
-      patch.coPresent = true;
-    }
-  }
+  const spatial = resolveSpatialFromInput({
+    message,
+    prior,
+    companionName: companionName ?? '',
+  });
+  if (spatial.venueSlug !== undefined) patch.venueSlug = spatial.venueSlug;
+  if (spatial.roomId !== undefined) patch.roomId = spatial.roomId;
+  if (spatial.coPresent !== undefined) patch.coPresent = spatial.coPresent;
+  if (spatial.location) patch.location = spatial.location;
 
   return patch;
 }
@@ -157,6 +147,7 @@ export function extractSceneDeltaFromIntent(
   if (intent.subtype === 'leave') {
     return {
       venueSlug: null,
+      roomId: null,
       coPresent: false,
       location: getLocation('player_home')?.name ?? 'Your Place',
     };
@@ -166,17 +157,12 @@ export function extractSceneDeltaFromIntent(
   if (!rawTarget || /^venue$/i.test(rawTarget)) return {};
   const slug = resolveVenueSlug(rawTarget);
   if (slug) {
+    const roomId = VENUE_PLACES[slug]?.defaultRoomId ?? null;
     return {
       venueSlug: slug,
-      location: getLocation(slug)?.name ?? rawTarget,
+      roomId,
+      location: formatSpatialLocation(slug, roomId),
       coPresent: true,
-    };
-  }
-
-  if (rawTarget.trim()) {
-    return {
-      location: rawTarget.trim().slice(0, 200),
-      coPresent: intent.subtype === 'arrive' || intent.subtype === 'go' || intent.subtype === 'follow',
     };
   }
 
@@ -237,6 +223,7 @@ function mergePartialPatches(
     out.location = intent.location ?? referee.location ?? heuristic.location;
     out.coPresent =
       intent.coPresent ?? referee.coPresent ?? heuristic.coPresent;
+    out.roomId = intent.roomId ?? referee.roomId ?? heuristic.roomId;
     const venue =
       intent.venueSlug !== undefined
         ? intent.venueSlug
@@ -257,7 +244,7 @@ function patchHasContent(p: PartialPatch, allowLocation: boolean): boolean {
   if (p.playerMobility || p.playerVoice || p.playerNotes) return true;
   if (p.companionMobility || p.companionVoice || p.companionNotes) return true;
   if (!allowLocation) return false;
-  return Boolean(p.location || p.coPresent !== undefined || p.venueSlug !== undefined);
+  return Boolean(p.location || p.coPresent !== undefined || p.venueSlug !== undefined || p.roomId !== undefined);
 }
 
 function lockedFieldsForPatch(
@@ -279,9 +266,11 @@ function lockedFieldsForPatch(
     locked.push('companionVoice');
   }
   if (patch.playerNotes && sources.includes('referee')) locked.push('playerNotes');
-  if (patch.location || patch.coPresent !== undefined || venueSlug !== undefined) {
+  if (patch.location || patch.coPresent !== undefined || venueSlug !== undefined || patch.roomId !== undefined) {
     if (sources.includes('intent') || sources.includes('referee') || sources.includes('heuristic')) {
       if (patch.location) locked.push('location');
+      if (patch.venueSlug !== undefined) locked.push('venueSlug');
+      if (patch.roomId !== undefined) locked.push('roomId');
       if (patch.coPresent !== undefined) locked.push('coPresent');
     }
   }
@@ -362,6 +351,10 @@ export function reapplyEngineLocks(
     if (v !== undefined) {
       (patch as Record<string, unknown>)[field] = v;
     }
+  }
+  if (delta.venueSlug !== undefined) {
+    patch.venueSlug = delta.venueSlug;
+    patch.roomId = delta.patch.roomId;
   }
   if (Object.keys(patch).length === 0) return snapshot;
   return mergeSceneSnapshot(snapshot, patch, { narratorTexts: [] });
