@@ -712,7 +712,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   // Reading a saved story is fully read-only; a finished active story also locks
   // the composer until the player switches threads or starts a new story.
   const composerLocked = activeThread === 'reading' || (activeThread === 'pack' && packCompleted) || !!archiveDay;
-  const inputDisabled = displayedLoading || composerLocked;
+  const inputDisabled = greetingLoading || displayedLoading || composerLocked;
 
   return (
     <motion.div
@@ -1090,11 +1090,37 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
 
           {/* 3. Render mappings changed to msg.role and msg.content */}
           {greetingLoading ? (
-            <div className="flex items-center justify-start px-1">
-              <div className="rounded-2xl bg-zinc-800 px-4 py-2 text-sm text-zinc-400">
-                …
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center justify-center gap-4 py-16 md:py-24"
+            >
+              <div className="relative">
+                <span className="absolute inset-0 animate-ping rounded-full bg-accent/20 [animation-duration:2s]" aria-hidden />
+                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full ring-2 ring-accent/30 shadow-md shadow-accent/20">
+                  {character.image ? (
+                    <img src={character.image} alt={character.name} className="h-full w-full object-cover object-top" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-brand-indigo/20 text-lg font-semibold text-brand-indigo">
+                      {character.name.trim()[0]?.toUpperCase() ?? "?"}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+              <div className="flex flex-col items-center gap-2">
+                <div className="inline-flex items-center gap-2 rounded-2xl border border-brand-sapphire/25 bg-gradient-to-br from-brand-indigo to-brand-sapphire px-5 py-3 shadow-sm">
+                  <span className="flex gap-1" aria-hidden>
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-white/80 [animation-duration:0.55s]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-white/80 [animation-delay:0.12s] [animation-duration:0.55s]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-white/80 [animation-delay:0.24s] [animation-duration:0.55s]" />
+                  </span>
+                  <span className="text-sm font-medium text-white/90">Loading conversation…</span>
+                </div>
+                <p className="max-w-xs text-center text-xs text-stone-500 dark:text-stone-400">
+                  Waking up {character.name}&apos;s scene — this can take a moment after idle.
+                </p>
+              </div>
+            </motion.div>
           ) : displayedMessages.flatMap((msg) => {
             // User messages render as a single bubble.
             if (msg.role === "user") {
@@ -1276,7 +1302,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                placeholder={composerLocked ? (archiveDay ? "Archived conversation — read only" : "This story has ended — switch to Free Roam to keep chatting") : displayedLoading ? "…" : `Message ${character.name}…`}
+                placeholder={composerLocked ? (archiveDay ? "Archived conversation — read only" : "This story has ended — switch to Free Roam to keep chatting") : greetingLoading ? "Loading conversation…" : displayedLoading ? "…" : `Message ${character.name}…`}
                 disabled={inputDisabled}
                 className="min-h-[52px] flex-1 rounded-[1.75rem] border border-brand-indigo/25 bg-white/95 py-3.5 pl-5 pr-14 text-[15px] text-stone-800 outline-none transition-all placeholder:text-brand-indigo/45 focus:border-brand-sapphire/50 focus:ring-2 focus:ring-brand-sapphire/20 dark:border-brand-sapphire/30 dark:bg-surface-elevated/80 dark:text-stone-50 dark:placeholder:text-stone-400 dark:focus:border-accent/40 dark:focus:ring-accent/20"
                 />

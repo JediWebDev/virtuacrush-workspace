@@ -522,6 +522,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let effIntent: PlayerIntent | undefined;
   let effectPlan: EffectPlan | undefined;
   let engineSceneDelta: EngineSceneDelta | null = null;
+  let suppressHomeBaseline = false;
   {
     // === Single LLM: director classifies intent + narrates. Engine owns affinity,
     // scene locks, chaos, secrets, and NPC scheduling before/after the call.
@@ -779,7 +780,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       priorSceneSnapshot = reconcileSceneSnapshotForPrompt(priorSceneSnapshot, turns, message);
     }
 
-    const suppressHomeBaseline = shouldSuppressHomeBaseline({
+    suppressHomeBaseline = shouldSuppressHomeBaseline({
       prior: priorSceneSnapshot,
       history: turns,
       message,
