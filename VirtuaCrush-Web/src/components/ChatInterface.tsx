@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useChat } from "../hooks/useChat";
 import { fetchGreeting, fetchCharacterState, fetchAffinity, fetchDevResetEnabled, devResetCharacter, respondToDesire, fetchChatHistory, fetchChatHistoryDay, fetchProgress, assetUrl, type CharacterState, type ChatHistoryDay } from "../lib/api";
 import { splitNarration } from "../lib/narration";
@@ -6,7 +6,7 @@ import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw, Zap, ListChecks, Hand, MapPin } from "lucide-react";
+import { Send, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw, Zap, ListChecks, Hand, MapPin, MessageCircle } from "lucide-react";
 import { readShowReplyChoices, writeShowReplyChoices } from "../lib/chatPreferences";
 import ChatAvatar from "./ChatAvatar";
 import { Character } from "../types/character";
@@ -25,6 +25,7 @@ import AchievementToast, { type AchievementToastData } from "./AchievementToast"
 import StageView from "./StageView";
 import ActionsPanel from "./ActionsPanel";
 import CityMap from "./CityMap";
+import GameCanvas, { type GameNpc } from "./GameCanvas";
 import { isScenePresentation } from "../types/scenePresentation";
 
 function formatHistoryDate(day: string): string {
@@ -156,6 +157,15 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [devResetting, setDevResetting] = useState(false);
   const [showReplyChoices, setShowReplyChoices] = useState(() => readShowReplyChoices());
   const [showActionsPanel, setShowActionsPanel] = useState(true);
+  // Dialogue overlay: the LLM is only engaged when the player walks up to a
+  // character in the Phaser world and opens this. The world itself (movement,
+  // NPC actions, statuses) is owned by the backend sim engine, not the LLM.
+  const [dialogueOpen, setDialogueOpen] = useState(false);
+  const sceneNpcs = useMemo<GameNpc[]>(
+    () => [{ id: character.id, name: character.name, x: 0.68, y: 0.45, color: 0xff5aa2 }],
+    [character.id, character.name],
+  );
+  const handleInteract = useCallback((_npcId: string) => setDialogueOpen(true), []);
   const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const toggleReplyChoices = () => {
@@ -821,6 +831,15 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             <div className="flex shrink-0 items-center gap-1.5">
               <button
                 type="button"
+                onClick={() => setDialogueOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-accent/35 bg-accent/10 px-2.5 py-2 text-xs font-semibold text-accent transition-all hover:bg-accent/15"
+                title={`Talk with ${character.name}`}
+              >
+                <MessageCircle size={16} />
+                <span className="hidden sm:inline">Talk</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setShowActionsPanel((v) => !v)}
                 className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-2 text-xs font-semibold transition-all ${
                   showActionsPanel
@@ -881,6 +900,31 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             </div>
         </div>
 
+        <GameCanvas npcs={sceneNpcs} playerName="You" onInteract={handleInteract} className="min-h-0 flex-1" />
+
+        <AnimatePresence>
+          {dialogueOpen && (
+            <motion.div
+              key="dialogue"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-40 flex flex-col bg-stone-50/97 backdrop-blur-xl dark:bg-surface/97"
+            >
+              <div className="flex shrink-0 items-center justify-between border-b border-black/[0.06] px-4 py-2.5 dark:border-white/[0.06]">
+                <span className="flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-200">
+                  <img src={character.image} alt="" className="h-7 w-7 rounded-full object-cover object-top" />
+                  Talking with {character.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDialogueOpen(false)}
+                  className="rounded-lg p-1.5 text-stone-500 transition-colors hover:bg-black/[0.06] hover:text-stone-800 dark:hover:bg-white/[0.06] dark:hover:text-stone-100"
+                  aria-label="Close conversation"
+                >
+                  <X size={18} />
+                </button>
+              </div>
         {showHistoryView ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="sticky top-0 z-10 border-b border-black/[0.06] dark:border-white/[0.06] bg-stone-50/90 dark:bg-surface/90 px-5 py-4 backdrop-blur-xl md:px-8">
@@ -1331,6 +1375,9 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
         )}
           </>
         )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
       {/* Desktop right panel — map on top, social feed below */}
       <div className="hidden min-h-0 flex-col border-l border-black/[0.06] dark:border-white/[0.06] lg:flex">
