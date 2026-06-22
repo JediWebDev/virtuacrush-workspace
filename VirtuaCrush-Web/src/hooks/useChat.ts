@@ -14,6 +14,7 @@
 import { useCallback, useRef, useState } from 'react';
 import type { ScenePresentation } from '../types/scenePresentation';
 import { isScenePresentation } from '../types/scenePresentation';
+import type { MapLocationPin, PlayerAction, PlayerProgressDetail } from '../types/playerActions';
 
 export type Role = 'user' | 'assistant';
 export interface Message {
@@ -38,6 +39,7 @@ export interface ChatDoneInfo {
   /** World/chaos engine beat the player should notice this turn. */
   /** Engine-owned stage layout (background, actors, poses). */
   presentation?: ScenePresentation | null;
+  availableActions?: PlayerAction[];
 }
 
 interface UseChatOptions {
@@ -106,6 +108,9 @@ export function useChat({
   const [affinityScore, setAffinityScore] = useState<number | null>(null);
   const [replyChoices, setReplyChoices] = useState<ReplyChoice[]>([]);
   const [presentation, setPresentation] = useState<ScenePresentation | null>(null);
+  const [availableActions, setAvailableActions] = useState<PlayerAction[]>([]);
+  const [mapLocations, setMapLocations] = useState<MapLocationPin[]>([]);
+  const [progressDetail, setProgressDetail] = useState<PlayerProgressDetail | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const stop = useCallback(() => {
@@ -115,15 +120,15 @@ export function useChat({
   }, []);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, opts?: { actionId?: string }) => {
       const trimmed = text.trim();
-      if (!trimmed || streaming) return;
+      if ((!trimmed && !opts?.actionId) || streaming) return;
 
       setError(null);
       const userMsg: Message = {
         id: crypto.randomUUID(),
         role: 'user',
-        content: trimmed,
+        content: trimmed || (availableActions.find((a) => a.id === opts?.actionId)?.label ?? '…'),
       };
       const assistantId = crypto.randomUUID();
       const assistantStub: Message = { id: assistantId, role: 'assistant', content: '' };
@@ -144,9 +149,8 @@ export function useChat({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             characterId,
-            message: trimmed,
-            // We don't send history; server loads it from DB. Saves bandwidth
-            // and ensures cross-device consistency.
+            message: opts?.actionId ? undefined : trimmed,
+            actionId: opts?.actionId,
           }),
           signal: controller.signal,
         });
@@ -193,8 +197,10 @@ export function useChat({
                     }
                   : undefined,
               presentation: isScenePresentation(d.presentation) ? d.presentation : undefined,
+              availableActions: Array.isArray(d.availableActions) ? d.availableActions : undefined,
             });
             if (isScenePresentation(d.presentation)) setPresentation(d.presentation);
+            if (Array.isArray(d.availableActions)) setAvailableActions(d.availableActions as PlayerAction[]);
             if (typeof d.affinityScore === 'number') {
               setAffinityScore(d.affinityScore);
               onAffinityUpdate?.(d.affinityScore);
@@ -215,11 +221,51 @@ export function useChat({
         abortRef.current = null;
       }
     },
-    [characterId, streaming, onDone, onQuotaExceeded, onAffinityUpdate, onCharacterPosted],
+    [characterId, streaming, onDone, onQuotaExceeded, onAffinityUpdate, onCharacterPosted, availableActions],
+  );
+
+  const sendAction = useCallback(
+    (actionId: string) => {
+      const label = availableActions.find((a) => a.id === actionId)?.label ?? '';
+      return send(label, { actionId });
+    },
+    [send, availableActions],
+  );
+
+  const hydrateRpgState = useCallback(
+    (payload: {
+      actions?: PlayerAction[];
+      mapLocations?: MapLocationPin[];
+      progress?: PlayerProgressDetail;
+    }) => {
+      if (payload.actions) setAvailableActions(payload.actions);
+      if (payload.mapLocations) setMapLocations(payload.mapLocations);
+      if (payload.progress) setProgressDetail(payload.progress);
+    },
+    [],
   );
 
   const clearQuotaFlag = useCallback(() => setQuotaExceeded(false), []);
   const clearReplyChoices = useCallback(() => setReplyChoices([]), []);
 
-  return { messages, setMessages, send, stop, streaming, error, quotaExceeded, clearQuotaFlag, affinityScore, replyChoices, clearReplyChoices, presentation, setPresentation };
+  return {
+    messages,
+    setMessages,
+    send,
+    sendAction,
+    stop,
+    streaming,
+    error,
+    quotaExceeded,
+    clearQuotaFlag,
+    affinityScore,
+    replyChoices,
+    clearReplyChoices,
+    presentation,
+    setPresentation,
+    availableActions,
+    mapLocations,
+    progressDetail,
+    hydrateRpgState,
+  };
 }

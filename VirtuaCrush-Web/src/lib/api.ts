@@ -33,6 +33,10 @@ export async function fetchGreeting(
   arcActive?: boolean;
   meetArcComplete?: boolean;
   presentation?: ScenePresentation | null;
+  actions?: import('../types/playerActions').PlayerAction[];
+  mapLocations?: import('../types/playerActions').MapLocationPin[];
+  progress?: import('../types/playerActions').PlayerProgressDetail;
+  currentVenueSlug?: string | null;
 }> {
   const res = await fetch('/api/chat/greet', {
     method: 'POST',
@@ -93,6 +97,12 @@ export interface CharacterState {
 // status strip above the chat. Lazily generated server-side on a new day.
 export async function fetchCharacterState(characterId: string): Promise<CharacterState> {
   return api<CharacterState>(`/api/state/${encodeURIComponent(characterId)}`);
+}
+
+export function fetchProgress(characterId: string) {
+  return api<import('../types/playerActions').ProgressPayload>(
+    `/api/progress/${encodeURIComponent(characterId)}`,
+  );
 }
 
 /** The persisted affinity score (0-100) for this character. Loaded on chat open

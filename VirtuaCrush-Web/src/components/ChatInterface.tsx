@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
-import { fetchGreeting, fetchCharacterState, fetchAffinity, fetchDevResetEnabled, devResetCharacter, respondToDesire, fetchChatHistory, fetchChatHistoryDay, assetUrl, type CharacterState, type ChatHistoryDay } from "../lib/api";
+import { fetchGreeting, fetchCharacterState, fetchAffinity, fetchDevResetEnabled, devResetCharacter, respondToDesire, fetchChatHistory, fetchChatHistoryDay, fetchProgress, assetUrl, type CharacterState, type ChatHistoryDay } from "../lib/api";
 import { splitNarration } from "../lib/narration";
 import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw, Zap, ListChecks } from "lucide-react";
+import { Send, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw, Zap, ListChecks, Hand } from "lucide-react";
 import { readShowReplyChoices, writeShowReplyChoices } from "../lib/chatPreferences";
 import ChatAvatar from "./ChatAvatar";
 import { Character } from "../types/character";
@@ -23,6 +23,7 @@ import { getActivePackSession, greetPackSession, abandonPackSession, fetchPackSt
 import NoticeToast from "./NoticeToast";
 import AchievementToast, { type AchievementToastData } from "./AchievementToast";
 import StageView from "./StageView";
+import ActionsPanel from "./ActionsPanel";
 import { isScenePresentation } from "../types/scenePresentation";
 
 function formatHistoryDate(day: string): string {
@@ -43,7 +44,21 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [userAvatarSrc, setUserAvatarSrc] = useState(() => customAvatar("You"));
   const [quotaToast, setQuotaToast] = useState(false);
   const [quotaLimit, setQuotaLimit] = useState<number | null>(null);
-  const { messages, setMessages, send: sendMessage, streaming: isLoading, replyChoices, clearReplyChoices, presentation, setPresentation } = useChat({
+  const {
+    messages,
+    setMessages,
+    send: sendMessage,
+    sendAction,
+    streaming: isLoading,
+    replyChoices,
+    clearReplyChoices,
+    presentation,
+    setPresentation,
+    availableActions,
+    mapLocations,
+    progressDetail,
+    hydrateRpgState,
+  } = useChat({
     characterId: character.id,
     initialMessages: [],
     onAffinityUpdate: (score) => {
@@ -73,6 +88,9 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           tone: info.chaos.tone,
         });
       }
+      fetchProgress(character.id)
+        .then((p) => hydrateRpgState(p))
+        .catch(() => { /* non-fatal */ });
       fetchCharacterState(character.id)
         .then((st) => {
           setStoryState(st);
@@ -136,6 +154,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [devResetEnabled, setDevResetEnabled] = useState(false);
   const [devResetting, setDevResetting] = useState(false);
   const [showReplyChoices, setShowReplyChoices] = useState(() => readShowReplyChoices());
+  const [showActionsPanel, setShowActionsPanel] = useState(true);
   const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const toggleReplyChoices = () => {
@@ -249,6 +268,11 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
         if (isScenePresentation(result.presentation)) {
           setPresentation(result.presentation);
         }
+        hydrateRpgState({
+          actions: result.actions,
+          mapLocations: result.mapLocations,
+          progress: result.progress,
+        });
 
         // Scene header only when there is no transcript yet (Play seeds intro into history).
         const sceneMsgs =
@@ -864,6 +888,20 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             <div className="flex shrink-0 items-center gap-1.5">
               <button
                 type="button"
+                onClick={() => setShowActionsPanel((v) => !v)}
+                className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-2 text-xs font-semibold transition-all ${
+                  showActionsPanel
+                    ? 'border-accent/35 bg-accent/10 text-accent'
+                    : 'border-black/10 text-stone-500 hover:border-black/15 hover:text-stone-700 dark:border-white/10 dark:text-stone-400 dark:hover:text-stone-200'
+                }`}
+                aria-pressed={showActionsPanel}
+                title={showActionsPanel ? 'Hide actions panel' : 'Show actions panel'}
+              >
+                <Hand size={16} />
+                <span className="hidden sm:inline">Actions</span>
+              </button>
+              <button
+                type="button"
                 onClick={toggleReplyChoices}
                 className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-2 text-xs font-semibold transition-all ${
                   showReplyChoices
@@ -1031,6 +1069,15 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             presentation={presentation}
             companionPortraitFallback={character.image}
             playerPortraitSrc={userAvatarSrc}
+          />
+        )}
+        {activeThread === 'freeRoam' && !showHistoryView && !archiveDay && showActionsPanel && (
+          <ActionsPanel
+            actions={availableActions}
+            mapLocations={mapLocations}
+            progress={progressDetail}
+            onAction={sendAction}
+            disabled={isLoading}
           />
         )}
         {/* Status strip removed: the daily-engine activity rarely matched the

@@ -6,6 +6,7 @@
 //   4. On success, persist both turns + increment usage (free users only)
 //   5. On error, send `event: error` and close
 import { Router, type Request, type Response } from 'express';
+import { buildProgressPayload } from './progress';
 import { requireAuth } from '../middleware/auth';
 import { enforceMessageQuota } from '../middleware/rateLimit';
 import { streamChat, completePrompt, streamPrompt, type ChatMessage } from '../inworld/chat';
@@ -21,6 +22,10 @@ import { ensureUserCharacterLoaded } from '../db/user_characters';
 import { setArcActive, clearArc as clearArcState, incrementAbandonmentStrikes, resetAbandonmentStrikes, saveCompletedArc, getCompletedArcIds } from '../db/arc_state';
 import { incrementAffinity } from '../db/affinity';
 import { loadPlayerProgress } from '../db/player_progress';
+import { getFullProfile, upsertProfile } from '../db/profile';
+import { getNpcStates } from '../db/npc_state';
+import { resolveAvailableActions, resolvePlayerAction } from '../sim/player_actions';
+import type { PlayerAction } from '../sim/player_actions';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
 import { pool } from '../db/pool';
@@ -43,6 +48,7 @@ import {
   snapshotToSceneState,
   applySceneContinuityUpdate,
   type SceneSnapshot,
+  type SceneSnapshotPatch,
 } from '../inworld/scene_snapshot';
 import { applyEngineSceneDelta } from '../db/scene_apply';
 import {
@@ -198,7 +204,10 @@ async function ensureMeetIntroPersisted(
 
 interface ChatRequestBody {
   characterId: CharacterId;
-  message: string;
+  message?: string;
+  /** Engine action id from GET /api/progress — resolves to canonical *action* text. */
+  actionId?: string;
+  actionPayload?: Record<string, unknown>;
 }
 
 router.post('/greet', requireAuth, async (req: Request, res: Response) => {
@@ -253,6 +262,16 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
       [userId, characterId, ...windowClause.params],
     );
 
+    const rpgPayload = await buildProgressPayload(userId, characterId).catch(() => null);
+    const rpgExtras = rpgPayload
+      ? {
+          actions: rpgPayload.actions,
+          mapLocations: rpgPayload.mapLocations,
+          progress: rpgPayload.progress,
+          currentVenueSlug: rpgPayload.currentVenueSlug,
+        }
+      : {};
+
     if (rows.length > 0) {
       let history = await loadHistory(userId, characterId, freeRoamWindow);
       if (!meetArcComplete) {
@@ -270,13 +289,14 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
         arcActive: meetArcComplete && !!activeArc?.sceneAnchor,
         meetArcComplete,
         presentation,
+        ...rpgExtras,
       });
     }
 
     // First contact with no history: skip the meet-cute greeting when a Studio arc is active.
     if (meetArcComplete && activeArc?.sceneAnchor) {
       const presentation = await loadSessionPresentation(userId, characterId).catch(() => null);
-      return res.json({ hasHistory: false, sceneHeader, activeStoryArc, arcActive: true, meetArcComplete, presentation });
+      return res.json({ hasHistory: false, sceneHeader, activeStoryArc, arcActive: true, meetArcComplete, presentation, ...rpgExtras });
     }
 
     const character = getCharacter(characterId);
@@ -298,7 +318,7 @@ router.post('/greet', requireAuth, async (req: Request, res: Response) => {
     );
 
     const presentation = await loadSessionPresentation(userId, characterId).catch(() => null);
-    return res.json({ hasHistory: false, greeting: greetingText, sceneHeader, activeStoryArc, meetArcComplete, presentation });
+    return res.json({ hasHistory: false, greeting: greetingText, sceneHeader, activeStoryArc, meetArcComplete, presentation, ...rpgExtras });
   } catch (err) {
     console.error('[chat] greet error:', err);
     return res.status(500).json({ error: 'greet_failed' });
@@ -374,10 +394,60 @@ router.get('/history/:characterId/:day', requireAuth, async (req: Request, res: 
 });
 
 router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, res: Response) => {
-  const { characterId, message } = req.body as ChatRequestBody;
+  const body = req.body as ChatRequestBody;
+  const { characterId, actionId } = body;
+  let message = typeof body.message === 'string' ? body.message.trim() : '';
 
   // --- Validate ---
-  if (!characterId || typeof message !== 'string' || message.trim().length === 0) {
+  if (!characterId || (!message && !actionId)) {
+    return res.status(400).json({ error: 'invalid_request' });
+  }
+
+  let actionScenePatch: SceneSnapshotPatch | null = null;
+
+  if (actionId) {
+    const userId = req.user!.id;
+    const [progress, profile, npcMap] = await Promise.all([
+      loadPlayerProgress(userId, characterId),
+      getFullProfile(userId),
+      getNpcStates(userId, [characterId]),
+    ]);
+    let companionName = characterId;
+    try {
+      companionName = getCharacter(characterId).displayName;
+    } catch {
+      /* custom */
+    }
+    const priorForAction = readSceneSnapshot(
+      (npcMap[characterId]?.knowledge ?? {}) as Record<string, unknown>,
+    );
+    const resolved = resolvePlayerAction(actionId, {
+      snapshot: priorForAction,
+      progress,
+      inventory: profile.inventory,
+      wornItemIds: profile.presentation.wornItemIds ?? [],
+      companionName,
+      characterId,
+      currentVenueSlug: priorForAction?.venueSlug ?? null,
+    });
+    if (!resolved) {
+      return res.status(400).json({ error: 'invalid_action' });
+    }
+    message = resolved.message;
+    actionScenePatch = resolved.scenePatch ?? null;
+
+    if (actionId.startsWith('inventory.equip:')) {
+      const itemId = actionId.slice('inventory.equip:'.length);
+      const worn = [...(profile.presentation.wornItemIds ?? [])];
+      if (!worn.includes(itemId)) worn.push(itemId);
+      await upsertProfile(userId, {
+        displayName: profile.profile.displayName,
+        wornItemIds: worn,
+      });
+    }
+  }
+
+  if (message.length === 0) {
     return res.status(400).json({ error: 'invalid_request' });
   }
   if (message.length > 4000) {
@@ -424,7 +494,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     currentArcId: playerProgress.activeArcId,
     activeArcStartedAt: playerProgress.activeArcStartedAt,
   };
-  const completedArcIds = playerProgress.completedArcIds;
+  const completedArcIds = new Set(playerProgress.completedArcIds);
 
   let arcContext: ArcContext | undefined;
   let arcJustStarted = false;
@@ -536,6 +606,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let effectPlan: EffectPlan | undefined;
   let engineSceneDelta: EngineSceneDelta | null = null;
   let suppressHomeBaseline = false;
+  let availableActions: PlayerAction[] = [];
   {
     // === Single LLM: director classifies intent + narrates. Engine owns affinity,
     // scene locks, chaos, secrets, and NPC scheduling before/after the call.
@@ -725,6 +796,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           messageCompanionPatch,
         ),
       ),
+      ...(actionScenePatch ?? {}),
     };
 
     if (arcContext && activeArc) {
@@ -1250,6 +1322,17 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         (finalSceneSnapshot?.roomId ?? null) !== roomIdBefore,
     });
 
+    const profileForActions = await getFullProfile(req.user!.id).catch(() => null);
+    availableActions = resolveAvailableActions({
+      snapshot: finalSceneSnapshot,
+      progress: playerProgress,
+      inventory: profileForActions?.inventory ?? [],
+      wornItemIds: profileForActions?.presentation.wornItemIds ?? [],
+      companionName: displayName,
+      characterId,
+      currentVenueSlug: finalSceneSnapshot?.venueSlug ?? null,
+    });
+
     send('done', {
       remaining,
       affinityScore: newAffinityScore,
@@ -1260,6 +1343,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       posted,
       chaos: chaosHint,
       presentation,
+      availableActions,
     });
 
     res.end();
