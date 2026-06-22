@@ -58,6 +58,13 @@ import {
   engineDeltaLogLine,
   type EngineSceneDelta,
 } from '../sim/scene_delta';
+import {
+  inferCompanionConditionFromBeats,
+  inferCompanionConditionFromConversation,
+  mergeCompanionConditionPatches,
+  formatCompanionConditionDirective,
+  enforceCompanionSpeechConstraints,
+} from '../inworld/scene_companion_condition';
 import { getCharacter, isUserCharacter, type CharacterId } from '../inworld/characters';
 import { getLocation } from '../inworld/locations';
 import {
@@ -689,7 +696,13 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     }
     const driveReaction = (companionEntity?.knowledge.pendingDriveReaction as string | undefined) || '';
 
-    const conversationScenePatch = inferSceneDeltaFromConversation(turns, message, priorSceneSnapshot);
+    const conversationScenePatch = {
+      ...inferSceneDeltaFromConversation(turns, message, priorSceneSnapshot),
+      ...mergeCompanionConditionPatches(
+        inferCompanionConditionFromBeats(storyBeats, displayName),
+        inferCompanionConditionFromConversation(turns, message, displayName, priorSceneSnapshot),
+      ),
+    };
 
     if (arcContext && activeArc) {
       const startedAt = arcStateResult.activeArcStartedAt ?? new Date(0);
@@ -747,6 +760,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       world: world!,
       conversation: conversationScenePatch,
       allowLocationChange: !activeArc?.sceneAnchor,
+      companionName: displayName,
     });
     if (engineSceneDelta) {
       const preDirector = await applyEngineSceneDelta(
@@ -807,6 +821,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       lorePromptExtras +
       playerKnown +
       lookNote +
+      formatCompanionConditionDirective(priorSceneSnapshot, displayName) +
       emotionTone +
       (driveReaction ? `\n\n${driveReaction}` : '') +
       formatMemoryBlock(memories) +
@@ -923,6 +938,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         narratorTexts: narratorTextsForScene,
         requiredNames: sceneValidationInput ? requiredCastNames(sceneValidationInput) : [],
         seedSnapshot: sceneSnapshotSeed,
+        companionName: displayName,
       });
       continuity.snapshot = reapplyEngineLocks(continuity.snapshot, engineSceneDelta);
       continuity.sceneState = snapshotToSceneState(continuity.snapshot);
@@ -975,6 +991,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
             narratorTexts: fixNarrator,
             requiredNames: requiredCastNames(sceneValidationInput),
             seedSnapshot: sceneSnapshotSeed,
+            companionName: displayName,
           });
           fixContinuity.snapshot = reapplyEngineLocks(fixContinuity.snapshot, engineSceneDelta);
           fixContinuity.sceneState = snapshotToSceneState(fixContinuity.snapshot);
@@ -997,6 +1014,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       }
 
       let dturns = dirOut.turns.some((t) => looksDegenerate(t.text)) ? [] : dirOut.turns;
+      dturns = enforceCompanionSpeechConstraints(dturns, displayName, continuity.snapshot);
       const arcResult = arcContext ? dirOut.arc : null;
       replyChoices = dirOut.choices ?? [];
       if (dirOut.memorable) {

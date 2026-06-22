@@ -212,7 +212,7 @@ Classify the player's last message in "intent" (what they did — not engine con
 Speakers: ${stage.companionName} (speech only), narrator (actions/scene), ${stage.npcs.map((n) => n.name).join(', ') || 'NPCs as listed'}.
 Include ≥1 "${stage.companionName}" line. Keep lines short. Output JSON only.
 Choices: 2–3 PLAYER tap-messages (first person / *actions*), never "${stage.companionName}" lines.${stage.playerName ? ` Player: "${stage.playerName}".` : ''}
-Return sceneSnapshot with current location, present, player mobility/voice (persist until cleared).
+Return sceneSnapshot with current location, present, player mobility/voice, companion mobility/voice (persist until cleared).
 
 ${turns ? turns + '\n' : ''}${stage.chaosDirective?.trim() ? `${stage.chaosDirective.trim()}\n` : ''}User: ${stage.userMessage}
 

@@ -10,6 +10,7 @@ import {
   type SceneSnapshot,
   type SceneSnapshotPatch,
 } from '../inworld/scene_snapshot';
+import { extractCompanionConditionFromMessage } from '../inworld/scene_companion_condition';
 
 export type SceneDeltaSource = 'heuristic' | 'referee' | 'intent';
 
@@ -78,6 +79,7 @@ function locationPhraseFromMessage(message: string): string | null {
 export function extractSceneDeltaFromMessage(
   message: string,
   _prior: SceneSnapshot | null,
+  companionName?: string,
 ): Partial<SceneSnapshotPatch> & { venueSlug?: string | null } {
   const patch: Partial<SceneSnapshotPatch> & { venueSlug?: string | null } = {};
   const actions = actionSegments(message);
@@ -88,6 +90,12 @@ export function extractSceneDeltaFromMessage(
     if (mob) patch.playerMobility = mob;
     const voice = voiceFromText(seg);
     if (voice) patch.playerVoice = voice;
+  }
+
+  if (companionName?.trim()) {
+    const comp = extractCompanionConditionFromMessage(message, companionName);
+    if (comp.companionMobility) patch.companionMobility = comp.companionMobility;
+    if (comp.companionVoice) patch.companionVoice = comp.companionVoice;
   }
 
   // Muffled speech outside *actions* implies gag is still on.
@@ -207,6 +215,9 @@ function mergePartialPatches(
   out.playerMobility = heuristic.playerMobility ?? referee.playerMobility ?? intent.playerMobility;
   out.playerVoice = heuristic.playerVoice ?? referee.playerVoice ?? intent.playerVoice;
   out.playerNotes = heuristic.playerNotes ?? referee.playerNotes ?? intent.playerNotes;
+  out.companionMobility = heuristic.companionMobility ?? referee.companionMobility ?? intent.companionMobility;
+  out.companionVoice = heuristic.companionVoice ?? referee.companionVoice ?? intent.companionVoice;
+  out.companionNotes = heuristic.companionNotes ?? referee.companionNotes ?? intent.companionNotes;
 
   if (allowLocationChange) {
     out.location = intent.location ?? referee.location ?? heuristic.location;
@@ -230,6 +241,7 @@ function mergePartialPatches(
 
 function patchHasContent(p: PartialPatch, allowLocation: boolean): boolean {
   if (p.playerMobility || p.playerVoice || p.playerNotes) return true;
+  if (p.companionMobility || p.companionVoice || p.companionNotes) return true;
   if (!allowLocation) return false;
   return Boolean(p.location || p.coPresent !== undefined || p.venueSlug !== undefined);
 }
@@ -245,6 +257,12 @@ function lockedFieldsForPatch(
   }
   if (patch.playerVoice && (sources.includes('heuristic') || sources.includes('referee'))) {
     locked.push('playerVoice');
+  }
+  if (patch.companionMobility && sources.includes('heuristic')) {
+    locked.push('companionMobility');
+  }
+  if (patch.companionVoice && sources.includes('heuristic')) {
+    locked.push('companionVoice');
   }
   if (patch.playerNotes && sources.includes('referee')) locked.push('playerNotes');
   if (patch.location || patch.coPresent !== undefined || venueSlug !== undefined) {
@@ -267,9 +285,10 @@ export function buildEngineSceneDelta(opts: {
   conversation?: Partial<SceneSnapshotPatch>;
   /** When false (e.g. active arc anchor), skip location/coPresent/venue changes. */
   allowLocationChange?: boolean;
+  companionName?: string;
 }): EngineSceneDelta | null {
   const allowLocation = opts.allowLocationChange !== false;
-  const heuristicRaw = extractSceneDeltaFromMessage(opts.message, opts.prior);
+  const heuristicRaw = extractSceneDeltaFromMessage(opts.message, opts.prior, opts.companionName);
   const refereeRaw = allowLocation
     ? extractSceneDeltaFromSceneHints(opts.sceneHints)
     : extractSceneDeltaFromSceneHints(
@@ -288,6 +307,8 @@ export function buildEngineSceneDelta(opts: {
 
   const merged = mergePartialPatches(heuristicRaw, refereeRaw, intentRaw, allowLocation);
   // Conversation fills coPresent/location when the story moved but DB snapshot is stale.
+  if (conversationRaw.companionMobility) merged.companionMobility = conversationRaw.companionMobility;
+  if (conversationRaw.companionVoice) merged.companionVoice = conversationRaw.companionVoice;
   if (allowLocation) {
     if (conversationRaw.coPresent !== undefined) merged.coPresent = conversationRaw.coPresent;
     if (conversationRaw.location) {
@@ -303,7 +324,9 @@ export function buildEngineSceneDelta(opts: {
   if (patchHasContent(heuristicRaw, allowLocation)) sources.push('heuristic');
   if (patchHasContent(refereeRaw, allowLocation)) sources.push('referee');
   if (patchHasContent(intentRaw, allowLocation)) sources.push('intent');
-  if (conversationRaw.coPresent !== undefined || conversationRaw.location) sources.push('heuristic');
+  if (conversationRaw.coPresent !== undefined || conversationRaw.location || conversationRaw.companionMobility || conversationRaw.companionVoice) {
+    sources.push('heuristic');
+  }
 
   if (Object.keys(patch).length === 0 && venueSlug === undefined) return null;
 

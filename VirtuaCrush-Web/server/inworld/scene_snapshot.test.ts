@@ -11,6 +11,25 @@ import {
   readSceneSnapshot,
 } from './scene_snapshot';
 
+test('mergeSceneSnapshot: companion gag persists until cleared', () => {
+  const prior = emptySceneSnapshot();
+  prior.companion.voice = 'gagged';
+  prior.companion.mobility = 'restrained';
+
+  const merged = mergeSceneSnapshot(prior, { location: 'parking garage' }, { narratorTexts: [] });
+  assert.equal(merged.companion.voice, 'gagged');
+  assert.equal(merged.companion.mobility, 'restrained');
+});
+
+test('formatSceneSnapshotBody: includes companion condition line', () => {
+  const snap = buildFreeRoamSceneSnapshot({ companionName: 'Lexi', coPresent: true });
+  snap.companion.voice = 'gagged';
+  snap.companion.mobility = 'restrained';
+  const body = formatSceneSnapshotBody(snap);
+  assert.match(body, /Companion condition.*gagged/i);
+  assert.match(body, /restrained/i);
+});
+
 test('mergeSceneSnapshot: player restraint persists until cleared', () => {
   const prior = buildInitialSceneSnapshot({
     setting: 'warehouse',
@@ -90,7 +109,7 @@ test('readSceneSnapshot: strips player from present when remote', () => {
       coPresent: false,
       present: ['you', 'Blair'],
       player: { mobility: 'free', voice: 'free', notes: '' },
-      companion: { notes: '' },
+      companion: { mobility: 'free', voice: 'free', notes: '' },
       openThreads: [],
     },
   });

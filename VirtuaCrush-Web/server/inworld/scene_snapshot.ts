@@ -14,12 +14,18 @@ export interface PlayerSnapshot {
   notes: string;
 }
 
+export interface CompanionSnapshot {
+  mobility: PlayerMobility;
+  voice: PlayerVoice;
+  notes: string;
+}
+
 export interface SceneSnapshot {
   location: string;
   coPresent: boolean;
   present: string[];
   player: PlayerSnapshot;
-  companion: { notes: string };
+  companion: CompanionSnapshot;
   openThreads: string[];
   updatedAt: string;
   /** Schema-driven chaos NPCs that already fired this session (pack threads). */
@@ -35,6 +41,8 @@ export interface SceneSnapshotPatch {
   playerMobility?: PlayerMobility;
   playerVoice?: PlayerVoice;
   playerNotes?: string;
+  companionMobility?: PlayerMobility;
+  companionVoice?: PlayerVoice;
   companionNotes?: string;
   openThreads?: string[];
   addThreads?: string[];
@@ -53,13 +61,17 @@ export function defaultPlayerSnapshot(): PlayerSnapshot {
   return { mobility: 'free', voice: 'free', notes: '' };
 }
 
+export function defaultCompanionSnapshot(): CompanionSnapshot {
+  return { mobility: 'free', voice: 'free', notes: '' };
+}
+
 export function emptySceneSnapshot(): SceneSnapshot {
   return {
     location: '',
     coPresent: true,
     present: [],
     player: defaultPlayerSnapshot(),
-    companion: { notes: '' },
+    companion: defaultCompanionSnapshot(),
     openThreads: [],
     updatedAt: new Date().toISOString(),
   };
@@ -140,6 +152,10 @@ export function parseSceneSnapshotPatch(raw: unknown): SceneSnapshotPatch | null
   if (typeof o.companionNotes === 'string' && o.companionNotes.trim()) {
     patch.companionNotes = o.companionNotes.trim().slice(0, 240);
   }
+  const compMob = parseMobility(o.companionMobility);
+  if (compMob) patch.companionMobility = compMob;
+  const compVoice = parseVoice(o.companionVoice);
+  if (compVoice) patch.companionVoice = compVoice;
 
   const threads = Array.isArray(o.openThreads)
     ? o.openThreads.map((x) => (typeof x === 'string' ? x.trim() : '')).filter(Boolean).slice(0, MAX_THREADS)
@@ -161,6 +177,14 @@ function narratorClearsMobility(narratorTexts: string[]): boolean {
 
 function narratorClearsVoice(narratorTexts: string[]): boolean {
   return CLEAR_VOICE_RE.test(narratorTexts.join(' ').toLowerCase());
+}
+
+function narratorClearsCompanionVoice(narratorTexts: string[], companionName?: string): boolean {
+  const blob = narratorTexts.join(' ').toLowerCase();
+  if (!CLEAR_VOICE_RE.test(blob) || GAGGED_RE.test(blob)) return false;
+  const name = companionName?.trim().toLowerCase();
+  if (name && blob.includes(name)) return true;
+  return /\b(peel|rip|remove|pull).*(tape|gag).*(mouth|lips|her|him)\b/.test(blob);
 }
 
 function mergePresent(prior: string[], patch: SceneSnapshotPatch, required: string[]): string[] {
@@ -201,7 +225,7 @@ function mergeThreads(prior: string[], patch: SceneSnapshotPatch): string[] {
 export function mergeSceneSnapshot(
   prior: SceneSnapshot,
   patch: SceneSnapshotPatch | null,
-  opts: { requiredNames?: string[]; narratorTexts?: string[] } = {},
+  opts: { requiredNames?: string[]; narratorTexts?: string[]; companionName?: string } = {},
 ): SceneSnapshot {
   if (!patch) return prior;
 
@@ -223,6 +247,19 @@ export function mergeSceneSnapshot(
   }
 
   if (patch.playerNotes) player.notes = patch.playerNotes;
+
+  if (patch.companionMobility) {
+    companion.mobility = patch.companionMobility;
+  } else if (companion.mobility !== 'free' && narratorClearsMobility(narr)) {
+    companion.mobility = 'free';
+  }
+
+  if (patch.companionVoice) {
+    companion.voice = patch.companionVoice;
+  } else if (companion.voice !== 'free' && narratorClearsCompanionVoice(narr, opts.companionName)) {
+    companion.voice = 'free';
+  }
+
   if (patch.companionNotes) companion.notes = patch.companionNotes;
 
   return {
@@ -268,7 +305,11 @@ export function readSceneSnapshot(knowledge: Record<string, unknown> | undefined
       voice,
       notes: typeof playerObj.notes === 'string' ? playerObj.notes : '',
     },
-    companion: { notes: typeof compObj.notes === 'string' ? compObj.notes : '' },
+    companion: {
+      mobility: parseMobility(compObj.mobility) ?? 'free',
+      voice: parseVoice(compObj.voice) ?? 'free',
+      notes: typeof compObj.notes === 'string' ? compObj.notes : '',
+    },
     openThreads,
     updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt : new Date().toISOString(),
   };
@@ -295,7 +336,12 @@ export function snapshotToSceneState(snap: SceneSnapshot): string {
     snap.player.notes.trim(),
   ].filter(Boolean).join('; ');
   const playerLine = playerCond ? `Player condition: ${playerCond}.` : 'Player condition: free.';
-  const compLine = snap.companion.notes.trim() ? `Companion: ${snap.companion.notes.trim()}.` : '';
+  const compCond = [
+    snap.companion.mobility !== 'free' ? `mobility: ${snap.companion.mobility}` : '',
+    snap.companion.voice !== 'free' ? `voice: ${snap.companion.voice}` : '',
+    snap.companion.notes.trim(),
+  ].filter(Boolean).join('; ');
+  const compLine = compCond ? `Companion condition: ${compCond}.` : '';
   const threads = snap.openThreads.length ? ` Open threads: ${snap.openThreads.join(' | ')}` : '';
   return `Location: ${snap.location || 'unspecified'}. ${prox} Present: ${present}. ${playerLine}${compLine ? ` ${compLine}` : ''}${threads}`.slice(
     0,
@@ -317,6 +363,12 @@ export function formatSceneSnapshotBody(snap: SceneSnapshot | null): string {
     snap.player.notes.trim(),
   ].filter(Boolean);
   const playerLine = playerParts.length ? playerParts.join('; ') : 'free';
+  const compParts = [
+    snap.companion.mobility !== 'free' ? snap.companion.mobility : '',
+    snap.companion.voice !== 'free' ? snap.companion.voice : '',
+    snap.companion.notes.trim(),
+  ].filter(Boolean);
+  const compLine = compParts.length ? compParts.join('; ') : 'free';
   const lines = [
     `Location: ${snap.location || 'unspecified'}`,
     snap.coPresent
@@ -324,8 +376,11 @@ export function formatSceneSnapshotBody(snap: SceneSnapshot | null): string {
       : 'Proximity: remote / not co-located (text or call — player is elsewhere).',
     snap.coPresent ? `Present: ${withCompanion}` : `With companion (player is remote): ${withCompanion}`,
     `Player condition (DO NOT drop until explicitly cleared in narration): ${playerLine}`,
+    `Companion condition (DO NOT drop until explicitly cleared in narration): ${compLine}`,
   ];
-  if (snap.companion.notes.trim()) lines.push(`Companion condition/notes: ${snap.companion.notes.trim()}`);
+  if (snap.companion.notes.trim() && !compParts.includes(snap.companion.notes.trim())) {
+    lines.push(`Companion notes: ${snap.companion.notes.trim()}`);
+  }
   if (snap.openThreads.length) lines.push(`Open threads: ${snap.openThreads.map((t) => `- ${t}`).join(' ')}`);
   return lines.join('\n');
 }
@@ -377,6 +432,7 @@ export function applySceneContinuityUpdate(opts: {
   narratorTexts: string[];
   requiredNames?: string[];
   seedSnapshot?: SceneSnapshot | null;
+  companionName?: string;
 }): { snapshot: SceneSnapshot; sceneState: string } {
   const base =
     opts.priorSnapshot ??
@@ -386,6 +442,7 @@ export function applySceneContinuityUpdate(opts: {
   let snapshot = mergeSceneSnapshot(base, opts.sceneSnapshotPatch, {
     requiredNames: opts.requiredNames ?? [],
     narratorTexts: opts.narratorTexts,
+    companionName: opts.companionName,
   });
 
   const castCheck = validateSnapshotCast(snapshot, opts.requiredNames ?? [], opts.narratorTexts);

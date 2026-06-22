@@ -24,6 +24,11 @@ test('resolveVenueSlug: unknown place returns null', () => {
   assert.equal(resolveVenueSlug('abandoned warehouse'), null);
 });
 
+test('extractSceneDeltaFromMessage: duct tape on companion sets companionVoice', () => {
+  const d = extractSceneDeltaFromMessage('*I slap duct tape over her mouth.*', null, 'Lexi');
+  assert.equal(d.companionVoice, 'gagged');
+});
+
 test('extractSceneDeltaFromMessage: travel phrase resolves venue', () => {
   const d = extractSceneDeltaFromMessage("let's go to the mall", null);
   assert.equal(d.venueSlug, 'westside_commons');
