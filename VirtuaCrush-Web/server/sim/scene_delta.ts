@@ -10,7 +10,10 @@ import {
   type SceneSnapshot,
   type SceneSnapshotPatch,
 } from '../inworld/scene_snapshot';
-import { extractCompanionConditionFromMessage } from '../inworld/scene_companion_condition';
+import {
+  extractCompanionConditionFromMessage,
+  finalizeCompanionConditionPatch,
+} from '../inworld/scene_companion_condition';
 import { formatSpatialLocation, resolveSpatialFromInput, VENUE_PLACES } from './spatial';
 
 export type SceneDeltaSource = 'heuristic' | 'referee' | 'intent';
@@ -108,7 +111,10 @@ export function extractSceneDeltaFromMessage(
   }
 
   if (companionName?.trim()) {
-    const comp = extractCompanionConditionFromMessage(message, companionName);
+    const comp = finalizeCompanionConditionPatch(
+      prior,
+      extractCompanionConditionFromMessage(message, companionName, prior),
+    );
     if (comp.companionMobility) patch.companionMobility = comp.companionMobility;
     if (comp.companionVoice) patch.companionVoice = comp.companionVoice;
   }

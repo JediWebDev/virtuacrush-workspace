@@ -65,6 +65,7 @@ import {
   inferCompanionConditionFromBeats,
   inferCompanionConditionFromConversation,
   mergeCompanionConditionPatches,
+  finalizeCompanionConditionPatch,
 } from '../inworld/scene_companion_condition';
 import { formatStatusDirectiveBlock, enforceStatusOnTurns } from '../sim/status_effects';
 import { resolvePresentation } from '../sim/scene_presentation';
@@ -710,16 +711,19 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     }
     const driveReaction = (companionEntity?.knowledge.pendingDriveReaction as string | undefined) || '';
 
-    const messageCompanionPatch = extractCompanionConditionFromMessage(message, displayName);
+    const messageCompanionPatch = extractCompanionConditionFromMessage(message, displayName, priorSceneSnapshot);
     const conversationScenePatch = {
       ...inferSceneDeltaFromConversation(turns, message, priorSceneSnapshot),
-      ...mergeCompanionConditionPatches(
-        inferCompanionConditionFromBeats(storyBeats, displayName, {
-          skipIfCleared:
-            messageCompanionPatch.companionVoice === 'free' || messageCompanionPatch.companionMobility === 'free',
-        }),
-        inferCompanionConditionFromConversation(turns, message, displayName, priorSceneSnapshot),
-        messageCompanionPatch,
+      ...finalizeCompanionConditionPatch(
+        priorSceneSnapshot,
+        mergeCompanionConditionPatches(
+          inferCompanionConditionFromBeats(storyBeats, displayName, {
+            skipIfCleared:
+              messageCompanionPatch.companionVoice === 'free' || messageCompanionPatch.companionMobility === 'free',
+          }),
+          inferCompanionConditionFromConversation(turns, message, displayName, priorSceneSnapshot),
+          messageCompanionPatch,
+        ),
       ),
     };
 

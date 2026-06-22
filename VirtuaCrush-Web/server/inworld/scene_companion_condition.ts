@@ -82,10 +82,11 @@ export function companionConditionClearFromMessage(
 export function extractCompanionConditionFromMessage(
   message: string,
   companionName: string,
-): Pick<SceneSnapshotPatch, 'companionMobility' | 'companionVoice'> {
+  prior: SceneSnapshot | null = null,
+): CompanionConditionPatch {
   const cleared = companionConditionClearFromMessage(message, companionName);
   if (cleared.companionVoice === 'free' || cleared.companionMobility === 'free') {
-    return cleared;
+    return finalizeCompanionConditionPatch(prior, cleared);
   }
 
   const patch: Pick<SceneSnapshotPatch, 'companionMobility' | 'companionVoice'> = {};
@@ -155,10 +156,10 @@ export function inferCompanionConditionFromConversation(
 ): Pick<SceneSnapshotPatch, 'companionMobility' | 'companionVoice'> {
   const cleared = companionConditionClearFromMessage(message, companionName);
   if (cleared.companionVoice === 'free' || cleared.companionMobility === 'free') {
-    return cleared;
+    return finalizeCompanionConditionPatch(prior, cleared);
   }
 
-  const patch: Pick<SceneSnapshotPatch, 'companionMobility' | 'companionVoice'> = {};
+  const patch: CompanionConditionPatch = {};
   const blob = [...history.slice(-14), { role: 'user' as const, content: message }]
     .map((m) => m.content)
     .join('\n');
@@ -220,9 +221,27 @@ export function enforceCompanionSpeechConstraints(
   });
 }
 
+type CompanionConditionPatch = Pick<SceneSnapshotPatch, 'companionMobility' | 'companionVoice'>;
+
+/** Ungag ≠ unbind — carry over the other axis from engine state when only one clears. */
+export function finalizeCompanionConditionPatch(
+  prior: SceneSnapshot | null,
+  patch: CompanionConditionPatch,
+): CompanionConditionPatch {
+  if (!prior) return patch;
+  const out: CompanionConditionPatch = { ...patch };
+  if (out.companionVoice === 'free' && out.companionMobility === undefined && prior.companion.mobility !== 'free') {
+    out.companionMobility = prior.companion.mobility;
+  }
+  if (out.companionMobility === 'free' && out.companionVoice === undefined && prior.companion.voice !== 'free') {
+    out.companionVoice = prior.companion.voice;
+  }
+  return out;
+}
+
 export function mergeCompanionConditionPatches(
-  ...patches: Array<Partial<Pick<SceneSnapshotPatch, 'companionMobility' | 'companionVoice'>>>
-): Pick<SceneSnapshotPatch, 'companionMobility' | 'companionVoice'> {
+  ...patches: Array<Partial<CompanionConditionPatch>>
+): CompanionConditionPatch {
   const out: Pick<SceneSnapshotPatch, 'companionMobility' | 'companionVoice'> = {};
   for (const p of patches) {
     if (p.companionVoice) out.companionVoice = p.companionVoice;

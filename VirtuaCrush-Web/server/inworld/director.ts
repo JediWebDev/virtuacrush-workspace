@@ -9,6 +9,7 @@ import { NARRATOR_BRIEF } from './characters';
 import { formatStoryActDirective, type StoryAct } from './story_structure';
 import { formatMeetArcPacingBlock } from './meet_arc';
 import { parseSceneSnapshotPatch, type SceneSnapshotPatch } from './scene_snapshot';
+import { sanitizeEnglishDialogue } from '../llm/quality';
 
 export type ActorKind = 'companion' | 'narrator' | 'npc';
 export interface Actor { tag: string; name: string; kind: ActorKind; brief?: string }
@@ -94,7 +95,7 @@ function asStr(v: unknown): string {
 
 /** Strips leaked JSON artifacts (`" }, {`, trailing braces/quotes, speaker keys) from a line. */
 function cleanLine(t: string): string {
-  return (t ?? '')
+  const stripped = sanitizeEnglishDialogue((t ?? '')
     // Leaked per-character JSON keys (e.g. serena_actions": [ or serena_lines":)
     .replace(/"?[a-zA-Z0-9_]+_actions"?\s*:\s*\[?\s*/gi, '')
     .replace(/"?[a-zA-Z0-9_]+_lines"?\s*:\s*"?/gi, '')
@@ -105,7 +106,8 @@ function cleanLine(t: string): string {
     .replace(/"\s*[}\]]\s*,?\s*[{\[]?\s*"?/g, ' ')
     .replace(/\]\s*"?$/g, '')   // stray ] or "] left from leaked action arrays
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim());
+  return stripped;
 }
 
 function salvageTexts(raw: string): string[] {

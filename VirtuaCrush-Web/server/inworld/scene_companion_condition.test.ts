@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import {
   extractCompanionConditionFromMessage,
   inferCompanionConditionFromBeats,
+  inferCompanionConditionFromConversation,
   enforceCompanionSpeechConstraints,
   looksMuffledSpeech,
   mergeCompanionConditionPatches,
+  finalizeCompanionConditionPatch,
 } from './scene_companion_condition';
 import { emptySceneSnapshot, mergeSceneSnapshot } from './scene_snapshot';
 
@@ -41,13 +43,72 @@ test('mergeSceneSnapshot: companion gag persists until narrator clears', () => {
 });
 
 test('extractCompanionConditionFromMessage: pull tape off clears gag', () => {
-  const p = extractCompanionConditionFromMessage('*pull the tape off slowly, watching her expression*', 'Lexi');
+  const prior = emptySceneSnapshot();
+  prior.companion.voice = 'gagged';
+  prior.companion.mobility = 'restrained';
+  const p = extractCompanionConditionFromMessage('*pull the tape off slowly, watching her expression*', 'Lexi', prior);
   assert.equal(p.companionVoice, 'free');
+  assert.equal(p.companionMobility, 'restrained');
 });
 
-test('extractCompanionConditionFromMessage: cut zip ties clears bind', () => {
-  const p = extractCompanionConditionFromMessage("*cut the zip ties carefully* She's not bolting tonight.", 'Lexi');
+test('extractCompanionConditionFromMessage: peel duct tape off mouth keeps bind', () => {
+  const prior = emptySceneSnapshot();
+  prior.companion.voice = 'gagged';
+  prior.companion.mobility = 'restrained';
+  const p = extractCompanionConditionFromMessage(
+    "*I peel the duct tape off of Lexi's mouth in one swift motion.*",
+    'Lexi',
+    prior,
+  );
+  assert.equal(p.companionVoice, 'free');
+  assert.equal(p.companionMobility, 'restrained');
+});
+
+test('extractCompanionConditionFromMessage: cut zip ties clears bind only', () => {
+  const prior = emptySceneSnapshot();
+  prior.companion.voice = 'gagged';
+  prior.companion.mobility = 'restrained';
+  const p = extractCompanionConditionFromMessage("*cut the zip ties carefully* She's not bolting tonight.", 'Lexi', prior);
   assert.equal(p.companionMobility, 'free');
+  assert.equal(p.companionVoice, 'gagged');
+});
+
+test('inferCompanionConditionFromConversation: ungag preserves prior restraint', () => {
+  const prior = emptySceneSnapshot();
+  prior.companion.voice = 'gagged';
+  prior.companion.mobility = 'restrained';
+  const p = inferCompanionConditionFromConversation(
+    [{ role: 'assistant', content: '[LEXI] mmf mmf!' }],
+    '*pull the tape off slowly*',
+    'Lexi',
+    prior,
+  );
+  assert.equal(p.companionVoice, 'free');
+  assert.equal(p.companionMobility, 'restrained');
+});
+
+test('finalizeCompanionConditionPatch: voice-only clear keeps bind', () => {
+  const prior = emptySceneSnapshot();
+  prior.companion.mobility = 'restrained';
+  const p = finalizeCompanionConditionPatch(prior, { companionVoice: 'free' });
+  assert.equal(p.companionVoice, 'free');
+  assert.equal(p.companionMobility, 'restrained');
+});
+
+test('mergeSceneSnapshot: narrator ungag does not clear companion bind', () => {
+  const prior = emptySceneSnapshot();
+  prior.companion.voice = 'gagged';
+  prior.companion.mobility = 'restrained';
+  const merged = mergeSceneSnapshot(
+    prior,
+    { companionVoice: 'free' },
+    {
+      narratorTexts: ['*Andrew peels the duct tape from her mouth; Lexi gasps.*'],
+      companionName: 'Lexi',
+    },
+  );
+  assert.equal(merged.companion.voice, 'free');
+  assert.equal(merged.companion.mobility, 'restrained');
 });
 
 test('mergeCompanionConditionPatches: explicit free beats stale gagged', () => {

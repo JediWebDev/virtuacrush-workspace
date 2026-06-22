@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { looksDegenerate } from './quality';
+import { looksDegenerate, sanitizeEnglishDialogue } from './quality';
 
 const SALAD =
   'заеней Leaf Galles replied „Go as parameters setup(mock/Sortal/exolid/L voice/ energy call LU Бе şirk dém as a ' +
@@ -29,4 +29,12 @@ test('looksDegenerate: passes normal roleplay replies', () => {
   assert.equal(looksDegenerate('[NARRATOR] Rain taps the window. Becca curls deeper into the couch.'), false);
   assert.equal(looksDegenerate("It's a date 🎢 can't wait!! 😏💕"), false);
   assert.equal(looksDegenerate('café, fiancée, jalapeño — touché my friend'), false);
+});
+
+test('sanitizeEnglishDialogue: drops isolated CJK tokens', () => {
+  assert.equal(
+    sanitizeEnglishDialogue("Karen's 車 is parked out front — you know, the red one."),
+    "Karen's is parked out front — you know, the red one.",
+  );
+  assert.equal(sanitizeEnglishDialogue('café and jalapeño stay'), 'café and jalapeño stay');
 });

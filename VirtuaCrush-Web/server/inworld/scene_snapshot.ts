@@ -213,9 +213,21 @@ export function sanitizeDirectorSnapshotPatch(
   return Object.keys(safe).length ? safe : null;
 }
 
+const CLEAR_COMPANION_BIND_RE =
+  /\b(cut\s+(the\s+)?(zip\s*-?\s*ties?|restraints?|rope)|untied|unbound|released\s+from|wrists?\s+(?:are|were)\s+free|freed?\s+(?:her|his|their)\s+(?:wrists|hands)|get\s+(?:her|him|them)\s+loose)\b/i;
+
 function narratorClearsMobility(narratorTexts: string[]): boolean {
   const blob = narratorTexts.join(' ').toLowerCase();
   return CLEAR_MOBILITY_RE.test(blob) && !RESTRAINED_RE.test(blob);
+}
+
+/** Ungagging in narration must not clear bind — require explicit untie/cut language. */
+function narratorClearsCompanionMobility(narratorTexts: string[], companionName?: string): boolean {
+  const blob = narratorTexts.join(' ').toLowerCase();
+  if (!CLEAR_COMPANION_BIND_RE.test(blob) || RESTRAINED_RE.test(blob)) return false;
+  const name = companionName?.trim().toLowerCase();
+  if (name && blob.includes(name)) return true;
+  return /\b(cut|untie|unbind|release)\b/.test(blob);
 }
 
 function narratorClearsVoice(narratorTexts: string[]): boolean {
@@ -291,9 +303,14 @@ export function mergeSceneSnapshot(
 
   if (patch.playerNotes) player.notes = patch.playerNotes;
 
+  const voiceOnlyClear = patch.companionVoice === 'free' && !patch.companionMobility;
   if (patch.companionMobility) {
     companion.mobility = patch.companionMobility;
-  } else if (companion.mobility !== 'free' && narratorClearsMobility(narr)) {
+  } else if (
+    companion.mobility !== 'free' &&
+    !voiceOnlyClear &&
+    narratorClearsCompanionMobility(narr, opts.companionName)
+  ) {
     companion.mobility = 'free';
   }
 

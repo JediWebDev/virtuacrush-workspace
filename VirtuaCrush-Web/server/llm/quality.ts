@@ -37,3 +37,28 @@ export function looksDegenerate(text: string): boolean {
 
   return false;
 }
+
+const FOREIGN_LETTER =
+  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Greek}]/u;
+
+/** Drops isolated non-Latin tokens (CJK leaks, etc.) from a single dialogue line. */
+export function sanitizeEnglishDialogue(text: string): string {
+  const t = (text ?? '').trim();
+  if (!t) return t;
+  const cleaned = t
+    .split(/(\s+)/)
+    .map((token) => {
+      if (!token.trim()) return token;
+      const stripped = token.trim();
+      if (!FOREIGN_LETTER.test(stripped)) return token;
+      const letters = [...stripped.replace(/[^\p{L}]/gu, '')];
+      if (!letters.length) return token;
+      const latin = letters.filter((c) => /\p{Script=Latin}/u.test(c)).length;
+      if (latin / letters.length < 0.5) return '';
+      return token;
+    })
+    .join('')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return cleaned || t;
+}
