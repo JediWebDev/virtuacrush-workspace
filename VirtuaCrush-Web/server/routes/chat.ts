@@ -47,6 +47,7 @@ import { applyEngineSceneDelta } from '../db/scene_apply';
 import {
   inferSceneDeltaFromConversation,
   shouldSuppressHomeBaseline,
+  resolveCoPresentForPrompt,
   formatActiveSceneDirective,
   reconcileSceneSnapshotForPrompt,
   isCrisisScene,
@@ -778,13 +779,18 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           ? formatLocationBlock(situation.scene.location, displayName, affinity)
           : formatSituationBlock(situation.state, scene, displayName, affinity);
 
+    const coPresentForPrompt = resolveCoPresentForPrompt({
+      prior: priorSceneSnapshot,
+      sceneAnchorCoPresent: activeArc?.sceneAnchor?.coPresent,
+      suppressHomeBaseline,
+      atVenue: Boolean(situation.scene.location),
+    });
     let lookNote = '';
     if (companionEntity) {
-      const coPresentNow = priorSceneSnapshot?.coPresent ?? false;
       const lastOutfit = describeLastSeenOutfit(companionEntity.knowledge.lastSeenOutfit, 'player', itemsById(world.user.inventory));
-      if (coPresentNow && lastOutfit) {
+      if (coPresentForPrompt && lastOutfit) {
         lookNote = `\n\nLAST TIME YOU SAW THE PLAYER they were wearing ${lastOutfit}; you do not know if that has changed. Do NOT invent a different outfit.`;
-      } else if (!coPresentNow) {
+      } else if (!coPresentForPrompt) {
         lookNote = `\n\nYou are apart and cannot see the player — do NOT invent what they are wearing.`;
       }
     }
@@ -1079,7 +1085,12 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       // Perception update for NEXT turn: companion learns name/bio, and outfit when co-present.
       if (companionEntity) {
         const learnedFacts = observePlayer({
-          coPresent: priorSceneSnapshot?.coPresent ?? activeArc?.sceneAnchor?.coPresent ?? false,
+          coPresent: resolveCoPresentForPrompt({
+            prior: continuity.snapshot,
+            sceneAnchorCoPresent: activeArc?.sceneAnchor?.coPresent,
+            suppressHomeBaseline,
+            atVenue: Boolean(situation.scene.location),
+          }),
           message,
           profile: world!.user.profile,
           existingFacts: companionEntity.knowledge.knownPlayerFacts,
@@ -1146,12 +1157,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       }
     }
 
-    // Autonomous social post: if this turn hit a meaningful beat (first-meeting
-    // completed, plans/contact swapped, an affinity milestone, or a real
-    // disclosure), the character may post to their feed in-character. The
-    // generator self-rate-limits with a cooldown; we only do the (cheap) check
-    // when a trigger fired, and surface `posted` so the client refreshes the feed.
-    let posted = false;
+    // Autonomous social post: fire-and-forget so arc-completion generation never
+    // blocks `done`. When a trigger fired, tell the client to refresh the feed.
     const postTrigger = postTriggerForTurn({
       completedArcId: completedArcIdForPost,
       arcBadgeTitle: earnedBadge?.title ?? null,
@@ -1160,13 +1167,14 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       newAffinity: newAffinityScore,
       emotionalDisclosure: revealSecretNow,
     });
+    const posted = postTrigger != null;
     if (postTrigger) {
-      posted = (await maybeAutonomousPost({
+      void maybeAutonomousPost({
         userId: req.user!.id,
         characterId,
         displayName,
         trigger: postTrigger,
-      })) != null;
+      }).catch((e) => console.warn('[chat] autonomous post failed:', e));
     }
 
     // Bump usage only for free users so paid users have a clean 0/null state.

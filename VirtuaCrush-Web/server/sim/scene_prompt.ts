@@ -107,6 +107,21 @@ export function shouldSuppressHomeBaseline(opts: {
   return false;
 }
 
+/** Whether the companion can see the player this turn (lookNote, observePlayer). */
+export function resolveCoPresentForPrompt(opts: {
+  prior: SceneSnapshot | null;
+  sceneAnchorCoPresent?: boolean;
+  suppressHomeBaseline: boolean;
+  atVenue: boolean;
+}): boolean {
+  if (opts.prior?.coPresent === true) return true;
+  if (opts.sceneAnchorCoPresent === true) return true;
+  if (opts.suppressHomeBaseline) return true;
+  if (opts.atVenue) return true;
+  if (opts.prior?.coPresent === false) return false;
+  return false;
+}
+
 /** One-line directive when home baseline / composed facts are suppressed. */
 export function formatActiveSceneDirective(snapshot: SceneSnapshot | null): string {
   const loc = snapshot?.location && !isStaleRemoteLocation(snapshot.location) ? snapshot.location : null;

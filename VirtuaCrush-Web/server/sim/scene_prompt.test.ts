@@ -4,6 +4,7 @@ import {
   sanitizeHomeBaselineActivity,
   inferSceneDeltaFromConversation,
   shouldSuppressHomeBaseline,
+  resolveCoPresentForPrompt,
   reconcileSceneSnapshotForPrompt,
   isCrisisScene,
 } from './scene_prompt';
@@ -28,6 +29,39 @@ test('inferSceneDeltaFromConversation: van captivity implies coPresent + locatio
   const patch = inferSceneDeltaFromConversation(history, 'Mmf. Mmmf.', null);
   assert.equal(patch.coPresent, true);
   assert.match(patch.location ?? '', /van/i);
+});
+
+test('resolveCoPresentForPrompt: physical scene suppresses stale remote snapshot', () => {
+  const prior = buildFreeRoamSceneSnapshot({ companionName: 'Lexi', coPresent: false });
+  assert.equal(
+    resolveCoPresentForPrompt({
+      prior,
+      suppressHomeBaseline: true,
+      atVenue: false,
+    }),
+    true,
+  );
+  assert.equal(
+    resolveCoPresentForPrompt({
+      prior,
+      suppressHomeBaseline: false,
+      atVenue: false,
+    }),
+    false,
+  );
+});
+
+test('resolveCoPresentForPrompt: scene anchor wins over false snapshot', () => {
+  const prior = buildFreeRoamSceneSnapshot({ companionName: 'Lexi', coPresent: false });
+  assert.equal(
+    resolveCoPresentForPrompt({
+      prior,
+      sceneAnchorCoPresent: true,
+      suppressHomeBaseline: false,
+      atVenue: false,
+    }),
+    true,
+  );
 });
 
 test('shouldSuppressHomeBaseline: true when player is restrained in ongoing scene', () => {
