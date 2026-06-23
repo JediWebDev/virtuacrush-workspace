@@ -8,7 +8,6 @@ import {
   LogOut,
   Loader2,
 } from "lucide-react";
-import AvatarImageStudio from "../components/AvatarImageStudio";
 import { useSession, signOut } from "../lib/auth-client";
 import {
   ApiError,
@@ -22,15 +21,6 @@ import {
 } from "../lib/api";
 import * as profileApi from "../lib/profile";
 import { customAvatar } from "../lib/customCharacter";
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("read_failed"));
-    reader.readAsDataURL(file);
-  });
-}
 
 function formatRenewalDate(iso: string | null): string | null {
   if (!iso) return null;
@@ -70,9 +60,6 @@ export default function AccountPage() {
   const { data: session } = useSession();
   const [avatarKey, setAvatarKey] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState("");
-  const [avatarBusy, setAvatarBusy] = useState(false);
-  const [avatarError, setAvatarError] = useState<string | null>(null);
-  const [avatarPrompt, setAvatarPrompt] = useState("");
 
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [subLoading, setSubLoading] = useState(true);
@@ -81,8 +68,6 @@ export default function AccountPage() {
 
   const [emailNotifs, setEmailNotifs] = useState(true);
   const [smsNotifs, setSmsNotifs] = useState(false);
-
-  const isPro = subscription?.subscribed ?? false;
 
   useEffect(() => {
     profileApi
@@ -101,37 +86,6 @@ export default function AccountPage() {
       .catch(() => setSubscription(null))
       .finally(() => setSubLoading(false));
   }, []);
-
-  const handleUploadAvatar = async (file: File) => {
-    setAvatarError(null);
-    setAvatarBusy(true);
-    try {
-      const dataUrl = await fileToDataUrl(file);
-      const { avatarKey: key } = await profileApi.uploadProfileAvatar(dataUrl);
-      setAvatarKey(key);
-    } catch {
-      setAvatarError("Couldn't upload that image. Use a PNG, JPG, or WEBP under 6MB.");
-    } finally {
-      setAvatarBusy(false);
-    }
-  };
-
-  const handleGenerateAvatar = async () => {
-    setAvatarError(null);
-    setAvatarBusy(true);
-    try {
-      const { avatarKey: key } = await profileApi.generateProfileAvatar(avatarPrompt.trim() || undefined);
-      setAvatarKey(key);
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 403) {
-        setAvatarError("AI avatar generation is a Pro feature.");
-      } else {
-        setAvatarError("Couldn't generate an image. Please try again.");
-      }
-    } finally {
-      setAvatarBusy(false);
-    }
-  };
 
   const handleCheckout = async () => {
     setSubError(null);
@@ -162,15 +116,11 @@ export default function AccountPage() {
   };
 
   const handleRemoveAvatar = async () => {
-    setAvatarError(null);
-    setAvatarBusy(true);
     try {
       await profileApi.deleteProfileAvatar();
       setAvatarKey(null);
     } catch {
-      setAvatarError("Couldn't remove that photo. Please try again.");
-    } finally {
-      setAvatarBusy(false);
+      /* noop */
     }
   };
 
@@ -202,24 +152,27 @@ export default function AccountPage() {
           <SectionCard
             title="Profile photo"
             icon={User}
-            description="Upload your own picture or describe how you'd like AI to portray you."
+            description="Your in-game avatar is chosen from preset character art."
           >
-            <AvatarImageStudio
-              imageSrc={avatarSrc}
-              alt={displayName || "Your profile photo"}
-              prompt={avatarPrompt}
-              onPromptChange={setAvatarPrompt}
-              onUpload={(f) => void handleUploadAvatar(f)}
-              onGenerate={() => void handleGenerateAvatar()}
-              onRemove={() => void handleRemoveAvatar()}
-              busy={avatarBusy}
-              error={avatarError}
-              isPro={isPro}
-              hasCustomImage={Boolean(avatarKey)}
-              promptLabel="Describe your profile photo"
-              promptPlaceholder="Confident smile, warm golden-hour light, casual denim jacket, painterly portrait, friendly eyes…"
-              promptHint="Describe your look, mood, clothing, and art style. Leave blank to fall back on your saved profile details."
-            />
+            <div className="flex items-center gap-4">
+              <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-black/10 shadow-sm dark:border-white/10">
+                <img src={avatarSrc} alt={displayName || "Your profile photo"} className="h-full w-full object-cover object-top" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm text-stone-600 dark:text-stone-300">
+                  Pick your playable character and look from the preset library (coming soon).
+                </p>
+                {avatarKey ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveAvatar()}
+                    className="mt-2 text-xs font-semibold text-stone-500 transition-colors hover:text-red-500 dark:text-stone-400 dark:hover:text-red-400"
+                  >
+                    Reset to default
+                  </button>
+                ) : null}
+              </div>
+            </div>
           </SectionCard>
 
           <SectionCard

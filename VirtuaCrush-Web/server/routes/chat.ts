@@ -124,8 +124,9 @@ import { applyEffects } from '../db/sim_apply';
 import { describeKnownPlayer, observePlayer, describeAppearance } from '../sim/player';
 import { describeLastSeenOutfit, itemsById, wornItems, describeOutfit, describeGrooming } from '../sim/wardrobe';
 import { upsertNpcState } from '../db/npc_state';
-import { looksDegenerate } from '../llm/quality';
-import { directorCompleteOpts } from '../llm/models';
+import { looksDegenerate, sanitizeEnglishDialogue } from '../llm/quality';
+import { directorCompleteOpts, dialogueCompleteOpts } from '../llm/models';
+import { buildDialoguePrompt } from '../inworld/dialogue';
 import { streamingDirectorTranscript } from '../llm/stream_director';
 import { budgetHistory } from '../llm/budget';
 import {
@@ -393,7 +394,12 @@ router.get('/history/:characterId/:day', requireAuth, async (req: Request, res: 
   }
 });
 
-router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, res: Response) => {
+// Legacy multi-actor director turn (scene/story/event-driven, multi-speaker JSON
+// output). Decoupled — no longer wired to a route. The engine now owns the world
+// and the LLM only voices one character; see streamDialogueTurn below. Kept in the
+// tree so the arc/pack/chaos/scene machinery can be revisited later if needed.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function legacyDirectorStream(req: Request, res: Response) {
   const body = req.body as ChatRequestBody;
   const { characterId, actionId } = body;
   let message = typeof body.message === 'string' ? body.message.trim() : '';
@@ -1352,7 +1358,167 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     send('error', { message: 'stream_failed' });
     res.end();
   }
-});
+}
+
+/** Cleans a single-voice plain-text reply: drops code fences, stray [LABEL]
+ *  prefixes, and isolated foreign-script (CJK, etc.) token leaks. */
+function cleanDialogueReply(raw: string): string {
+  const t = (raw ?? '').replace(/\r\n/g, '\n').replace(/```[a-z]*/gi, '').replace(/```/g, '');
+  return t
+    .split('\n')
+    .map((line) => sanitizeEnglishDialogue(line.replace(/^\s*\[[^\]]+\]\s?/, '')))
+    .join('\n')
+    .trim();
+}
+
+// Dialogue-only chat turn. The engine owns the world; the LLM only voices the one
+// character the player is talking to (tone, voice style, emotional state). Plain
+// text in, plain first-person text out — no scene/story/event/multi-actor content.
+async function streamDialogueTurn(req: Request, res: Response) {
+  const body = req.body as ChatRequestBody;
+  const { characterId, actionId } = body;
+  let message = typeof body.message === 'string' ? body.message.trim() : '';
+
+  if (!characterId || (!message && !actionId)) {
+    return res.status(400).json({ error: 'invalid_request' });
+  }
+
+  if (characterId.startsWith('user:')) {
+    const ok = await ensureUserCharacterLoaded(characterId, req.user!.id);
+    if (!ok) return res.status(404).json({ error: 'unknown_character' });
+  }
+
+  let displayName = characterId;
+  try {
+    displayName = getCharacter(characterId).displayName;
+  } catch {
+    /* custom character */
+  }
+
+  // Structured engine actions (travel, equip, …) resolve to a player utterance so
+  // the existing action UI keeps working; world/scene effects live in the engine.
+  if (actionId) {
+    const [progress, profile, npcMap] = await Promise.all([
+      loadPlayerProgress(req.user!.id, characterId),
+      getFullProfile(req.user!.id),
+      getNpcStates(req.user!.id, [characterId]),
+    ]);
+    const prior = readSceneSnapshot((npcMap[characterId]?.knowledge ?? {}) as Record<string, unknown>);
+    const resolved = resolvePlayerAction(actionId, {
+      snapshot: prior,
+      progress,
+      inventory: profile.inventory,
+      wornItemIds: profile.presentation.wornItemIds ?? [],
+      companionName: displayName,
+      characterId,
+      currentVenueSlug: prior?.venueSlug ?? null,
+    });
+    if (!resolved) return res.status(400).json({ error: 'invalid_action' });
+    message = resolved.message;
+  }
+
+  if (!message) return res.status(400).json({ error: 'invalid_request' });
+  if (message.length > 4000) return res.status(400).json({ error: 'message_too_long', max: 4000 });
+
+  // Recent window for local coherence; long-term recall is out of scope now.
+  const turns: ChatMessage[] = budgetHistory(
+    await loadRecentTurns(
+      req.user!.id,
+      characterId,
+      RECENT_TURNS_FOR_PROMPT,
+      await resolveFreeRoamWindow(req.user!.id, characterId),
+    ),
+  );
+
+  // Read-only emotional state so tone tracks how the character feels (decays toward
+  // baseline; no intent-driven updates anymore).
+  let emotions: EmotionState | null = null;
+  let secretDiscovered = false;
+  try {
+    const npcMap = await getNpcStates(req.user!.id, [characterId]);
+    const knowledge = (npcMap[characterId]?.knowledge ?? {}) as Record<string, unknown>;
+    secretDiscovered = knowledge.secretDiscovered === true;
+    const stored = knowledge.emotions as EmotionState | undefined;
+    const updatedAt =
+      typeof knowledge.emotionsUpdatedAt === 'string' ? Date.parse(knowledge.emotionsUpdatedAt) : NaN;
+    const hours = Number.isFinite(updatedAt) ? Math.max(0, (Date.now() - updatedAt) / 3_600_000) : 0;
+    emotions = stored ? decayEmotions(stored, characterId, hours) : initEmotions(characterId);
+  } catch {
+    emotions = null;
+  }
+
+  const prompt = buildDialoguePrompt({
+    characterId,
+    displayName,
+    history: turns,
+    userMessage: message,
+    emotions,
+    secretDiscovered,
+  });
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const send = (event: string, data: unknown) => {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const abortController = new AbortController();
+  req.on('close', () => abortController.abort());
+
+  const opts = dialogueCompleteOpts();
+  let raw = '';
+  let streamedChars = 0;
+  try {
+    try {
+      for await (const delta of streamPrompt(prompt, opts)) {
+        if (abortController.signal.aborted) break;
+        raw += delta;
+        const clean = cleanDialogueReply(raw);
+        if (clean.length > streamedChars) {
+          send('chunk', { text: clean.slice(streamedChars) });
+          streamedChars = clean.length;
+        }
+      }
+    } catch (streamErr) {
+      console.warn('[chat] dialogue stream failed; falling back to complete:', streamErr);
+      raw = await completePrompt(prompt, opts);
+    }
+    if (!raw.trim()) raw = await completePrompt(prompt, opts);
+
+    const assistantFull = cleanDialogueReply(raw) || '…';
+    if (!abortController.signal.aborted && assistantFull.length > streamedChars) {
+      send('chunk', { text: assistantFull.slice(streamedChars) });
+    }
+
+    await persistTurn({
+      userId: req.user!.id,
+      characterId,
+      userMessage: message,
+      assistantMessage: assistantFull,
+    });
+
+    // Quota: bump usage only for free users so paid users keep a clean state.
+    let remaining: number | null = null;
+    if (!(await isSubscribed(req.user!.id))) {
+      const used = await incrementUsage(req.user!.id);
+      remaining = Math.max(0, FREE_TIER_DAILY_LIMIT - used);
+    }
+
+    send('done', { remaining });
+    res.end();
+  } catch (err) {
+    console.error('[chat] dialogue stream error:', err);
+    send('error', { message: 'stream_failed' });
+    res.end();
+  }
+}
+
+router.post('/stream', requireAuth, enforceMessageQuota, streamDialogueTurn);
 
 async function loadRecentTurns(
   userId: string,

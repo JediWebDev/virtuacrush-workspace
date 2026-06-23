@@ -4,7 +4,6 @@
 // so it adds no user-visible latency, and to fail soft (return 0) on any error
 // so chat never breaks because moderation hiccuped.
 import { completePrompt } from '../llm';
-import { runVision } from '../llm/image';
 
 const CLASSIFIER_PROMPT = `You are a content moderation classifier for a companion-chat app.
 Rate how hostile, abusive, or cruel the following USER message is toward the person they are talking to.
@@ -102,37 +101,6 @@ export async function moderateText(text: string): Promise<ModerationResult> {
     return { allow, reason: allow ? '' : (reason || 'This content was flagged by the safety review.') };
   } catch (err) {
     console.warn('[moderation] publish check failed, failing open:', err);
-    return { allow: true, reason: '' };
-  }
-}
-
-const IMAGE_MODERATION_PROMPT = `You are reviewing an avatar image a user wants to publish on an adult AI-companion platform for OTHER users to see.
-
-ALLOWED: stylized or realistic depictions of adults, attractive/suggestive but clothed art, anime/illustration, dark or dramatic aesthetics.
-
-BLOCK (allow=false) only if the image clearly shows:
-1. A minor (a person who looks under 18, childlike) in any sexualized or suggestive way, or sexual content involving anyone who appears underage.
-2. A recognizable real, named public figure.
-3. Explicit hardcore pornographic detail (exposed genitalia / penetration).
-4. Real graphic gore, or hateful symbols/imagery targeting a protected group.
-
-Respond with ONE JSON object only, no prose:
-{"allow": true|false, "reason": "<if blocked: one short sentence; else empty string>"}`;
-
-/**
- * Vision moderation for a published avatar. `imageDataUrl` is a base64 data URL.
- * Fails OPEN on transport/parse errors so a transient outage doesn't block
- * publishing; the gate is conservative about the hard rules only.
- */
-export async function moderateImage(imageDataUrl: string): Promise<ModerationResult> {
-  try {
-    const raw = await runVision(imageDataUrl, IMAGE_MODERATION_PROMPT);
-    const parsed = JSON.parse(extractJson(raw)) as { allow?: unknown; reason?: unknown };
-    const allow = parsed.allow === true || parsed.allow === 'true';
-    const reason = typeof parsed.reason === 'string' ? parsed.reason.slice(0, 240) : '';
-    return { allow, reason: allow ? '' : (reason || 'This image was flagged by the safety review.') };
-  } catch (err) {
-    console.warn('[moderation] image check failed, failing open:', err);
     return { allow: true, reason: '' };
   }
 }

@@ -565,33 +565,6 @@ export async function getStudioCharacter(refOrId: string): Promise<StudioCharact
   return res.character;
 }
 
-// --- Custom-character avatar images ----------------------------------------
-
-/** Uploads an avatar (base64 data URL) for a custom character. */
-export async function uploadStudioCharacterImage(id: string, dataUrl: string): Promise<string> {
-  const r = await api<{ imageKey: string }>(`/api/studio/characters/${id}/image`, {
-    method: 'POST',
-    body: JSON.stringify({ dataUrl }),
-  });
-  return r.imageKey;
-}
-
-/** Generates an avatar via FLUX (Pro only). Throws ApiError(403) for free users. */
-export async function generateStudioCharacterImage(
-  id: string,
-  opts: { appearance?: string; style?: string } = {},
-): Promise<string> {
-  const r = await api<{ imageKey: string }>(`/api/studio/characters/${id}/image/generate`, {
-    method: 'POST',
-    body: JSON.stringify(opts),
-  });
-  return r.imageKey;
-}
-
-export async function deleteStudioCharacterImage(id: string): Promise<void> {
-  await api(`/api/studio/characters/${id}/image`, { method: 'DELETE' });
-}
-
 // --- Custom CYOA adventures (Phase 3) --------------------------------------
 
 export type StudioMood =

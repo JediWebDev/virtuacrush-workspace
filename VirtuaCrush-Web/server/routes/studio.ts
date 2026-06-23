@@ -20,7 +20,7 @@ import {
 } from '../db/user_stories';
 import {
   createUserCharacter, listUserCharacters, deleteUserCharacter, getUserCharacter,
-  ensureUserCharacterLoaded, setCharacterVisibility, setCharacterImage, type UserCharacter,
+  ensureUserCharacterLoaded, setCharacterVisibility, type UserCharacter,
 } from '../db/user_characters';
 import { validateArcSpec } from '../inworld/user_arc';
 import { validatePackSpec } from '../inworld/user_pack';
@@ -31,11 +31,7 @@ import { pool } from '../db/pool';
 import { arcOpeningLine } from '../inworld/active_arc';
 import { userStoryToArc } from '../inworld/user_arc';
 import { getCharacter } from '../inworld/characters';
-import { moderateText, moderateImage } from '../inworld/moderation';
-import { generateImage } from '../llm/image';
-import { putObject, getObjectBytes } from '../lib/r2';
-import { isSubscribed } from '../db/subscriptions';
-import { randomUUID } from 'node:crypto';
+import { moderateText } from '../inworld/moderation';
 import { studioVocabularyPayload, normalizeVoiceTagsInput } from '../studio/schema';
 import {
   randomCharacterDraft,
@@ -43,30 +39,6 @@ import {
   randomPackDraft,
   pickRandomCharacterId,
 } from '../studio/random';
-
-// Accepted avatar upload types (magic-byte sniffed) and the max decoded size.
-const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
-function sniffImageType(buf: Buffer): string | null {
-  if (buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'image/png';
-  if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
-  if (buf.length > 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
-  return null;
-}
-function extFor(mime: string): string {
-  return mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
-}
-/** Decodes a base64 data URL into bytes (any prefix tolerated). */
-function decodeImageDataUrl(dataUrl: string): Buffer | null {
-  const m = /^data:[^;]+;base64,(.+)$/s.exec((dataUrl ?? '').trim());
-  if (!m) return null;
-  try { return Buffer.from(m[1], 'base64'); } catch { return null; }
-}
-/** Builds the FLUX prompt for a character avatar from their persona. */
-function avatarPrompt(c: UserCharacter, appearance?: string, style?: string): string {
-  const styleLine = (style && style.trim()) || 'polished digital character portrait, soft cinematic lighting, detailed';
-  const look = (appearance && appearance.trim()) ? `Appearance: ${appearance.trim()}. ` : '';
-  return `Character portrait avatar of ${c.displayName}. ${look}Personality/context: ${c.core.slice(0, 600)}. ${c.tone ? `Mood/tone: ${c.tone}. ` : ''}Head-and-shoulders framing, centered, expressive face, ${styleLine}. No text, no watermark, no logo.`;
-}
 
 const router = Router();
 
@@ -166,18 +138,7 @@ router.post('/characters/:id/publish', requireAuth, async (req: Request, res: Re
   const c = await getUserCharacter(req.params.id);
   if (!c || c.ownerUserId !== req.user!.id) return res.status(404).json({ error: 'not_found' });
 
-  // Text safety check first.
-  let verdict = await moderateText(characterText(c));
-
-  // If it has a published avatar, run a vision safety check on the image too.
-  if (verdict.allow && c.imageKey) {
-    const obj = await getObjectBytes(c.imageKey);
-    if (obj) {
-      const dataUrl = `data:${obj.contentType};base64,${obj.body.toString('base64')}`;
-      const imgVerdict = await moderateImage(dataUrl);
-      if (!imgVerdict.allow) verdict = { allow: false, reason: imgVerdict.reason || 'The avatar image was flagged by the safety review.' };
-    }
-  }
+  const verdict = await moderateText(characterText(c));
 
   const updated = verdict.allow
     ? await setCharacterVisibility(req.user!.id, c.id, { visibility: 'public', moderationStatus: 'approved', reason: null, creatorName: creatorName(req) })
@@ -191,66 +152,6 @@ router.post('/characters/:id/unpublish', requireAuth, async (req: Request, res: 
   if (!c || c.ownerUserId !== req.user!.id) return res.status(404).json({ error: 'not_found' });
   const updated = await setCharacterVisibility(req.user!.id, c.id, { visibility: 'private', moderationStatus: 'approved', reason: null });
   return res.json({ character: updated });
-});
-
-// --- Avatar image: upload / generate / remove -------------------------------
-
-// POST /api/studio/characters/:id/image  { dataUrl } — upload an avatar
-router.post('/characters/:id/image', requireAuth, async (req: Request, res: Response) => {
-  const c = await getUserCharacter(req.params.id);
-  if (!c || c.ownerUserId !== req.user!.id) return res.status(404).json({ error: 'not_found' });
-
-  const buf = decodeImageDataUrl(String((req.body ?? {}).dataUrl ?? ''));
-  if (!buf) return res.status(400).json({ error: 'invalid_image' });
-  if (buf.length > MAX_IMAGE_BYTES) return res.status(413).json({ error: 'image_too_large' });
-  const mime = sniffImageType(buf);
-  if (!mime) return res.status(400).json({ error: 'unsupported_image_type' });
-
-  const key = `user-content/${req.user!.id}/characters/${c.id}/${randomUUID()}.${extFor(mime)}`;
-  try {
-    await putObject(key, buf, mime);
-    await setCharacterImage(req.user!.id, c.id, key);
-    return res.json({ imageKey: key });
-  } catch (err) {
-    console.error('[studio] image upload failed:', err);
-    return res.status(500).json({ error: 'upload_failed' });
-  }
-});
-
-// POST /api/studio/characters/:id/image/generate  { appearance?, style? } — Pro only
-router.post('/characters/:id/image/generate', requireAuth, async (req: Request, res: Response) => {
-  const c = await getUserCharacter(req.params.id);
-  if (!c || c.ownerUserId !== req.user!.id) return res.status(404).json({ error: 'not_found' });
-
-  // Pro-gated by default. IMAGE_GEN_FOR_ALL=1 opens it to everyone (useful for
-  // testing/launch promos) without removing the gate from the codebase.
-  const proOk = process.env.IMAGE_GEN_FOR_ALL === '1' || (await isSubscribed(req.user!.id));
-  if (!proOk) return res.status(403).json({ error: 'pro_required' });
-
-  const b = (req.body ?? {}) as { appearance?: string; style?: string };
-  try {
-    const img = await generateImage(avatarPrompt(c, b.appearance, b.style));
-    const ext = extFor(img.contentType.includes('png') ? 'image/png' : img.contentType);
-    const key = `user-content/${req.user!.id}/characters/${c.id}/${randomUUID()}.${ext}`;
-    await putObject(key, img.body, img.contentType);
-    await setCharacterImage(req.user!.id, c.id, key);
-    return res.json({ imageKey: key });
-  } catch (err) {
-    const detail = (err as Error)?.message ?? String(err);
-    console.error('[studio] image generation failed:', detail);
-    // Distinguish a storage/permission failure (R2) from a model-call failure so
-    // the cause is obvious. "Access Denied" = the R2 token lacks write permission.
-    const storage = /not configured|access denied|forbidden|denied|credential|signature|bucket|\bR2\b|s3/i.test(detail);
-    return res.status(502).json({ error: storage ? 'storage_failed' : 'generation_failed', detail });
-  }
-});
-
-// DELETE /api/studio/characters/:id/image — revert to the initials avatar
-router.delete('/characters/:id/image', requireAuth, async (req: Request, res: Response) => {
-  const c = await getUserCharacter(req.params.id);
-  if (!c || c.ownerUserId !== req.user!.id) return res.status(404).json({ error: 'not_found' });
-  await setCharacterImage(req.user!.id, c.id, null);
-  return res.json({ ok: true });
 });
 
 // --- Shared publish/unpublish for stories (arcs) AND packs (adventures) -----

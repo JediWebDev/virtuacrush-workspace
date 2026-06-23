@@ -35,24 +35,6 @@ export function deleteItem(id: string): Promise<{ ok: boolean }> {
   return fetch('/api/profile/items/' + encodeURIComponent(id), { method: 'DELETE', credentials: 'include' }).then(asJson);
 }
 
-export function uploadProfileAvatar(dataUrl: string): Promise<{ avatarKey: string }> {
-  return fetch('/api/profile/avatar', {
-    method: 'POST',
-    credentials: 'include',
-    headers: json,
-    body: JSON.stringify({ dataUrl }),
-  }).then(asJson);
-}
-
-export function generateProfileAvatar(appearance?: string): Promise<{ avatarKey: string }> {
-  return fetch('/api/profile/avatar/generate', {
-    method: 'POST',
-    credentials: 'include',
-    headers: json,
-    body: JSON.stringify({ appearance }),
-  }).then(asJson);
-}
-
 export function deleteProfileAvatar(): Promise<{ ok: boolean }> {
   return fetch('/api/profile/avatar', { method: 'DELETE', credentials: 'include' }).then(asJson);
 }

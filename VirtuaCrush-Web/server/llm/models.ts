@@ -27,3 +27,13 @@ export function directorCompleteOpts(): CompleteOpts {
     temperature: cfg.temperature,
   };
 }
+
+/** Dialogue-only single-voice reply (plain text, no JSON). */
+export function dialogueCompleteOpts(): CompleteOpts {
+  const cfg = openAiConfig();
+  return {
+    model: cfg.model,
+    maxTokens: cfg.maxTokens,
+    temperature: cfg.temperature,
+  };
+}

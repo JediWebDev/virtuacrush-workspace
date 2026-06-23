@@ -10,7 +10,6 @@ import { arcFormFromStory } from "../lib/studioLoad";
 import { CHARACTERS } from "../types/character";
 import AdventureBuilder from "../components/AdventureBuilder";
 import PublishControl from "../components/PublishControl";
-import AvatarImageStudio from "../components/AvatarImageStudio";
 import { StudioGuide, StudioField, StudioFieldHint, StudioOptionalSection } from "../components/StudioGuide";
 import {
   studioLabelClass,
@@ -32,11 +31,7 @@ import {
   unpublishStudioStory,
   publishStudioCharacter,
   unpublishStudioCharacter,
-  uploadStudioCharacterImage,
-  generateStudioCharacterImage,
-  deleteStudioCharacterImage,
   assetUrl,
-  ApiError,
   fetchStudioVocabulary,
   fetchRandomCharacterDraft,
   fetchRandomArcDraft,
@@ -45,16 +40,6 @@ import {
   type StudioArcInput,
   type StudioCharacter,
 } from "../lib/api";
-
-/** Reads a File into a base64 data URL. */
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result));
-    r.onerror = () => reject(r.error);
-    r.readAsDataURL(file);
-  });
-}
 
 type Tone = NonNullable<StudioArcInput["tone"]>;
 const TONES: Tone[] = ["light", "serious", "romantic", "dramatic"];
@@ -275,37 +260,6 @@ export default function StudioPage() {
   const handleUnpublishChar = async (c: StudioCharacter) => {
     setPubBusyId(c.id);
     try { await unpublishStudioCharacter(c.id); } catch { /* noop */ } finally { refreshChars(); setPubBusyId(null); }
-  };
-
-  // Avatar images (upload / generate / remove)
-  const [imgBusyId, setImgBusyId] = useState<string | null>(null);
-  const [imgError, setImgError] = useState<{ id: string; message: string } | null>(null);
-  const [imgPrompt, setImgPrompt] = useState<Record<string, string>>({});
-  const handleUploadImage = async (c: StudioCharacter, file: File) => {
-    setImgError(null); setImgBusyId(c.id);
-    try {
-      const dataUrl = await fileToDataUrl(file);
-      await uploadStudioCharacterImage(c.id, dataUrl);
-      refreshChars();
-    } catch {
-      setImgError({ id: c.id, message: "Couldn't upload that image. Use a PNG/JPG/WEBP under 6MB." });
-    } finally { setImgBusyId(null); }
-  };
-  const handleGenerateImage = async (c: StudioCharacter) => {
-    setImgError(null); setImgBusyId(c.id);
-    try {
-      await generateStudioCharacterImage(c.id, { appearance: (imgPrompt[c.id] || "").trim() || undefined });
-      refreshChars();
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 403) setImgError({ id: c.id, message: "AI avatar generation is a Pro feature." });
-      else if (e instanceof ApiError && e.body?.error === "storage_failed") setImgError({ id: c.id, message: "Image storage rejected the upload — the R2 API token likely needs Object Read & Write permission." });
-      else if (e instanceof ApiError && e.body?.detail) setImgError({ id: c.id, message: String(e.body.detail).slice(0, 220) });
-      else setImgError({ id: c.id, message: "Couldn't generate an image. Please try again." });
-    } finally { setImgBusyId(null); }
-  };
-  const handleRemoveImage = async (c: StudioCharacter) => {
-    setImgBusyId(c.id);
-    try { await deleteStudioCharacterImage(c.id); refreshChars(); } catch { /* noop */ } finally { setImgBusyId(null); }
   };
 
   const set = <K extends keyof ReturnType<typeof emptyForm>>(k: K, v: ReturnType<typeof emptyForm>[K]) =>
@@ -748,23 +702,17 @@ export default function StudioPage() {
                   <p className="text-sm font-semibold text-stone-900 dark:text-stone-50">{c.displayName}</p>
                   <p className="mt-1 line-clamp-3 text-xs italic text-stone-500">{c.core}</p>
 
-                  <div className="mt-4">
-                    <AvatarImageStudio
-                      imageSrc={c.imageKey ? assetUrl(c.imageKey) : customAvatar(c.displayName)}
-                      alt={c.displayName}
-                      prompt={imgPrompt[c.id] ?? ""}
-                      onPromptChange={(value) => setImgPrompt((p) => ({ ...p, [c.id]: value }))}
-                      onUpload={(f) => void handleUploadImage(c, f)}
-                      onGenerate={() => void handleGenerateImage(c)}
-                      onRemove={() => void handleRemoveImage(c)}
-                      busy={imgBusyId === c.id}
-                      error={imgError?.id === c.id ? imgError.message : null}
-                      hasCustomImage={Boolean(c.imageKey)}
-                      promptLabel="Describe this companion's avatar"
-                      promptPlaceholder="Weathered sea captain, silver beard, navy coat, warm grin, soft harbor light, painterly portrait…"
-                      promptHint="Describe their look, outfit, mood, and art style. Leave blank to infer from their personality."
-                      generateLabel="Generate avatar"
-                    />
+                  <div className="mt-4 flex items-center gap-3">
+                    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-black/10 dark:border-white/10">
+                      <img
+                        src={c.imageKey ? assetUrl(c.imageKey) : customAvatar(c.displayName)}
+                        alt={c.displayName}
+                        className="h-full w-full object-cover object-top"
+                      />
+                    </div>
+                    <p className="text-xs text-stone-500 dark:text-stone-400">
+                      Preset art for this companion will be chosen from the character library.
+                    </p>
                   </div>
 
                   <div className="mt-3 flex gap-2">
