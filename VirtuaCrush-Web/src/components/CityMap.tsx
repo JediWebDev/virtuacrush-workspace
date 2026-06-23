@@ -1,3 +1,4 @@
+import { assetUrl } from '../lib/api';
 import type { MapLocationPin, PlayerAction } from '../types/playerActions';
 
 interface Props {
@@ -16,11 +17,14 @@ const ZONE_TINT: Record<string, string> = {
 
 export default function CityMap({ locations, onTravel, disabled }: Props) {
   return (
-    <div className="relative mx-auto aspect-[4/3] w-full max-w-md overflow-hidden rounded-2xl border border-black/10 bg-gradient-to-br from-stone-200/80 to-stone-300/60 dark:border-white/10 dark:from-stone-800/80 dark:to-stone-900/60">
-      <div className="absolute inset-0 opacity-30">
-        <div className="absolute left-[10%] top-[20%] h-[60%] w-[35%] rounded-full bg-stone-400/40 blur-2xl" />
-        <div className="absolute right-[5%] bottom-[10%] h-[45%] w-[40%] rounded-full bg-stone-500/30 blur-2xl" />
-      </div>
+    <div className="relative mx-auto aspect-[4/3] w-full max-w-md overflow-hidden rounded-2xl border border-black/10 bg-stone-300 dark:border-white/10 dark:bg-stone-800">
+      <img
+        src={assetUrl('city-map.png')}
+        alt="City map"
+        draggable={false}
+        className="absolute inset-0 h-full w-full select-none object-cover"
+      />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent dark:from-black/40" />
       {locations.map((loc) => {
         const travelAction: PlayerAction = {
           id: `travel:${loc.slug}`,

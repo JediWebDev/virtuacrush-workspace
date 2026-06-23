@@ -23,6 +23,7 @@ import { getActivePackSession, greetPackSession, abandonPackSession, fetchPackSt
 import NoticeToast from "./NoticeToast";
 import AchievementToast, { type AchievementToastData } from "./AchievementToast";
 import CityMap from "./CityMap";
+import DialogueBox from "./DialogueBox";
 import GameCanvas, { type GameNpc } from "./GameCanvas";
 import { isScenePresentation } from "../types/scenePresentation";
 
@@ -744,6 +745,9 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   // the composer until the player switches threads or starts a new story.
   const composerLocked = activeThread === 'reading' || (activeThread === 'pack' && packCompleted) || !!archiveDay;
   const inputDisabled = greetingLoading || displayedLoading || composerLocked;
+  // The latest line in the conversation — what the JRPG dialogue box "speaks".
+  const lastDialogueMessage =
+    displayedMessages.length > 0 ? displayedMessages[displayedMessages.length - 1] : null;
 
   return (
     <motion.div
@@ -859,26 +863,41 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
 
         <GameCanvas npcs={sceneNpcs} playerName="You" onInteract={handleInteract} className="min-h-0 flex-1" />
 
+        {/* JRPG dialogue box — shows the latest spoken line; free-text input only. */}
+        <DialogueBox
+          open={dialogueOpen && !showHistoryView}
+          character={character}
+          playerName="You"
+          playerAvatar={userAvatarSrc}
+          message={lastDialogueMessage ? { role: lastDialogueMessage.role, content: lastDialogueMessage.content } : null}
+          loading={displayedLoading}
+          greeting={greetingLoading}
+          input={input}
+          onInput={setInput}
+          onSend={() => handleSend()}
+          onClose={() => setDialogueOpen(false)}
+          inputDisabled={inputDisabled}
+          placeholder={composerLocked ? (archiveDay ? "Archived conversation — read only" : "This story has ended") : greetingLoading ? "Loading conversation…" : displayedLoading ? "…" : `Message ${character.name}…`}
+        />
+
+        {/* Chat history slides up from the bottom. (The legacy transcript/composer
+            lives in the never-rendered false branch of the ternary below.) */}
         <AnimatePresence>
-          {dialogueOpen && (
+          {showHistoryView && (
             <motion.div
-              key="dialogue"
+              key="history"
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 280 }}
-              className="absolute inset-x-0 bottom-0 z-40 flex h-[55%] max-h-[460px] flex-col overflow-hidden rounded-t-3xl border-t border-black/10 bg-stone-50/95 shadow-[0_-12px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-surface/95"
+              className="absolute inset-x-0 bottom-0 z-40 flex h-[72%] max-h-[560px] flex-col overflow-hidden rounded-t-3xl border-t border-black/10 bg-stone-50/95 shadow-[0_-12px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl dark:border-white/10 dark:bg-surface/95"
             >
-              <div className="flex shrink-0 items-center gap-3 border-b border-black/[0.06] px-4 py-2.5 dark:border-white/[0.06]">
-                <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl ring-2 ring-accent/30">
-                  <img src={character.image} alt="" className="h-full w-full object-cover object-top" />
-                </div>
-                <p className="min-w-0 flex-1 truncate font-serif text-base font-bold text-stone-900 dark:text-stone-50">{character.name}</p>
+              <div className="flex shrink-0 items-center justify-end border-b border-black/[0.06] px-3 py-2 dark:border-white/[0.06]">
                 <button
                   type="button"
-                  onClick={() => setDialogueOpen(false)}
+                  onClick={() => setShowHistoryView(false)}
                   className="shrink-0 rounded-lg p-1.5 text-stone-500 transition-colors hover:bg-black/[0.06] hover:text-stone-800 dark:hover:bg-white/[0.06] dark:hover:text-stone-100"
-                  aria-label="Close conversation"
+                  aria-label="Close history"
                 >
                   <X size={18} />
                 </button>
