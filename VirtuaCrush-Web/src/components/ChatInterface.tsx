@@ -25,7 +25,12 @@ import AchievementToast, { type AchievementToastData } from "./AchievementToast"
 import CityMap from "./CityMap";
 import DialogueBox from "./DialogueBox";
 import GameCanvas, { type GameNpc } from "./GameCanvas";
+import { getScene, DEFAULT_SCENE_ID, type SceneInteractable } from "../game/scenes";
 import { isScenePresentation } from "../types/scenePresentation";
+
+/** Dev-only collision/zone authoring overlay: append ?game-debug to the URL. */
+const GAME_DEBUG =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).has("game-debug");
 
 function formatHistoryDate(day: string): string {
   // day is YYYY-MM-DD; anchor at noon to avoid timezone date shifts.
@@ -156,11 +161,32 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   // character in the Phaser world and opens this. The world itself (movement,
   // NPC actions, statuses) is owned by the backend sim engine, not the LLM.
   const [dialogueOpen, setDialogueOpen] = useState(false);
-  const sceneNpcs = useMemo<GameNpc[]>(
-    () => [{ id: character.id, name: character.name, x: 0.68, y: 0.45, color: 0xff5aa2 }],
-    [character.id, character.name],
-  );
-  const handleInteract = useCallback((_npcId: string) => setDialogueOpen(true), []);
+  // Active game location (movement + actions live in the Phaser canvas). Doors
+  // switch this; the canvas reboots for the new map.
+  const [activeSceneId, setActiveSceneId] = useState(DEFAULT_SCENE_ID);
+  const [worldToast, setWorldToast] = useState<{ open: boolean; title: string; detail?: string }>({
+    open: false,
+    title: "",
+  });
+  const activeScene = useMemo(() => getScene(activeSceneId), [activeSceneId]);
+  const gameNpc = useMemo<GameNpc>(() => ({ id: character.id, name: character.name }), [character.id, character.name]);
+  const handleInteractNpc = useCallback((_npcId: string) => setDialogueOpen(true), []);
+  const handleInteractObject = useCallback((it: SceneInteractable) => {
+    if (it.kind === "door" && it.to) {
+      const dest = getScene(it.to);
+      setActiveSceneId(it.to);
+      setWorldToast({ open: true, title: `Heading to ${dest.name}` });
+      return;
+    }
+    // Skill/inventory gating is a placeholder until that system lands; for now
+    // every object action resolves with its flavor result. Actions never touch
+    // the LLM — they are handled here + in the engine.
+    setWorldToast({
+      open: true,
+      title: it.label,
+      detail: it.result ?? `You interact with the ${it.label.toLowerCase()}.`,
+    });
+  }, []);
   const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -861,7 +887,22 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
             </div>
         </div>
 
-        <GameCanvas npcs={sceneNpcs} playerName="You" onInteract={handleInteract} className="min-h-0 flex-1" />
+        <GameCanvas
+          scene={activeScene}
+          npc={gameNpc}
+          playerName="You"
+          onInteractNpc={handleInteractNpc}
+          onInteractObject={handleInteractObject}
+          debug={GAME_DEBUG}
+          className="min-h-0 flex-1"
+        />
+        <NoticeToast
+          open={worldToast.open}
+          title={worldToast.title}
+          detail={worldToast.detail}
+          onClose={() => setWorldToast((t) => ({ ...t, open: false }))}
+          durationMs={3500}
+        />
 
         {/* JRPG dialogue box — shows the latest spoken line; free-text input only. */}
         <DialogueBox
