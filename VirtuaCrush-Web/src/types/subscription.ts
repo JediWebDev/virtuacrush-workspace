@@ -1,4 +1,4 @@
-export type UserTier = "guest" | "free" | "pro" | "vip";
+export type UserTier = "guest" | "free" | "pro";
 
 export const FREE_CHARS = ["Mina", "Becca", "Serena", "Ash", "Bohdi", "Lexi"] as const;
 
@@ -13,5 +13,5 @@ export function isFreeCharacter(fullName: string): boolean {
 }
 
 export function hasPremiumAccess(tier: UserTier): boolean {
-  return tier=== 'pro' || tier === 'vip';
+  return tier === 'pro';
 }
