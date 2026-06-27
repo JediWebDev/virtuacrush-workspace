@@ -1,0 +1,60 @@
+diff --git a/src/pages/HomePage.tsx b/src/pages/HomePage.tsx
+--- a/src/pages/HomePage.tsx
++++ b/src/pages/HomePage.tsx
+@@ -56,9 +56,11 @@
+     period: "/ month",
+     highlight: true,
+     features: [
+       "Unlimited chats",
+-      "Premium feed access",
++      "Image generation",
++      "Custom characters",
++      "Custom story arcs",
+       "Enhanced memory",
+       "Uncensored chat",
+       "All characters unlocked",
+     ],
+diff --git a/src/App.tsx b/src/App.tsx
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -212,7 +212,7 @@
+                       Unlock Premium Companions
+                     </h2>
+                     <p className="mb-8 text-sm text-stone-400">
+-                      Upgrade to PRO or VIP to chat with the entire roster, unlock private media, and
++                      Upgrade to PRO to chat with the entire roster, unlock private media, and
+                       access interactive content.
+                     </p>
+diff --git a/src/types/subscription.ts b/src/types/subscription.ts
+--- a/src/types/subscription.ts
++++ b/src/types/subscription.ts
+@@ -1,4 +1,4 @@
+-export type UserTier = "guest" | "free" | "pro" | "vip";
++export type UserTier = "guest" | "free" | "pro";
+@@ -13,5 +13,5 @@
+ export function hasPremiumAccess(tier: UserTier): boolean {
+-  return tier=== 'pro' || tier === 'vip';
++  return tier === 'pro';
+ }
+diff --git a/db/migrations/020_interest_list.sql b/db/migrations/020_interest_list.sql
+--- a/db/migrations/020_interest_list.sql
++++ b/db/migrations/020_interest_list.sql
+@@ -1,6 +1,6 @@
+--- VIP interest list: emails collected from the "notify me" CTA. One row per
++-- PRO interest list: emails collected from the "notify me" CTA. One row per
+ -- (email, source) so repeat submissions are no-ops.
+ CREATE TABLE IF NOT EXISTS interest_list (
+   id         BIGSERIAL PRIMARY KEY,
+   email      TEXT NOT NULL,
+-  source     TEXT NOT NULL DEFAULT 'vip_waitlist',
++  source     TEXT NOT NULL DEFAULT 'pro_waitlist',
+   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+diff --git a/server/inworld/characters.ts b/server/inworld/characters.ts
+--- a/server/inworld/characters.ts
++++ b/server/inworld/characters.ts
+@@ -148,7 +148,7 @@
+ You spend your evenings hitting up grimy rock clubs to scout local talent, drinking in the darkest corner of the bar, tearing through guitar riffs until your fingers bleed, and smoking on fire escapes.
+ You reference the chaos of tour life, the ringing in your ears, and the raw emotional subtext behind your music. You flirt in a dangerous, smirk-heavy, and intensely focused way.
+-You'd happily pull the user into a VIP booth to escape the crowd or send them a rough, distorted riff you just recorded in the dark.`,
++You'd happily pull the user into a private booth to escape the crowd or send them a rough, distorted riff you just recorded in the dark.`,
+   }),
