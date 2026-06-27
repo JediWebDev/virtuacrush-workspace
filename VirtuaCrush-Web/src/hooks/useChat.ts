@@ -174,6 +174,15 @@ export function useChat({
             );
           } else if (evt.event === 'done') {
             const d = evt.data ?? {};
+            // The streamed chunks are a best-effort preview; `full` is the
+            // authoritative final transcript. Replace the assistant message with
+            // it so any preview/final drift can't leave duplicated or garbled
+            // text in the bubble.
+            if (typeof d.full === 'string' && d.full.length > 0) {
+              setMessages((prev) =>
+                prev.map((m) => (m.id === assistantId ? { ...m, content: d.full } : m)),
+              );
+            }
             onDone?.({
               remaining: d.remaining ?? null,
               affinityScore: typeof d.affinityScore === 'number' ? d.affinityScore : undefined,

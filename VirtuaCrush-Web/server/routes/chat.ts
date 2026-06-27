@@ -1102,12 +1102,13 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           void resetAbandonmentStrikes(req.user!.id, characterId).catch(() => {});
         }
       }
-      if (!abortController.signal.aborted) {
-        const finalTranscript = sanitizeRoleplayTranscript(turnsToTranscript(replyTurns));
-        if (finalTranscript.length > streamedChars) {
-          send('chunk', { text: finalTranscript.slice(streamedChars) });
-        }
-      }
+      // The streamed chunks above are a best-effort PREVIEW assembled from
+      // partial JSON. `assistantFull` (parsed + sanitized) is authoritative and
+      // is sent in the `done` event below, where the client replaces the preview
+      // with it. We intentionally do NOT reconcile by slicing here — that drifted
+      // whenever the preview and the final transcript differed and could
+      // duplicate or splice the tail of the reply.
+      void streamedChars;
 
       // Perception update for NEXT turn: companion learns name/bio, and outfit when co-present.
       if (companionEntity) {
@@ -1212,6 +1213,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     }
 
     send('done', {
+      full: assistantFull,
       remaining,
       affinityScore: newAffinityScore,
       affinityAwarded,
