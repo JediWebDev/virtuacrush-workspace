@@ -12,11 +12,30 @@ interface Props {
   key?: React.Key;
 }
 
+// Per-character image framing. Default is a cover-crop anchored to the top of
+// the portrait; a few characters need overrides because their source art is
+// framed differently.
+const IMAGE_FIT: Record<string, string> = {
+  // Serena's portrait is cropped too tightly by object-cover, cutting off her
+  // face -- contain shows the whole portrait.
+  serena: "object-contain",
+};
+const IMAGE_POSITION: Record<string, string> = {
+  // Mina sits low in the frame with empty space (shelf/plushies) up top; shift
+  // the crop window down so her face moves up and the dead space is trimmed.
+  mina: "object-[center_60%]",
+  // Serena is letterboxed (contain), so center her.
+  serena: "object-center",
+};
+
 export default function CompanionCard({ character, onSelect, userTier }: Props) {
   const isLocked =
     !isCustomCharacterId(character.id) &&
     (userTier === "guest" || userTier === "free") &&
     !isFreeCharacter(character.name);
+
+  const imageFit = IMAGE_FIT[character.id] ?? "object-cover";
+  const imagePosition = IMAGE_POSITION[character.id] ?? "object-top";
 
   return (
     <motion.div
@@ -31,7 +50,7 @@ export default function CompanionCard({ character, onSelect, userTier }: Props) 
           <img
             src={character.image}
             alt={character.name}
-            className={`h-full w-full object-cover object-top transition-transform duration-700 ease-out group-hover:scale-[1.03] ${
+            className={`h-full w-full ${imageFit} ${imagePosition} transition-transform duration-700 ease-out group-hover:scale-[1.03] ${
               isLocked ? "opacity-75 grayscale-[0.35]" : ""
             }`}
           />
