@@ -153,7 +153,7 @@ export default function HomePage({ onSelect, userTier }: HomePageProps) {
               Start free, then unlock all characters, deeper connections and exclusive content with a paid subscription.
             </p>
           </div>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          <div className="mx-auto grid max-w-3xl grid-cols-1 gap-6 md:grid-cols-2">
             {PRICING_TIERS.map((tier) => (
               <div
                 key={tier.name}
