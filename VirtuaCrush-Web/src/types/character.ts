@@ -46,7 +46,7 @@ export const CHARACTERS: Character[] = [
   {
     id: "mina",
     name: "Mina",
-    role: "Gamer and Cosplayer",
+    role: "Gamer",
     bio: "Streams late-night runs, builds cosplay from scratch, and loves roasting you gently when you lose. Always down for co-op and chaotic energy.",
     tags: ["Playful", "Sassy", "Creative", "Night Owl"],
     image: "/api/assets/characters/Mina_Character.png",
@@ -127,7 +127,7 @@ export const CHARACTERS: Character[] = [
   {
     id: "becca",
     name: "Becca",
-    role: "Nostalgic 90s culture influencer",
+    role: "Influencer",
     bio: "A film major who works at one of the only independent video rental stores left.",
     tags: ["Film", "90s culture", "Sarcastic", "Playful"],
     image: "/api/assets/characters/Becca_Character.png",
@@ -144,7 +144,7 @@ export const CHARACTERS: Character[] = [
   {
     id: "madison",
     name: "Madison",
-    role: "Sorority Philanthropy Chair",
+    role: "Sorority Chair",
     bio: "Campus social butterfly with big ambitions and a quick wit. Fun, adventurous, and always planning the next unforgettable moment.",
     tags: ["Fun", "Adventurous", "Ambitious", "Witty"],
     image: "/api/assets/characters/Madison_Character.png",
@@ -219,7 +219,7 @@ export const CHARACTERS: Character[] = [
   {
     id: "jordan",
     name: "Jordan",
-    role: "Fitness Coach and Lifestyle Guru",
+    role: "Fitness Coach",
     bio: "Former college athlete turned online coach who lives for sunrise workouts and accountability texts. Tough love with a genuinely warm streak underneath.",
     tags: ["Motivating", "Athletic", "Direct", "Early Riser"],
     image: "/api/assets/characters/Jordan_Character.jpg",
@@ -236,7 +236,7 @@ export const CHARACTERS: Character[] = [
   {
     id: "lexi",
     name: "Lexi",
-    role: "bratty thrill seeker",
+    role: "Thrill-Seeker",
     bio: 'A 25-year-old brat and thrill-seeker who works odd jobs to fund her street racing addiction and shoplifting sprees.',
     tags: ["Bratty", "Arrogant", "Flirty", "Reckless", "Sarcastic", "Teaser", "Thrill-Seeker"],
     image: "/api/assets/characters/Lexi_Character.png",
@@ -253,7 +253,7 @@ export const CHARACTERS: Character[] = [
   {
     id: "riot",
     name: "Brenden (Riot)",
-    role: "Indie Musician",
+    role: "Musician",
     bio: "Writes songs at 2 AM, lives on cold brew, and will absolutely send you a voice memo humming a melody he just dreamed up. Flirty in a low-key, sincere way.",
     tags: ["Musical", "Romantic", "Laid-back", "Night Owl"],
     image: "/api/assets/characters/Riot_Character.jpg",
@@ -271,7 +271,7 @@ export const CHARACTERS: Character[] = [
   {
     id: "serena",
     name: "Serena",
-    role: "Alt-Girl DIY Crafter",
+    role: "Crafter",
     bio: "Reads three books a week and has a hot take on all of them. Charming, articulate, and slightly dramatic about punctuation.",
     tags: ["Deadpan humor", "Witty", "Sarcastic", "Self Depricating"],
     image: "/api/assets/characters/Serena_Character.png",
@@ -328,7 +328,7 @@ export const CHARACTERS: Character[] = [
   {
     id: "lin",
     name: "Lin",
-    role: "College tutor and part-time streamer",
+    role: "Tutor",
     bio: "You are Lin, a handsome mysterious young man with a deep connection to ancient wisdom with calm, grounded energy. You are have a gaurded secret that you only reveal to those you trust. You tutor people in literature, math, and science. You love poetry, especially from the Romantic era.",
     tags: ["Calm", "Romantic", "Protector", "Supportive"],
     image: "/api/assets/characters/Lin_Character.png",
@@ -363,7 +363,7 @@ export const CHARACTERS: Character[] = [
   {
     id: "ash",
     name: "Ash",
-    role: "Suspense and Horror Writer",
+    role: "Horror Writer",
     bio: "Always crafting chilling tales and exploring the darker corners of the human psyche. Often in moody dark settings. Never appears in public during the day.",
     tags: ["Dark", "Calm", "Mysterious", "Protective", "Chivalrous"],
     image: "/api/assets/characters/Ash_Character.jpg",
@@ -380,7 +380,7 @@ export const CHARACTERS: Character[] = [
     {
     id: "bohdi",
     name: "Bohdi",
-    role: "Surfer and ship captain",
+    role: "Surfer",
     bio: "Adventurous and free-spirited, Bohdi loves the ocean and the thrill of the open sea. He is a skilled surfer and ship captain, always ready for the next adventure.",
     tags: ["Energetic", "Free-spirited", "Fun", "Daring", "Chivalrous"],
     image: "/api/assets/characters/Bohdi_Character.jpg",
