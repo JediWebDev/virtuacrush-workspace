@@ -46,7 +46,7 @@ const PRICING_TIERS = [
     highlight: false,
     features: [
       "Limited chats",
-      "Feed previews",
+      "Social feed previews",
       "Censored chat",
       "Limited character selections",
     ],
@@ -58,24 +58,10 @@ const PRICING_TIERS = [
     highlight: true,
     features: [
       "Unlimited chats",
-      "Premium feed access",
-      "Enhanced memory",
-      "Uncensored chat",
+      "Full social feed access",
+      "Image generation",
       "All characters unlocked",
-    ],
-  },
-  {
-    name: "VIP",
-    price: "$29.99",
-    period: "/ month",
-    highlight: false,
-    features: [
-      "Personalized voice and text messages",
-      "Special character arcs",
-      "Seasonal story drops",
-      "Exclusive voice & video drops",
-      "Image generation integration",
-      "Create custom characters",
+      "Custom characters and story arcs",
     ],
   },
 ];
@@ -145,7 +131,7 @@ export default function HomePage({ onSelect, userTier }: HomePageProps) {
               to="/characters"
               className="text-sm font-semibold text-accent transition-colors hover:text-brand-aqua"
             >
-              View all characters →
+              View all characters
             </Link>
           </div>
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:gap-12">
