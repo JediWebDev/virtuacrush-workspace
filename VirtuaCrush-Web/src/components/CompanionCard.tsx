@@ -15,17 +15,11 @@ interface Props {
 // Per-character image framing. Default is a cover-crop anchored to the top of
 // the portrait; a few characters need overrides because their source art is
 // framed differently.
-const IMAGE_FIT: Record<string, string> = {
-  // Serena's portrait is cropped too tightly by object-cover, cutting off her
-  // face -- contain shows the whole portrait.
-  serena: "object-contain",
-};
+const IMAGE_FIT: Record<string, string> = {};
 const IMAGE_POSITION: Record<string, string> = {
   // Mina sits low in the frame with empty space (shelf/plushies) up top; shift
   // the crop window down so her face moves up and the dead space is trimmed.
   mina: "object-[center_60%]",
-  // Serena is letterboxed (contain), so center her.
-  serena: "object-center",
 };
 
 export default function CompanionCard({ character, onSelect, userTier }: Props) {
