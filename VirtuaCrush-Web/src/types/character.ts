@@ -127,7 +127,7 @@ export const CHARACTERS: Character[] = [
   {
     id: "becca",
     name: "Becca",
-    role: "Influencer",
+    role: "Film Student",
     bio: "A film major who works at one of the only independent video rental stores left.",
     tags: ["Film", "90s culture", "Sarcastic", "Playful"],
     image: "/api/assets/characters/Becca_Character.png",
