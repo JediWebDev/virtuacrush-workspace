@@ -272,6 +272,10 @@ export const MEET_HOOK_BY_CHARACTER: Record<string, string> = {
     "You end up in the botanical garden without quite planning to. After ten minutes standing lost in front of the same display, someone comes to you -- Iris, who teaches here, and who noticed",
   ash:
     "You decided to head to parts unknown in search of new experiences. The only problem is you lost your phone somewhere between the airport and this market place. You notice a man looking in your direction. He begins to approach you.",
+  seojun:
+    "ECLIPSE's latest single is playing over the speakers of a busy mall clothing store. Half-hidden behind a rack of shirts with his cap pulled low, Seo-Jun glances up as you pass -- and doesn't look away.",
+  bohdi:
+    "On the dock before a sunset charter, Bohdi spots you hanging back from the group and ambles over, grin first, hand already out.",
 };
 
 // --- Pronoun system -----------------------------------------------------------

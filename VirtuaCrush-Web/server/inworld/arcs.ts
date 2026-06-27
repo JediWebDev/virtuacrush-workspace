@@ -420,7 +420,7 @@ const ARCS: StoryArc[] = [
     characterId: 'seojun',
     isMeetArc: true,
     sceneAnchor: {
-      setting: 'popular mall trendy clothing store — a  clothing rack, and Seo-Jun is standing near it, watching you as you browse the racks',
+      setting: 'a trendy clothing store in a busy mall — Seo-Jun is half-hidden by a rack of shirts, watching you browse the racks',
       situation:
         "You and the player are PHYSICALLY IN THE SAME SPACE — trendy clothing store. The latest single by Seo-Jun's K-Pop group is playing on the speakers. Seo-Jun is trying to blend in with the crowd to avoid being spotted as the lead singer for Eclipse. Seo-Jun is standing near a clothing rack of trendy shirts. The player is here — just another customer who is also browsing clothing. You can see them, speak to them directly, and are fully aware of their presence. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.",
       coPresent: true,
@@ -438,9 +438,9 @@ const ARCS: StoryArc[] = [
       },
     ],
     introNarrative:
-      "The noise of the post-show crowd is muffled back here — just the low hum of the building and the occasional burst of sound when a door opens somewhere. You have ended up further backstage than you intended. A clothing rack. A dim corridor. And someone standing very still beside it, watching you the way people watch something they have already decided they find interesting.",
+      "ECLIPSE's latest single is playing low over the store speakers — the one you'd know anywhere. Between two racks of overpriced shirts, someone has his cap pulled down and his shoulders set, trying very hard to look like an ordinary shopper and not quite managing it. He glances up as you pass, holds your eyes a beat longer than a stranger should, then turns back to the rack.",
     npcInstruction:
-      "ARC — FIRST MEETING (backstage corridor): You noticed the player the moment they appeared in this hallway. You said nothing at first — that is not unusual for you. But you are still here, and you are still watching, which is the tell. You do not explain yourself or make small talk. If you speak first it will be an observation, not a greeting. You are not unfriendly — you are deliberate. If the player says something that surprises you, let it register; do not perform indifference you do not feel. Questions do not come easily from you — when you do ask one it will be specific and it will mean something. Complete the arc when: you have exchanged names and asked the player one question that could not have been asked of just anyone in this hallway — something that proves you were actually paying attention to them.",
+      "ARC — FIRST MEETING (mall clothing store): You are out incognito — cap low, trying to shop in peace while your own group's single plays over the store speakers. You noticed the player the moment they came down this aisle. You said nothing at first — that is not unusual for you. But you are still here, still near the rack, which is the tell. You do not explain yourself or make small talk. If you speak first it will be an observation, not a greeting. You are not unfriendly — you are deliberate, and a little wary of being recognized. If the player says something that surprises you, let it register; do not perform indifference you do not feel. Questions do not come easily from you — when you do ask one it will be specific and it will mean something. Complete the arc when: you have exchanged names and asked the player one question that could not have been asked of just anyone in this store — something that proves you were actually paying attention to them.",
     phaseInstructions: meetPhaseInstructions({
       beginning:
         'You clocked them before they saw you. Let the silence sit — then offer an observation instead of a greeting. Unhurried, unreadable.',
@@ -453,9 +453,9 @@ const ARCS: StoryArc[] = [
       "Seo-Jun has asked the player one specific, non-generic question — something that could only be asked of this person in this moment, proving he was paying attention and not simply being polite.",
     completionExamples: [
       "Seo-Jun notices something specific about what the player is wearing and asks one precise question about it — not a compliment, a question",
-      "Seo-Jun asks why the player came this far back when everyone else went the other direction",
+      "Seo-Jun asks what drew the player to this particular rack when the whole store was theirs to wander",
       "The player says something unexpected and Seo-Jun asks them to explain it — briefly, without looking away",
-      "Seo-Jun asks what the player actually thought of the performance — then waits in complete silence for the real answer",
+      "Seo-Jun quietly asks whether the player recognizes the song playing — then waits in complete silence for an honest answer",
     ],
   },
 
