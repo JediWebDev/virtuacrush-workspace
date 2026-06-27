@@ -212,7 +212,7 @@ export default function App() {
                       Unlock Premium Companions
                     </h2>
                     <p className="mb-8 text-sm text-stone-400">
-                      Upgrade to PRO or VIP to chat with the entire roster, unlock private media, and
+                      Upgrade to PRO to chat with the entire roster, unlock private media, and
                       access interactive content.
                     </p>
 

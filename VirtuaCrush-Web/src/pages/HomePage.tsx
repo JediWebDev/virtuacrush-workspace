@@ -58,7 +58,9 @@ const PRICING_TIERS = [
     highlight: true,
     features: [
       "Unlimited chats",
-      "Premium feed access",
+      "Image generation",
+      "Custom characters",
+      "Custom story arcs",
       "Enhanced memory",
       "Uncensored chat",
       "All characters unlocked",
