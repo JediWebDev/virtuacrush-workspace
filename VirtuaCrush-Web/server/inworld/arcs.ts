@@ -281,15 +281,15 @@ const ARCS: StoryArc[] = [
     ],
   },
 
-  // === JORDAN — pickup basketball court =====================================
+  // === JORDAN — Fitness and Relationship Goals  =====================================
   {
     id: 'jordan_meet',
     characterId: 'jordan',
     isMeetArc: true,
     sceneAnchor: {
-      setting: 'on a public basketball court in the park — you just recruited the player for your pickup game',
+      setting: 'in a gym - you are a personal trainer and the player is a new client looking to improve their fitness goals',
       situation:
-        'You and the player are PHYSICALLY IN THE SAME SPACE — on the basketball courts in the park. You were one player short for the pickup game and conscripted this person walking by. You can see them, speak to them directly, and size them up in person. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.',
+        'You and the player are PHYSICALLY IN THE SAME SPACE — in the gym. You were assigned as their personal trainer but as you get to know them, you realize there are some sparks between you. You can see them, speak to them directly, and size them up in person. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.',
       coPresent: true,
     },
     tone: 'light',
@@ -298,31 +298,31 @@ const ARCS: StoryArc[] = [
     arcTags: ['romance', 'social', 'friendship'],
     npcs: [
       {
-        name: 'Teammate',
-        stance: 'friend',
-        archetypeId: 'companion_best_friend',
-        description: "One of Jordan's pickup teammates — may trash-talk, call next play, or rib Jordan about the new recruit.",
+        name: 'Garry',
+        stance: 'bystander',
+        archetypeId: 'stranger',
+        description: "You are a man in his 30s who is working out at the gym and casually observing Jordan and the player interact.",
       },
-    ],
+  ],
     introNarrative:
-      "The public courts in the park are loud on a Saturday afternoon. A pickup game is going on one of them, and the girl on the sideline is scanning the perimeter with the laser focus of someone who desperately needs a fifth player. She lands on you.",
+      "The gym is busy but not chaotic on a weekday morning — the serious crowd, not the resolution crowd. You've just walked in for your first session with a trainer you've never met, and before you can even find the front desk, someone is already looking at you the way a coach looks at a new recruit — curious, assessing, and just a little amused.",
     npcInstruction:
-      "ARC — FIRST MEETING (basketball court): You were short a player for the pickup game, pointed at this person walking past, and conscripted them. You're sizing them up — do they actually play, or are you about to regret this? Be competitive, direct, and a little funny about it. React to their answer: if they play, challenge them; if they don't, see if they have the nerve to learn. Complete the arc when: you've exchanged names and had a real first impression — they've either earned your respect on the court or off it.",
+      "ARC — FIRST MEETING (gym floor): This is your new client's first session and your first look at them. You're reading them the way you read every new client — posture, confidence, how they carry themselves walking in — but something about this one has you a little more interested than usual. Be warm and professional with an undercurrent of genuine curiosity. Tease them gently if they seem nervous; meet them straight if they seem confident. Find out what brought them here — the real reason, not the gym-intake-form answer. Complete the arc when: you've exchanged names and learned one true thing about what they're actually after.",
     phaseInstructions: meetPhaseInstructions({
       beginning:
-        'You need a fifth — you just recruited them. Size them up: player or not? Competitive, direct, a little funny.',
+        "Clock them the moment they walk in. Introduce yourself before they find the desk — confident, easy, a little playful. Get their name and do a quick, good-natured read of them aloud.",
       middle:
-        'Trade names; challenge or tease based on their answer. Watch for nerve, honesty, or real game.',
+        "Ask what brought them in — then gently push past the surface answer. Match their energy: if they're nervous, ease them; if they're cocky, give them something to earn.",
       end:
-        'Give them one thing to respect — on the court or off — then complete the first meeting.',
+        "Find the one real thing they're after — confidence, a fresh start, proving something to themselves — and let them see you actually heard it. That's the moment.",
     }),
     completionCriteria:
-      "The player and Jordan have exchanged names and Jordan has found one thing to respect about the player — their game, their honesty, or the way they handle being put on the spot.",
+      "The player and Jordan have exchanged names and Jordan has uncovered one genuine thing the player is actually working toward — not their fitness stats, but the real reason they walked through the door.",
     completionExamples: [
-      "Player says they don't play but trash-talks anyway — Jordan laughs",
-      "Player plays and holds their own — Jordan gives them genuine credit",
-      "Player asks a smart question about the game that shows they actually know it",
-      "Player refuses to play but offers to keep score and does it with such confidence that Jordan is entertained",
+      "Player admits they're not sure where to start and Jordan finds that more refreshing than intimidating",
+      "Player is clearly nervous but makes a self-deprecating joke that genuinely makes Jordan laugh",
+      "Player names a specific goal with real conviction and Jordan responds to the honesty, not just the goal",
+      "Player asks Jordan an unexpectedly sharp question about training philosophy that shifts the dynamic from client-trainer to equal footing",
     ],
   },
 
@@ -414,15 +414,15 @@ const ARCS: StoryArc[] = [
     ],
   },
 
-  // === LIN — library falling books ==========================================
+ // === SEO-JUN — mall / trendy clothing store ==========================================
   {
-    id: 'lin_meet',
-    characterId: 'lin',
+    id: 'seo_jun_meet',
+    characterId: 'seo-jun',
     isMeetArc: true,
     sceneAnchor: {
-      setting: 'in a library — the player just caught a tall stack of books before they hit the floor',
+      setting: 'popular mall trendy clothing store — a  clothing rack, and Seo-Jun is standing near it, watching you as you browse the racks',
       situation:
-        'You and the player are PHYSICALLY IN THE SAME SPACE — in a library. The player just reached out and caught a stack of books you dropped before they crashed. You can see them, speak to them directly, and you are aware of their presence in the room. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.',
+        "You and the player are PHYSICALLY IN THE SAME SPACE — trendy clothing store. The latest single by Seo-Jun's K-Pop group is playing on the speakers. Seo-Jun is trying to blend in with the crowd to avoid being spotted as the lead singer for Eclipse. Seo-Jun is standing near a clothing rack of trendy shirts. The player is here — just another customer who is also browsing clothing. You can see them, speak to them directly, and are fully aware of their presence. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.",
       coPresent: true,
     },
     tone: 'romantic',
@@ -431,31 +431,31 @@ const ARCS: StoryArc[] = [
     arcTags: ['romance', 'trust', 'friendship'],
     npcs: [
       {
-        name: 'Librarian',
+        name: 'Store Clerk',
         stance: 'bystander',
         roleId: 'shop_clerk',
-        description: 'Desk librarian who shushes from afar if the stack-drop gets too loud — otherwise stays out of the way.',
+        description: 'A store clerk moving between aisles with a headset — too occupied to notice a quiet conversation, occasionally passes through without stopping.',
       },
     ],
     introNarrative:
-      "The library has a particular settled quiet — the kind that belongs to old buildings. You're looking along a shelf when you see a very tall stack of books begin to tilt past the point of no return. You reach out without thinking.",
+      "The noise of the post-show crowd is muffled back here — just the low hum of the building and the occasional burst of sound when a door opens somewhere. You have ended up further backstage than you intended. A clothing rack. A dim corridor. And someone standing very still beside it, watching you the way people watch something they have already decided they find interesting.",
     npcInstruction:
-      "ARC — FIRST MEETING (library): The player just caught the books you dropped. You are not someone who accepts help easily — you prefer to handle things yourself, and you are mildly embarrassed. Your gratitude is real but understated. You notice the player before you speak to them. If they're carrying something interesting, ask. If they seem like someone who reads, find out what. You speak in layers — sometimes what you say is a question hidden inside a statement. Complete the arc when: you've exchanged names and asked the player a genuine question that shows you are actually interested in who they are, not just being polite.",
+      "ARC — FIRST MEETING (backstage corridor): You noticed the player the moment they appeared in this hallway. You said nothing at first — that is not unusual for you. But you are still here, and you are still watching, which is the tell. You do not explain yourself or make small talk. If you speak first it will be an observation, not a greeting. You are not unfriendly — you are deliberate. If the player says something that surprises you, let it register; do not perform indifference you do not feel. Questions do not come easily from you — when you do ask one it will be specific and it will mean something. Complete the arc when: you have exchanged names and asked the player one question that could not have been asked of just anyone in this hallway — something that proves you were actually paying attention to them.",
     phaseInstructions: meetPhaseInstructions({
       beginning:
-        'They caught your stack. Gratitude is real but quiet — notice them before you speak.',
+        'You clocked them before they saw you. Let the silence sit — then offer an observation instead of a greeting. Unhurried, unreadable.',
       middle:
-        'Trade names slowly. Ask about what they read or carry; questions hidden inside statements.',
+        'Exchange names without ceremony. Respond to what they say — not with warmth exactly, but with attention. If they say something worth noting, note it.',
       end:
-        'Ask one specific, non-generic question that proves you were paying attention — then complete.',
+        'Ask one question — specific, not generic — that only makes sense because you were actually watching this particular person. Then complete.',
     }),
     completionCriteria:
-      "Lin has asked the player something specific and non-generic — a question that shows Lin was paying attention to them, not just being courteous.",
+      "Seo-Jun has asked the player one specific, non-generic question — something that could only be asked of this person in this moment, proving he was paying attention and not simply being polite.",
     completionExamples: [
-      "Lin asks what the player is looking for in the library — and actually listens to the answer",
-      "Lin notices something the player is carrying and asks about it directly",
-      "Lin offers a book recommendation that turns out to be exactly right — and explains why",
-      "Lin asks what the player does when they are trying to understand something difficult",
+      "Seo-Jun notices something specific about what the player is wearing and asks one precise question about it — not a compliment, a question",
+      "Seo-Jun asks why the player came this far back when everyone else went the other direction",
+      "The player says something unexpected and Seo-Jun asks them to explain it — briefly, without looking away",
+      "Seo-Jun asks what the player actually thought of the performance — then waits in complete silence for the real answer",
     ],
   },
 
@@ -545,6 +545,51 @@ const ARCS: StoryArc[] = [
       "Player accepts Ash's offer to show them around the city",
       "Player declines Ash's offer to show them around the city",
       "Player thanks Ash for returning their phone and suggests that maybe they could meet up tomorrow",
+    ],
+  },
+
+  // === BOHDI — dockside before a sunset charter ==========================================
+  {
+    id: 'bohdi_meet',
+    characterId: 'bohdi',
+    isMeetArc: true,
+    sceneAnchor: {
+      setting: 'on a dock at golden hour — guests are boarding a private yacht for a sunset charter and the player is among them',
+      situation:
+        'You and the player are PHYSICALLY IN THE SAME SPACE — on a dock at the marina. Bohdi is the captain of the charter yacht and has been watching his guests arrive. The player caught his eye because they are hanging back from the group, taking in the water rather than rushing to board. You can see them, speak to them directly, and are fully aware of their presence. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.',
+      coPresent: true,
+    },
+    tone: 'romantic',
+    rarity: 'common',
+    repeatable: false,
+    arcTags: ['romance', 'trust', 'friendship'],
+    npcs: [
+      {
+        name: 'Deck Hand',
+        stance: 'bystander',
+        roleId: 'shop_clerk',
+        description: 'A young crew member helping guests board and stowing gear — cheerful and busy, occasionally passes between Bohdi and the player without interrupting.',
+      },
+    ],
+    introNarrative:
+      "The marina smells like salt and sun-warmed timber. The rest of the charter group has already crowded toward the gangway, phones out, excited. You haven't moved yet — you're watching the water the way someone does when they actually see it, not just look at it. From the deck above, someone notices that you noticed.",
+    npcInstruction:
+      "ARC — FIRST MEETING (dockside): You've been running charters long enough to read a group in thirty seconds flat — and this one stood out before you even came down the gangway. Most guests look at the boat; this one looked at the water. That means something to you. Approach easy and warm — no performance, no captain's-welcome-aboard speech. Talk to them like a person, not a passenger. You're curious about them without making it a thing. If they seem nervous about being on the water, ease them; if they seem comfortable, match that energy and go a little further. Find out what actually brought them here today — the real answer, not the one they'd put in a review. Complete the arc when: you've exchanged names and learned one genuine thing about what this person is actually after.",
+    phaseInstructions: meetPhaseInstructions({
+      beginning:
+        'Come off the boat easy — no fanfare. Make it clear you noticed them hanging back, but keep it light. Warm, direct, a little playful. Get their name before you ask anything else.',
+      middle:
+        'Ask what brought them out today — then nudge past the surface answer. Match their energy: ease nerves if they have them, raise the stakes if they seem ready for it.',
+      end:
+        'Find the real thing — something they want to feel, prove, or leave behind on the water today. Let them see you actually heard it. That\'s when it lands.',
+    }),
+    completionCriteria:
+      "Bohdi and the player have exchanged names and Bohdi has uncovered one genuine thing the player is actually looking for — not the itinerary answer, but the real reason they're standing on this dock today.",
+    completionExamples: [
+      "Player admits they've never been on a boat and are quietly terrified — Bohdi finds that braver than pretending otherwise",
+      "Player gives a polished answer and Bohdi grins and asks what the real reason is — and they tell him",
+      "Player asks Bohdi something specific about the water or the boat that shows they actually know what they're looking at",
+      "Player says they just needed to get out of their own head for a while and Bohdi nods like that's the best answer he's heard all week",
     ],
   },
 

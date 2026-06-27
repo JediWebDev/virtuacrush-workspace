@@ -50,7 +50,7 @@ export const BYSTANDER_ROLES: Record<BystanderRoleId, BystanderRoleDefinition> =
   valet: { id: 'valet', label: 'Valet', settingTags: ['hotel', 'restaurant', 'garage', 'parking'] },
   concierge: { id: 'concierge', label: 'Concierge', settingTags: ['hotel', 'lobby', 'resort'] },
   nurse: { id: 'nurse', label: 'Nurse / medic', settingTags: ['hospital', 'clinic', 'emergency'] },
-  stranger: { id: 'stranger', label: 'Passerby / stranger', settingTags: ['street', 'park', 'public', 'crowd'] },
+  stranger: { id: 'stranger', label: 'Passerby / stranger', settingTags: ['street', 'park', 'public', 'crowd', 'mall', 'store', 'shopping', 'gym', 'bookstore', 'comic_shop'] },
 };
 
 // ---------------------------------------------------------------------------
