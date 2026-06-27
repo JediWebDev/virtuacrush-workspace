@@ -3,8 +3,9 @@
 // render the "what they're doing right now" status strip above the chat.
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../middleware/auth';
-import { getSituation } from '../db/state';
+import { getSituation, setSceneLocation, ensureCharacterStateRow } from '../db/state';
 import { getLore } from '../inworld/lore';
+import { getLocation, resolveSceneForLocation, travelDestinations } from '../inworld/locations';
 import { getNpcStates } from '../db/npc_state';
 import { getAffinity } from '../db/affinity';
 import { getCompletedArcIds } from '../db/arc_state';
@@ -46,6 +47,8 @@ router.get('/:characterId', requireAuth, async (req: Request, res: Response) => 
     const secretDiscovered = affinity >= SECRET_REVEAL_AFFINITY;
     const secretProgress = secretTrustProgress(affinity);
 
+    const sceneInfo = resolveSceneForLocation(scene.location);
+
     res.json({
       characterId,
       activity: state.activity,
@@ -64,11 +67,55 @@ router.get('/:characterId', requireAuth, async (req: Request, res: Response) => 
       drives,
       pendingEvent,
       sceneLocation: scene.location ?? null,
+      sceneName: sceneInfo.name,
+      sceneImage: sceneInfo.image,
       meetArcComplete: hasCompletedMeetArc(characterId, completedArcIds),
     });
   } catch (err) {
     console.error('[state] get failed:', err);
     res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+// GET /api/state/:characterId/locations — travel destinations + the current one.
+router.get('/:characterId/locations', requireAuth, async (req: Request, res: Response) => {
+  const { characterId } = req.params;
+  try {
+    const { scene } = await getSituation(req.user!.id, characterId);
+    const locations = travelDestinations().map((l) => ({
+      slug: l.slug,
+      name: l.name,
+      shortName: l.shortName,
+      description: l.description,
+      image: l.image ?? null,
+    }));
+    return res.json({ locations, current: scene.location ?? 'player_home' });
+  } catch (err) {
+    console.error('[state] locations failed:', err);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+// POST /api/state/:characterId/travel { slug } — explicitly move the player to a
+// venue. This drives the chat backdrop AND the director prompt's CURRENT SETTING
+// (chat.ts reads scene_location each turn). 'player_home' is stored as null so it
+// reuses the home baseline.
+router.post('/:characterId/travel', requireAuth, async (req: Request, res: Response) => {
+  const { characterId } = req.params;
+  const slug = String((req.body ?? {}).slug ?? '').trim();
+  try {
+    const loc = getLocation(slug);
+    if (!loc || (loc.type !== 'public' && loc.type !== 'player_home')) {
+      return res.status(400).json({ error: 'invalid_location' });
+    }
+    await ensureCharacterStateRow(req.user!.id, characterId);
+    // Home is the baseline (null); any public venue stores its slug.
+    await setSceneLocation(req.user!.id, characterId, loc.type === 'player_home' ? null : loc.slug);
+    const scene = resolveSceneForLocation(loc.type === 'player_home' ? null : loc.slug);
+    return res.json({ ok: true, scene });
+  } catch (err) {
+    console.error('[state] travel failed:', err);
+    return res.status(500).json({ error: 'internal_error' });
   }
 });
 

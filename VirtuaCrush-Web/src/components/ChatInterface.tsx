@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useChat } from "../hooks/useChat";
-import { fetchGreeting, fetchCharacterState, fetchAffinity, fetchDevResetEnabled, devResetCharacter, respondToDesire, fetchChatHistory, fetchChatHistoryDay, assetUrl, type CharacterState, type ChatHistoryDay } from "../lib/api";
+import { fetchGreeting, fetchCharacterState, fetchAffinity, fetchDevResetEnabled, devResetCharacter, respondToDesire, fetchChatHistory, fetchChatHistoryDay, fetchTravelLocations, travelTo, assetUrl, type CharacterState, type ChatHistoryDay, type TravelLocation } from "../lib/api";
 import { splitNarration } from "../lib/narration";
 import { parseScript } from "../lib/script";
 import ActivityLog from "./ActivityLog";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { Send, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw, Zap, ListChecks } from "lucide-react";
+import { Send, ArrowLeft, Loader2, Sparkles, LayoutGrid, X, History, Search, Info, Heart, BookMarked, RotateCcw, Zap, ListChecks, MapPin, Check } from "lucide-react";
 import { readShowReplyChoices, writeShowReplyChoices } from "../lib/chatPreferences";
 import ChatAvatar from "./ChatAvatar";
 import { Character } from "../types/character";
@@ -95,6 +95,10 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [profileOpen, setProfileOpen] = useState(false);
   const [storyState, setStoryState] = useState<CharacterState | null>(null);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
+  // Scene / location backdrop + explicit-travel picker.
+  const [travelLocations, setTravelLocations] = useState<TravelLocation[]>([]);
+  const [travelOpen, setTravelOpen] = useState(false);
+  const [traveling, setTraveling] = useState(false);
   const [chaosToast, setChaosToast] = useState<{
     open: boolean;
     title: string;
@@ -309,6 +313,34 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
       .catch((err) => console.error('[state] fetch failed:', err));
     return () => { cancelled = true; };
   }, [character.id]);
+
+  // Load the travel destinations once per character (static registry list).
+  useEffect(() => {
+    let cancelled = false;
+    setTravelOpen(false);
+    fetchTravelLocations(character.id)
+      .then((r) => { if (!cancelled) setTravelLocations(r.locations); })
+      .catch(() => { /* non-fatal — travel picker just stays empty */ });
+    return () => { cancelled = true; };
+  }, [character.id]);
+
+  // Explicit travel: move the player, then refresh state so the backdrop (and
+  // the next director prompt's CURRENT SETTING) reflect the new location.
+  const handleTravel = async (slug: string) => {
+    if (traveling) return;
+    setTravelOpen(false);
+    if (slug === (storyState?.sceneLocation ?? 'player_home')) return;
+    setTraveling(true);
+    try {
+      await travelTo(character.id, slug);
+      const st = await fetchCharacterState(character.id);
+      setStoryState(st);
+    } catch (err) {
+      console.error('[travel] failed:', err);
+    } finally {
+      setTraveling(false);
+    }
+  };
 
   // Load the PERSISTED affinity on open so the bar shows real progress
   // immediately — not 0 until the first reply comes back. Progress is stored
@@ -885,6 +917,71 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
               </button>
             </div>
         </div>
+
+        {/* Scene backdrop — top third of the chat, driven by the player's
+            current location (explicit travel). The same location is sent to the
+            director prompt as CURRENT SETTING on the next turn. */}
+        {!showHistoryView && activeThread === 'freeRoam' && (
+          <div className="relative w-full shrink-0 grow-0 basis-1/3 overflow-hidden border-b border-black/[0.06] dark:border-white/[0.06]">
+            <img
+              src={assetUrl(storyState?.sceneImage ?? 'scenes/Users_Apartment.png')}
+              alt={storyState?.sceneName ?? 'Your Apartment'}
+              className="h-full w-full object-cover object-center"
+            />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-stone-100 via-stone-100/15 to-black/30 dark:from-surface-elevated dark:via-surface-elevated/15 dark:to-black/45" />
+
+            <div className="absolute bottom-3 left-4 flex items-center gap-1.5">
+              <MapPin size={15} className="text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]" />
+              <span className="text-sm font-semibold tracking-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.7)]">
+                {storyState?.sceneName ?? 'Your Apartment'}
+              </span>
+            </div>
+
+            <div className="absolute right-3 top-3">
+              <button
+                type="button"
+                onClick={() => setTravelOpen((o) => !o)}
+                disabled={traveling || travelLocations.length === 0}
+                className="flex items-center gap-1.5 rounded-full border border-white/25 bg-black/35 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-md transition-colors hover:bg-black/55 disabled:opacity-60"
+                aria-haspopup="listbox"
+                aria-expanded={travelOpen}
+              >
+                {traveling ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
+                {traveling ? 'Traveling…' : 'Travel'}
+              </button>
+              {travelOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setTravelOpen(false)} aria-hidden />
+                  <div
+                    role="listbox"
+                    className="absolute right-0 z-20 mt-2 max-h-64 w-52 overflow-y-auto rounded-2xl border border-black/10 dark:border-white/10 bg-stone-50/95 dark:bg-surface/95 p-1.5 shadow-2xl backdrop-blur-xl"
+                  >
+                    {travelLocations.map((loc) => {
+                      const isCurrent = (storyState?.sceneLocation ?? 'player_home') === loc.slug;
+                      return (
+                        <button
+                          key={loc.slug}
+                          type="button"
+                          role="option"
+                          aria-selected={isCurrent}
+                          onClick={() => void handleTravel(loc.slug)}
+                          className={`flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm transition-colors ${
+                            isCurrent
+                              ? 'bg-accent/12 text-accent'
+                              : 'text-stone-700 hover:bg-black/[0.05] dark:text-stone-200 dark:hover:bg-white/[0.06]'
+                          }`}
+                        >
+                          <span className="truncate">{loc.name}</span>
+                          {isCurrent ? <Check size={15} className="shrink-0" /> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {showHistoryView ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

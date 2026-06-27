@@ -82,8 +82,38 @@ export interface CharacterState {
   pendingEvent?: { drive: string; prompt: string; options: { id: string; label: string }[] } | null;
   /** Current travel location slug (null = player is at home / remote chat). */
   sceneLocation?: string | null;
+  /** Display name of the current location (e.g. "Westside Mall"). */
+  sceneName?: string;
+  /** R2 object key for the current location's backdrop (pass to assetUrl). */
+  sceneImage?: string;
   /** False until the roster character's built-in meet-cute arc is completed. */
   meetArcComplete?: boolean;
+}
+
+export interface TravelLocation {
+  slug: string;
+  name: string;
+  shortName: string;
+  description: string;
+  image: string | null;
+}
+
+/** Travel destinations the player can move between, plus the current slug. */
+export function fetchTravelLocations(
+  characterId: string,
+): Promise<{ locations: TravelLocation[]; current: string }> {
+  return api(`/api/state/${encodeURIComponent(characterId)}/locations`);
+}
+
+/** Explicitly move the player to a venue (drives the chat backdrop + prompt). */
+export function travelTo(
+  characterId: string,
+  slug: string,
+): Promise<{ ok: boolean; scene: { slug: string; name: string; shortName: string; image: string } }> {
+  return api(`/api/state/${encodeURIComponent(characterId)}/travel`, {
+    method: 'POST',
+    body: JSON.stringify({ slug }),
+  });
 }
 
 // Current story-engine state (what the character is "doing" today) for the

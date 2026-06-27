@@ -10,9 +10,9 @@ import {
 } from './scene_delta';
 import { emptySceneSnapshot } from '../inworld/scene_snapshot';
 
-test('resolveVenueSlug: mall keyword → westside_commons', () => {
-  assert.equal(resolveVenueSlug('the mall'), 'westside_commons');
-  assert.equal(resolveVenueSlug('westside_commons'), 'westside_commons');
+test('resolveVenueSlug: mall keyword → mall', () => {
+  assert.equal(resolveVenueSlug('the mall'), 'mall');
+  assert.equal(resolveVenueSlug('mall'), 'mall');
 });
 
 test('resolveVenueSlug: home variants', () => {
@@ -47,9 +47,9 @@ test('extractSceneDeltaFromMessage: pull tape off clears companion gag', () => {
 
 test('extractSceneDeltaFromMessage: travel phrase resolves venue', () => {
   const d = extractSceneDeltaFromMessage("let's go to the mall", null);
-  assert.equal(d.venueSlug, 'westside_commons');
+  assert.equal(d.venueSlug, 'mall');
   assert.equal(d.coPresent, true);
-  assert.ok(d.location?.includes('Commons') || d.location?.includes('Mall'));
+  assert.ok(d.location?.includes('Mall'));
 });
 
 test('extractSceneDeltaFromMessage: *wriggle free* clears restraint', () => {
@@ -74,10 +74,10 @@ test('extractSceneDeltaFromIntent: movement leave', () => {
 
 test('extractSceneDeltaFromIntent: movement go with slug target', () => {
   const d = extractSceneDeltaFromIntent(
-    { type: 'movement', subtype: 'go', target: 'the_grind' },
+    { type: 'movement', subtype: 'go', target: 'cafe' },
     {} as never,
   );
-  assert.equal(d.venueSlug, 'the_grind');
+  assert.equal(d.venueSlug, 'cafe');
   assert.equal(d.coPresent, true);
 });
 
@@ -116,13 +116,13 @@ test('buildEngineSceneDelta: referee hints fill gaps heuristics miss', () => {
 test('buildEngineSceneDelta: heuristic mobility + intent location', () => {
   const delta = buildEngineSceneDelta({
     message: "*slip out of the cuffs* let's hit the mall",
-    intent: { type: 'movement', subtype: 'go', target: 'westside_commons' },
+    intent: { type: 'movement', subtype: 'go', target: 'mall' },
     prior: emptySceneSnapshot(),
     world: {} as never,
   });
   assert.ok(delta);
   assert.equal(delta!.patch.playerMobility, 'free');
-  assert.equal(delta!.venueSlug, 'westside_commons');
+  assert.equal(delta!.venueSlug, 'mall');
   assert.ok(delta!.lockedFields.includes('playerMobility'));
   assert.ok(delta!.lockedFields.includes('location'));
 });
@@ -130,7 +130,7 @@ test('buildEngineSceneDelta: heuristic mobility + intent location', () => {
 test('buildEngineSceneDelta: skips location when allowLocationChange false', () => {
   const delta = buildEngineSceneDelta({
     message: "let's go to the mall",
-    intent: { type: 'movement', subtype: 'go', target: 'westside_commons' },
+    intent: { type: 'movement', subtype: 'go', target: 'mall' },
     prior: emptySceneSnapshot(),
     world: {} as never,
     allowLocationChange: false,
@@ -143,13 +143,13 @@ test('reapplyEngineLocks: director cannot undo engine location', () => {
   prior.location = 'Old Place';
   const delta = buildEngineSceneDelta({
     message: "let's go to the mall",
-    intent: { type: 'movement', subtype: 'go', target: 'westside_commons' },
+    intent: { type: 'movement', subtype: 'go', target: 'mall' },
     prior,
     world: {} as never,
   })!;
   const afterDirector = { ...prior, location: 'Old Place' };
   const locked = reapplyEngineLocks(afterDirector, delta);
-  assert.ok(locked.location?.includes('Commons') || locked.location?.includes('Mall'));
+  assert.ok(locked.location?.includes('Mall'));
 });
 
 test('extractSceneDeltaFromMessage: "cut me free" does not clear restraint prematurely', () => {

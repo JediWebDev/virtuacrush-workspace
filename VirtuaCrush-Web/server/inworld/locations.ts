@@ -16,6 +16,8 @@ export interface CityLocation {
   /** Longer atmosphere note for richer scene context. */
   atmosphere: string;
   type: LocationType;
+  /** R2 object key for this venue's backdrop image (served via /api/assets). */
+  image?: string;
   /** Only set for character_home locations. */
   characterId?: string;
   /** Minimum affinity required to visit (character homes only). */
@@ -33,63 +35,107 @@ export const LOCATIONS: CityLocation[] = [
   // ── Player home ────────────────────────────────────────────────────────────
   {
     slug: 'player_home',
-    name: 'Your Place',
+    name: 'Your Apartment',
     shortName: 'Home',
     description: "the player's apartment — a comfortable, lived-in space",
     atmosphere: 'Home territory: familiar, low-key, comfortable. The player is in their own space.',
     type: 'player_home',
+    image: 'scenes/Users_Apartment.png',
     mapX: 0.12,
     mapY: 0.78,
     zone: 'player',
   },
 
-  // ── Public venues ───────────────────────────────────────────────────────────
+  // ── Public venues (each backed by a scene backdrop image) ───────────────────
   {
-    slug: 'the_grind',
-    name: 'The Grind Coffee Co.',
-    shortName: 'Coffee Shop',
-    description: 'a cozy independent coffee shop with exposed brick, mismatched furniture, and the smell of espresso',
+    slug: 'cafe',
+    name: 'The Grind Café',
+    shortName: 'Café',
+    description: 'a cozy independent café with exposed brick, mismatched furniture, and the smell of espresso',
     atmosphere:
-      'Relaxed, slightly hipster. Jazz plays quietly. People work on laptops, have whispered meetings. Good for long conversations.',
+      'Relaxed, slightly hipster. Jazz plays quietly. People work on laptops and have whispered meetings. Good for long conversations.',
     type: 'public',
+    image: 'scenes/cafe.png',
     mapX: 0.18,
     mapY: 0.42,
     zone: 'arts',
   },
   {
-    slug: 'palette_paper',
-    name: 'Palette & Paper',
-    shortName: 'Art Store',
-    description: 'a well-stocked art supply shop with natural light, rows of paint, sketchbooks, and the faint smell of turpentine',
+    slug: 'bookstore',
+    name: 'Chapter & Verse',
+    shortName: 'Bookstore',
+    description: 'a quiet independent bookstore — shelves to the ceiling, a reading nook, the smell of paper and old wood',
     atmosphere:
-      'Quiet and focused. Artists browse methodically. Staff know regulars by name. Has a small gallery wall in the back.',
+      'Hushed and unhurried. Soft footsteps on worn carpet, a corner chair by a rain-streaked window. Good for slow, thoughtful talk.',
     type: 'public',
+    image: 'scenes/bookstore.png',
     mapX: 0.26,
-    mapY: 0.54,
+    mapY: 0.52,
     zone: 'arts',
   },
   {
-    slug: 'westside_commons',
-    name: 'Westside Commons',
-    shortName: 'Mall',
-    description: 'a mid-size indoor mall — chain stores, food court, a few indie boutiques on the upper level',
+    slug: 'comic_book_store',
+    name: 'Splash Page Comics',
+    shortName: 'Comic Store',
+    description: 'a packed comic book shop — long boxes, wall of new releases, figurines and posters everywhere',
     atmosphere:
-      'Bright and busy. Background mall noise. Good for people-watching. The food court has surprisingly decent ramen.',
+      'Playful and a little nerdy. Bright fluorescent light, fans debating storylines, the rustle of bagged-and-boarded issues.',
     type: 'public',
-    mapX: 0.50,
-    mapY: 0.35,
+    image: 'scenes/comic_book_store.png',
+    mapX: 0.44,
+    mapY: 0.40,
     zone: 'downtown',
   },
   {
-    slug: 'ember_theater',
-    name: 'Ember Theater',
-    shortName: 'Theater',
-    description: 'a renovated art-deco movie theater showing indie films and occasional live events',
+    slug: 'mall',
+    name: 'Westside Mall',
+    shortName: 'Mall',
+    description: 'a mid-size indoor mall — chain stores, a food court, a few indie boutiques on the upper level',
     atmosphere:
-      'Dramatic, a little old-fashioned. Dark velvet seats, real butter on the popcorn. Hushed reverence for the screen.',
+      'Bright and busy. Background mall noise, good for people-watching. The food court has surprisingly decent ramen.',
     type: 'public',
-    mapX: 0.60,
-    mapY: 0.52,
+    image: 'scenes/mall.png',
+    mapX: 0.54,
+    mapY: 0.34,
+    zone: 'downtown',
+  },
+  {
+    slug: 'restaurant',
+    name: 'Lumière Bistro',
+    shortName: 'Restaurant',
+    description: 'a warm sit-down restaurant — candlelit tables, white linen, the clink of cutlery and a shared bottle of wine',
+    atmosphere:
+      'Intimate and a little romantic. Low lighting, the smell of the kitchen, the comfortable hum of other diners.',
+    type: 'public',
+    image: 'scenes/restaurant.png',
+    mapX: 0.62,
+    mapY: 0.50,
+    zone: 'downtown',
+  },
+  {
+    slug: 'beach',
+    name: 'Cove Beach',
+    shortName: 'Beach',
+    description: 'a stretch of sandy coastline — rolling surf, a boardwalk behind, gulls overhead',
+    atmosphere:
+      'Open and easy. Salt air, the wash of waves, warm sand underfoot, the whole horizon to yourselves.',
+    type: 'public',
+    image: 'scenes/beach.png',
+    mapX: 0.40,
+    mapY: 0.14,
+    zone: 'downtown',
+  },
+  {
+    slug: 'jail',
+    name: 'County Holding',
+    shortName: 'Jail',
+    description: 'a county holding cell — concrete, steel bars, a hard bench and a buzzing overhead light',
+    atmosphere:
+      'Tense and cold. Echoing footsteps down the corridor, the clang of a far door, fluorescent glare and very little privacy.',
+    type: 'public',
+    image: 'scenes/Jail.png',
+    mapX: 0.58,
+    mapY: 0.66,
     zone: 'downtown',
   },
 
@@ -239,14 +285,32 @@ export function getLocation(slug: string): CityLocation | null {
 }
 
 const VENUE_KEYWORD_ALIASES: Record<string, string> = {
-  mall: 'westside_commons',
-  coffee: 'the_grind',
-  'coffee shop': 'the_grind',
-  cafe: 'the_grind',
-  'art store': 'palette_paper',
-  theater: 'ember_theater',
-  cinema: 'ember_theater',
-  movies: 'ember_theater',
+  mall: 'mall',
+  cafe: 'cafe',
+  café: 'cafe',
+  coffee: 'cafe',
+  'coffee shop': 'cafe',
+  bookstore: 'bookstore',
+  'book store': 'bookstore',
+  books: 'bookstore',
+  library: 'bookstore',
+  comic: 'comic_book_store',
+  comics: 'comic_book_store',
+  'comic book': 'comic_book_store',
+  'comic book store': 'comic_book_store',
+  'comic store': 'comic_book_store',
+  restaurant: 'restaurant',
+  dinner: 'restaurant',
+  dining: 'restaurant',
+  bistro: 'restaurant',
+  beach: 'beach',
+  boardwalk: 'beach',
+  shore: 'beach',
+  ocean: 'beach',
+  jail: 'jail',
+  prison: 'jail',
+  'holding cell': 'jail',
+  'police station': 'jail',
   home: 'player_home',
 };
 
@@ -292,4 +356,34 @@ export function locationsForCharacter(characterId: string): CityLocation[] {
   return LOCATIONS.filter(
     (l) => l.type !== 'character_home' || l.characterId === characterId,
   );
+}
+
+// ── Scene backdrops ──────────────────────────────────────────────────────────
+// The player's location drives a backdrop image at the top of the chat. A null
+// location (remote/home baseline) resolves to the apartment.
+
+const PLAYER_HOME_SLUG = 'player_home';
+/** Fallback backdrop when a location has no image or is unknown. */
+export const DEFAULT_SCENE_IMAGE = 'scenes/Users_Apartment.png';
+
+export interface ResolvedScene {
+  slug: string;
+  name: string;
+  shortName: string;
+  /** R2 object key (serve via /api/assets/<image>). */
+  image: string;
+}
+
+/** Resolve the backdrop scene for a (possibly null) location slug. */
+export function resolveSceneForLocation(slug: string | null | undefined): ResolvedScene {
+  const loc = (slug ? getLocation(slug) : null) ?? getLocation(PLAYER_HOME_SLUG);
+  if (!loc) {
+    return { slug: PLAYER_HOME_SLUG, name: 'Your Apartment', shortName: 'Home', image: DEFAULT_SCENE_IMAGE };
+  }
+  return { slug: loc.slug, name: loc.name, shortName: loc.shortName, image: loc.image ?? DEFAULT_SCENE_IMAGE };
+}
+
+/** Locations the player can explicitly travel to (apartment + public venues). */
+export function travelDestinations(): CityLocation[] {
+  return LOCATIONS.filter((l) => l.type === 'player_home' || l.type === 'public');
 }
