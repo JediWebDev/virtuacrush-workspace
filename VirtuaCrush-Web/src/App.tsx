@@ -10,7 +10,6 @@ import Nav from "./components/Nav";
 import HomePage from "./pages/HomePage";
 import BrowseCharactersPage from "./pages/BrowseCharactersPage";
 import AccountPage from "./pages/AccountPage";
-import HowItWorksPage from "./pages/HowItWorksPage";
 import AvatarPage from "./components/AvatarPage";
 import StudioPage from "./pages/StudioPage";
 import CommunityPage from "./pages/CommunityPage";
@@ -93,7 +92,7 @@ export default function App() {
     // PUBLIC SITE: the landing page, pricing, and legal docs are crawlable and
     // viewable without an account (this is what Google indexes). Anything
     // interactive falls through to the auth page.
-    const PUBLIC_PATHS = ["/", "/how-it-works", "/terms", "/privacy", "/acceptable-use", "/ai-disclaimer"];
+    const PUBLIC_PATHS = ["/", "/terms", "/privacy", "/acceptable-use", "/ai-disclaimer"];
     const isPublicPage = PUBLIC_PATHS.includes(location.pathname);
     return (
       <div className="flex min-h-screen flex-col bg-stone-50 dark:bg-surface">
@@ -101,7 +100,6 @@ export default function App() {
         <div className="relative flex flex-1 flex-col">
           <Routes>
             <Route path="/" element={<HomePage onSelect={() => navigate("/auth")} userTier="guest" />} />
-            <Route path="/how-it-works" element={<HowItWorksPage />} />
             <Route path="/terms" element={<LegalPage markdown={termsMd} />} />
             <Route path="/privacy" element={<LegalPage markdown={privacyMd} />} />
             <Route path="/acceptable-use" element={<LegalPage markdown={acceptableUseMd} />} />
@@ -165,7 +163,6 @@ export default function App() {
               <Route path="/avatar" element={<AvatarPage />} />
               <Route path="/studio" element={<StudioPage />} />
               <Route path="/community" element={<CommunityPage />} />
-              <Route path="/how-it-works" element={<HowItWorksPage />} />
               <Route path="/terms" element={<LegalPage markdown={termsMd} />} />
               <Route path="/privacy" element={<LegalPage markdown={privacyMd} />} />
               <Route path="/acceptable-use" element={<LegalPage markdown={acceptableUseMd} />} />
@@ -217,7 +214,7 @@ export default function App() {
                       type="button"
                       onClick={() => {
                         setShowUpgradeModal(false);
-                        navigate("/how-it-works");
+                        navigate("/#pricing");
                       }}
                       className="w-full rounded-xl bg-accent py-3.5 text-sm font-semibold text-white shadow-md shadow-accent/25 transition-all hover:bg-accent-deep active:scale-[0.98]"
                     >

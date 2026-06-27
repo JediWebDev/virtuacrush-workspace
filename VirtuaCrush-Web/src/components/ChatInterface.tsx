@@ -725,7 +725,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
         open={quotaToast}
         limit={quotaLimit}
         onClose={() => setQuotaToast(false)}
-        onUpgrade={() => { setQuotaToast(false); navigate("/how-it-works"); }}
+        onUpgrade={() => { setQuotaToast(false); navigate("/#pricing"); }}
       />
       <AchievementToast
         open={achievementToast.open}

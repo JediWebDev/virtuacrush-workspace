@@ -50,11 +50,6 @@ export default function Footer() {
                     Characters
                   </Link>
                 </li>
-                <li>
-                  <Link to="/how-it-works" className="transition-colors hover:text-accent">
-                    How It Works
-                  </Link>
-                </li>
               </ul>
             </div>
 
