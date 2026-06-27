@@ -416,8 +416,8 @@ const ARCS: StoryArc[] = [
 
  // === SEO-JUN — mall / trendy clothing store ==========================================
   {
-    id: 'seo_jun_meet',
-    characterId: 'seo-jun',
+    id: 'seojun_meet',
+    characterId: 'seojun',
     isMeetArc: true,
     sceneAnchor: {
       setting: 'popular mall trendy clothing store — a  clothing rack, and Seo-Jun is standing near it, watching you as you browse the racks',

@@ -294,6 +294,8 @@ const CHARACTER_PRONOUNS: Record<string, Pronouns> = {
   riot: MALE_PRONOUNS,
   lin: MALE_PRONOUNS,
   ash: MALE_PRONOUNS,
+  seojun: MALE_PRONOUNS,
+  bohdi: MALE_PRONOUNS,
 };
 
 export function pronounsFor(characterId: string): Pronouns {
