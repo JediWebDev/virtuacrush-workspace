@@ -122,6 +122,23 @@ export async function fetchCharacterState(characterId: string): Promise<Characte
   return api<CharacterState>(`/api/state/${encodeURIComponent(characterId)}`);
 }
 
+export type AchievementKind = 'arc' | 'affinity' | 'secret' | 'beat';
+
+export interface Achievement {
+  characterId: string;
+  kind: AchievementKind;
+  key: string;
+  title: string;
+  description: string;
+  tone: string | null;
+  earnedAt: string;
+}
+
+/** All achievements the player has earned (newest first; client groups by companion). */
+export function fetchAchievements(): Promise<{ achievements: Achievement[] }> {
+  return api<{ achievements: Achievement[] }>(`/api/achievements`);
+}
+
 /** The persisted affinity score (0-100) for this character. Loaded on chat open
  *  so the bar shows real progress immediately instead of 0 until the first reply. */
 export async function fetchAffinity(characterId: string): Promise<number> {

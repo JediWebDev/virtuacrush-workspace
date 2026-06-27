@@ -75,6 +75,12 @@ export interface StoryArc {
   tone: 'light' | 'serious' | 'romantic' | 'dramatic';
   rarity: 'common' | 'uncommon' | 'rare';
   repeatable: boolean;
+  /** Minimum affinity before this arc can be selected. When omitted, a sensible
+   *  default is derived from `rarity` (see RARITY_AFFINITY_GATE). */
+  affinityRequired?: number;
+  /** When true, this arc only becomes eligible after the player has uncovered
+   *  the companion's secret. */
+  requiresSecret?: boolean;
   arcTags: NarrativeTag[];
   followUps?: string[];
   /** Optional authored NPCs (friends, enemies, bystanders) for this arc. */
@@ -1014,6 +1020,8 @@ const ARCS: StoryArc[] = [
     tone: 'light',
     rarity: 'common',
     repeatable: true,
+    // Only surfaces once Lin's secret is out — a post-reveal, secret-gated arc.
+    requiresSecret: true,
     arcTags: ['trust', 'growth', 'friendship'],
     npcs: [
       {
@@ -1200,6 +1208,20 @@ const RARITY_WEIGHT: Record<StoryArc['rarity'], number> = {
   rare: 1,
 };
 
+// Default affinity gate by rarity when an arc doesn't set `affinityRequired`.
+// This makes the roster unlock progressively: common arcs are always available,
+// while uncommon/rare (more intimate, higher-stakes) arcs require a closer bond.
+const RARITY_AFFINITY_GATE: Record<StoryArc['rarity'], number> = {
+  common: 0,
+  uncommon: 30,
+  rare: 55,
+};
+
+/** Effective affinity needed to unlock an arc (explicit override or rarity default). */
+export function arcAffinityGate(arc: StoryArc): number {
+  return arc.affinityRequired ?? RARITY_AFFINITY_GATE[arc.rarity];
+}
+
 /**
  * Picks a story arc for the given character.
  *
@@ -1217,7 +1239,11 @@ export function selectArc(
   characterId: string,
   completedArcIds: Set<string>,
   currentArcId: string | null,
+  opts: { affinity?: number; secretDiscovered?: boolean } = {},
 ): StoryArc | null {
+  const affinity = opts.affinity ?? 0;
+  const secretDiscovered = opts.secretDiscovered ?? false;
+
   // --- Meet-first gate -------------------------------------------------------
   const meetArcId = `${characterId}_meet`;
   if (!completedArcIds.has(meetArcId) && currentArcId !== meetArcId) {
@@ -1242,6 +1268,10 @@ export function selectArc(
     if (a.id === currentArcId) return false;
     if (lockedFollowUps.has(a.id)) return false;
     if (!a.repeatable && completedArcIds.has(a.id)) return false;
+    // Progression gates: intimate arcs unlock as affinity grows, and
+    // secret-gated arcs only after the player has uncovered the secret.
+    if (affinity < arcAffinityGate(a)) return false;
+    if (a.requiresSecret && !secretDiscovered) return false;
     return true;
   });
 

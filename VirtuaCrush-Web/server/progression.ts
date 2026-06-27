@@ -23,3 +23,26 @@ export function secretTrustProgress(affinity: number, threshold = SECRET_REVEAL_
 /** Desire-event choice affinity bumps. */
 export const DESIRE_ENCOURAGE_AFFINITY = 1;
 export const DESIRE_DECLINE_AFFINITY = -1;
+
+// ---------------------------------------------------------------------------
+// Affinity tiers — relationship milestones that become achievements when first
+// crossed. `{name}` is replaced with the companion's display name at emit time.
+// ---------------------------------------------------------------------------
+export interface AffinityTier {
+  threshold: number;
+  key: string;
+  title: string;
+  description: string;
+}
+
+export const AFFINITY_TIERS: AffinityTier[] = [
+  { threshold: 25, key: 'affinity:25', title: 'Warming Up', description: 'You and {name} are starting to click.' },
+  { threshold: 50, key: 'affinity:50', title: 'Close', description: 'You and {name} have a real connection now.' },
+  { threshold: 75, key: 'affinity:75', title: 'Inseparable', description: '{name} lights up the moment you show up.' },
+  { threshold: 100, key: 'affinity:100', title: 'Soulbound', description: 'You and {name} are completely in sync.' },
+];
+
+/** Tiers newly crossed moving from `prev` to `next` affinity (exclusive→inclusive). */
+export function crossedAffinityTiers(prev: number, next: number): AffinityTier[] {
+  return AFFINITY_TIERS.filter((t) => prev < t.threshold && next >= t.threshold);
+}

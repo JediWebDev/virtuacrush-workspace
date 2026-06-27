@@ -76,7 +76,9 @@ import {
   sceneCastToNpcRefs,
   suggestBystanderForSetting,
 } from '../inworld/npc_schema';
-import { maybeAutonomousPost, postTriggerForTurn } from '../inworld/social_post';
+import { maybeAutonomousPost, postTriggerForTurn, detectFirstContactExchange } from '../inworld/social_post';
+import { recordAchievement, type AchievementRecord } from '../db/achievements';
+import { crossedAffinityTiers } from '../progression';
 import { getLore, formatCharacterFactsBlock } from '../inworld/lore';
 import { formatPersonaTraitsBlock, shouldRevealSecret } from '../sim/traits';
 import {
@@ -113,7 +115,7 @@ import { planEffects, type EffectPlan } from '../sim/effects';
 import { applyEffects } from '../db/sim_apply';
 import { describeKnownPlayer, observePlayer, describeAppearance } from '../sim/player';
 import { describeLastSeenOutfit, itemsById, wornItems, describeOutfit, describeGrooming } from '../sim/wardrobe';
-import { upsertNpcState } from '../db/npc_state';
+import { upsertNpcState, getNpcStates } from '../db/npc_state';
 import { looksDegenerate } from '../llm/quality';
 import { directorCompleteOpts } from '../llm/models';
 import { streamingDirectorTranscript } from '../llm/stream_director';
@@ -404,16 +406,22 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   const affinityPromise = getAffinity(req.user!.id, characterId);
   const arcStatePromise = getArcState(req.user!.id, characterId);
   const completedArcIdsPromise = getCompletedArcIds(req.user!.id, characterId);
+  // Whether this companion's secret is already uncovered — gates secret-locked arcs.
+  const npcStatePromise = getNpcStates(req.user!.id, [characterId]);
 
   // Gate the prompt on these before streaming.
-  const [situation, memories, storyBeats, affinity, arcStateResult, completedArcIds] = await Promise.all([
+  const [situation, memories, storyBeats, affinity, arcStateResult, completedArcIds, npcStateMap] = await Promise.all([
     situationPromise,
     memoriesPromise,
     storyBeatsPromise,
     affinityPromise,
     arcStatePromise,
     completedArcIdsPromise,
+    npcStatePromise,
   ]);
+  const secretAlreadyDiscovered = Boolean(
+    (npcStateMap[characterId]?.knowledge as Record<string, unknown> | undefined)?.secretDiscovered,
+  );
 
   let arcContext: ArcContext | undefined;
   let arcJustStarted = false;
@@ -455,7 +463,10 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     activeArc = getArc(priorArcId);
   }
   if (!activeArc && !onUserArc) {
-    const candidate = selectArc(characterId, completedArcIds, null);
+    const candidate = selectArc(characterId, completedArcIds, null, {
+      affinity,
+      secretDiscovered: secretAlreadyDiscovered,
+    });
     if (candidate) {
       await setArcActive(req.user!.id, characterId, candidate.id);
       activeArc = candidate;
@@ -1185,6 +1196,55 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       }
     }
 
+    // --- Achievements: arc completion, affinity tiers, secret reveal, beats ---
+    // Each is idempotent (recordAchievement dedupes); only genuinely new ones are
+    // returned so the client toasts them once.
+    const newAchievements: AchievementRecord[] = [];
+    try {
+      if (earnedBadge && completedArcIdForPost) {
+        const a = await recordAchievement(req.user!.id, characterId, {
+          kind: 'arc',
+          key: `arc:${completedArcIdForPost}`,
+          title: earnedBadge.title,
+          description: earnedBadge.description,
+          tone: activeArc?.tone ?? null,
+        });
+        if (a) newAchievements.push(a);
+      }
+      if (revealSecretNow) {
+        const a = await recordAchievement(req.user!.id, characterId, {
+          kind: 'secret',
+          key: 'secret',
+          title: `${displayName}'s Secret`,
+          description: `You earned ${displayName}'s trust and uncovered what they keep hidden.`,
+          tone: 'dramatic',
+        });
+        if (a) newAchievements.push(a);
+      }
+      for (const tier of crossedAffinityTiers(affinity, newAffinityScore)) {
+        const a = await recordAchievement(req.user!.id, characterId, {
+          kind: 'affinity',
+          key: tier.key,
+          title: tier.title,
+          description: tier.description.replace('{name}', displayName),
+          tone: 'romantic',
+        });
+        if (a) newAchievements.push(a);
+      }
+      if (detectFirstContactExchange(`${message}\n${assistantFull}`)) {
+        const a = await recordAchievement(req.user!.id, characterId, {
+          kind: 'beat',
+          key: 'beat:contact_swap',
+          title: 'Numbers Exchanged',
+          description: `You and ${displayName} swapped contact info.`,
+          tone: 'light',
+        });
+        if (a) newAchievements.push(a);
+      }
+    } catch (e) {
+      console.warn('[achievements] record failed:', e);
+    }
+
     // Autonomous social post: fire-and-forget so arc-completion generation never
     // blocks `done`. When a trigger fired, tell the client to refresh the feed.
     const postTrigger = postTriggerForTurn({
@@ -1222,6 +1282,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       choices: replyChoices,
       posted,
       chaos: chaosHint,
+      achievements: newAchievements,
     });
 
     res.end();

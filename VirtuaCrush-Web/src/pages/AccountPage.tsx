@@ -7,8 +7,10 @@ import {
   Bell,
   LogOut,
   Loader2,
+  Trophy,
 } from "lucide-react";
 import AvatarImageStudio from "../components/AvatarImageStudio";
+import AchievementsPanel from "../components/AchievementsPanel";
 import { useSession, signOut } from "../lib/auth-client";
 import {
   ApiError,
@@ -199,6 +201,14 @@ export default function AccountPage() {
         </div>
 
         <div className="space-y-6">
+          <SectionCard
+            title="Achievements"
+            icon={Trophy}
+            description="Milestones you've earned with each companion. Share your favorite moments."
+          >
+            <AchievementsPanel />
+          </SectionCard>
+
           <SectionCard
             title="Profile photo"
             icon={User}

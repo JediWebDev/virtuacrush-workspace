@@ -50,8 +50,11 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     },
     onQuotaExceeded: (info) => { setQuotaLimit(info?.limit ?? null); setQuotaToast(true); },
     onDone: (info) => {
-      if (info.earnedBadge?.title) {
-        setAchievementToast({ open: true, badge: info.earnedBadge });
+      if (info.achievements?.length) {
+        setAchievementQueue((q) => [
+          ...q,
+          ...info.achievements!.map((a) => ({ title: a.title, description: a.description })),
+        ]);
       }
       if (info.affinityAwarded && info.affinityAwarded > 0) {
         if (typeof info.affinityScore === 'number') {
@@ -129,10 +132,9 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   // and a timer that auto-closes the finished story tab.
   const [affinityToast, setAffinityToast] = useState<{ open: boolean; amount: number }>({ open: false, amount: 0 });
   const [historyToast, setHistoryToast] = useState<{ open: boolean; title: string }>({ open: false, title: '' });
-  const [achievementToast, setAchievementToast] = useState<{ open: boolean; badge: AchievementToastData | null }>({
-    open: false,
-    badge: null,
-  });
+  // Queue of milestone toasts; multiple can land in one turn (e.g. arc completion
+  // + an affinity tier), shown one after another.
+  const [achievementQueue, setAchievementQueue] = useState<AchievementToastData[]>([]);
   const [meetArcComplete, setMeetArcComplete] = useState(() => isCustomCharacterId(character.id));
   const [devResetEnabled, setDevResetEnabled] = useState(false);
   const [devResetting, setDevResetting] = useState(false);
@@ -174,7 +176,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
     setReadingMessages([]);
     setAffinityToast({ open: false, amount: 0 });
     setHistoryToast({ open: false, title: '' });
-    setAchievementToast({ open: false, badge: null });
+    setAchievementQueue([]);
     setMeetArcComplete(isCustomCharacterId(character.id));
 
     (async () => {
@@ -315,13 +317,14 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   }, [character.id]);
 
   // Load the travel destinations once per character (static registry list).
+  // DISABLED FOR NOW alongside the scene backdrop below — re-enable both together.
   useEffect(() => {
-    let cancelled = false;
     setTravelOpen(false);
-    fetchTravelLocations(character.id)
-      .then((r) => { if (!cancelled) setTravelLocations(r.locations); })
-      .catch(() => { /* non-fatal — travel picker just stays empty */ });
-    return () => { cancelled = true; };
+    // let cancelled = false;
+    // fetchTravelLocations(character.id)
+    //   .then((r) => { if (!cancelled) setTravelLocations(r.locations); })
+    //   .catch(() => { /* non-fatal — travel picker just stays empty */ });
+    // return () => { cancelled = true; };
   }, [character.id]);
 
   // Explicit travel: move the player, then refresh state so the backdrop (and
@@ -760,15 +763,15 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
         onUpgrade={() => { setQuotaToast(false); navigate("/#pricing"); }}
       />
       <AchievementToast
-        open={achievementToast.open}
-        badge={achievementToast.badge}
-        onClose={() => setAchievementToast((t) => ({ ...t, open: false }))}
+        open={achievementQueue.length > 0}
+        badge={achievementQueue[0] ?? null}
+        onClose={() => setAchievementQueue((q) => q.slice(1))}
         offsetRem={14}
       />
       <NoticeToast
         open={affinityToast.open}
         title={`+${affinityToast.amount} affinity with ${character.name}`}
-        detail={achievementToast.open ? "You made a real first impression." : "Your bond grew stronger."}
+        detail={achievementQueue.length > 0 ? "You made a real first impression." : "Your bond grew stronger."}
         icon={<Heart size={18} className="fill-accent" />}
         onClose={() => setAffinityToast((t) => ({ ...t, open: false }))}
         offsetRem={6}
@@ -920,8 +923,12 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
 
         {/* Scene backdrop — top third of the chat, driven by the player's
             current location (explicit travel). The same location is sent to the
-            director prompt as CURRENT SETTING on the next turn. */}
-        {!showHistoryView && activeThread === 'freeRoam' && (
+            director prompt as CURRENT SETTING on the next turn.
+            DISABLED FOR NOW: the setting images weren't helping UX, so this is
+            turned off and the chat column spans the full height. Flip the
+            `false &&` guard back to re-enable (also re-enable the travel fetch
+            effect above). */}
+        {false && !showHistoryView && activeThread === 'freeRoam' && (
           <div className="relative w-full shrink-0 grow-0 basis-1/3 overflow-hidden border-b border-black/[0.06] dark:border-white/[0.06]">
             <img
               src={assetUrl(storyState?.sceneImage ?? 'scenes/Users_Apartment.png')}

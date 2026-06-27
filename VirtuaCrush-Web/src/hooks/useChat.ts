@@ -26,6 +26,17 @@ export interface ReplyChoice {
   userMessage: string;
 }
 
+/** A milestone earned this turn (arc completion, affinity tier, secret, beat). */
+export interface DoneAchievement {
+  characterId: string;
+  kind: string;
+  key: string;
+  title: string;
+  description: string;
+  tone: string | null;
+  earnedAt: string;
+}
+
 /** Fired when the server finishes a streamed reply (quota, affinity, arc badge, etc.). */
 export interface ChatDoneInfo {
   remaining: number | null;
@@ -35,6 +46,8 @@ export interface ChatDoneInfo {
   meetArcComplete?: boolean;
   /** World/chaos engine beat the player should notice this turn. */
   chaos?: { title: string; detail: string; tone: 'subtle' | 'major' };
+  /** Milestones newly earned this turn — toast each. */
+  achievements?: DoneAchievement[];
 }
 
 interface UseChatOptions {
@@ -197,6 +210,7 @@ export function useChat({
                       tone: d.chaos.tone === 'subtle' ? 'subtle' : 'major',
                     }
                   : undefined,
+              achievements: Array.isArray(d.achievements) ? (d.achievements as DoneAchievement[]) : undefined,
             });
             if (typeof d.affinityScore === 'number') {
               setAffinityScore(d.affinityScore);
