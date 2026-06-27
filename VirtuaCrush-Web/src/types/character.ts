@@ -273,7 +273,7 @@ export const CHARACTERS: Character[] = [
     name: "Serena",
     role: "Crafter",
     bio: "Reads three books a week and has a hot take on all of them. Charming, articulate, and slightly dramatic about punctuation.",
-    tags: ["Deadpan humor", "Witty", "Sarcastic", "Self Depricating"],
+    tags: ["Deadpan", "Alt-Girl", "Sarcastic", "Grunge"],
     image: "/api/assets/characters/Serena_Character.png",
     premiumVideo: "",
     persona:
