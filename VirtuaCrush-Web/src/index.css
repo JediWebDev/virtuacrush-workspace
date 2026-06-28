@@ -1,9 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
+/* Removed @custom-variant directive — not a standard at-rule and caused unknownAtRules warning */
 
-@theme {
+:root {
   --font-sans: "Outfit", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-serif: "Playfair Display", ui-serif, Georgia, serif;
   --font-hero: "Crimson Pro", ui-serif, Georgia, serif;
@@ -26,16 +26,32 @@
 
 @layer base {
   html {
-    @apply transition-colors duration-300;
+    transition: color 300ms, background-color 300ms, border-color 300ms, text-decoration-color 300ms, fill 300ms, stroke 300ms;
   }
 
   body {
-    @apply bg-stone-50 text-stone-900 antialiased overflow-x-hidden transition-colors duration-300 dark:bg-surface dark:text-stone-100;
+    background-color: #f8fafc;
+    color: #0f172a;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+    transition: color 300ms, background-color 300ms, border-color 300ms, text-decoration-color 300ms, fill 300ms, stroke 300ms;
     font-feature-settings: "kern" 1, "liga" 1;
   }
 
+  .dark body {
+    background-color: var(--color-surface);
+    color: #f8fafc;
+  }
+
   ::selection {
-    @apply bg-accent/25 text-stone-900 dark:bg-accent/30 dark:text-stone-50;
+    background-color: rgba(247, 37, 133, 0.25);
+    color: #0f172a;
+  }
+
+  .dark ::selection {
+    background-color: rgba(247, 37, 133, 0.3);
+    color: #f8fafc;
   }
 }
 
@@ -45,7 +61,10 @@
 
 /* Frosted panels on light / vivid-royal dark backgrounds */
 .glass {
-  @apply border shadow-[0_8px_32px_rgba(0,0,0,0.06)] backdrop-blur-2xl backdrop-saturate-150 transition-colors duration-300;
+  border: 1px solid transparent;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+  backdrop-filter: saturate(150%) blur(40px);
+  transition: color 300ms, background-color 300ms, border-color 300ms, text-decoration-color 300ms, fill 300ms, stroke 300ms;
   border-color: color-mix(in srgb, var(--color-brand-indigo) 22%, transparent);
   background: linear-gradient(
     135deg,
@@ -102,7 +121,9 @@
 }
 
 .text-gradient {
-  @apply bg-clip-text text-transparent;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
   background-image: linear-gradient(
     90deg,
     var(--color-accent),
@@ -112,15 +133,29 @@
 }
 
 .hover-glow {
-  @apply transition-all duration-300 hover:border-accent/40;
+  transition: all 300ms;
 }
 
 .hover-glow:hover {
   box-shadow: 0 12px 40px rgba(247, 37, 133, 0.22);
+  border-color: rgba(247, 37, 133, 0.4);
 }
 
 .btn-primary {
-  @apply rounded-xl bg-accent font-semibold text-white shadow-md shadow-accent/30 transition-all hover:bg-accent-deep active:scale-[0.98];
+  border-radius: 1rem;
+  background-color: var(--color-accent);
+  font-weight: 600;
+  color: white;
+  box-shadow: 0 10px 25px rgba(247, 37, 133, 0.18);
+  transition: all 300ms;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-accent-deep);
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
 }
 
 .ambient-accent {
@@ -132,13 +167,21 @@
 }
 
 .composer-bar {
-  @apply border-t p-4 md:p-8 md:pt-6;
+  border-top: 1px solid transparent;
+  padding: 1rem;
   border-color: color-mix(in srgb, var(--color-brand-indigo) 18%, transparent);
   background: linear-gradient(
     to top,
     color-mix(in srgb, var(--color-brand-indigo) 8%, white),
     color-mix(in srgb, white 94%, var(--color-brand-sapphire) 6%)
   );
+}
+
+@media (min-width: 768px) {
+  .composer-bar {
+    padding: 2rem;
+    padding-top: 1.5rem;
+  }
 }
 
 .dark .composer-bar {
@@ -162,10 +205,28 @@
   width: 6px;
 }
 ::-webkit-scrollbar-track {
-  @apply bg-stone-100 transition-colors duration-300 dark:bg-surface-elevated;
+  background-color: #f5f5f4;
+  transition: background-color 300ms, border-color 300ms, color 300ms, text-decoration-color 300ms, fill 300ms, stroke 300ms;
+}
+.dark ::-webkit-scrollbar-track {
+  background-color: var(--color-surface-elevated);
 }
 ::-webkit-scrollbar-thumb {
-  @apply rounded-full bg-black/15 transition-colors hover:bg-accent/45 dark:bg-white/15 dark:hover:bg-accent/40;
+  border-radius: 9999px;
+  background-color: rgba(0, 0, 0, 0.15);
+  transition: background-color 300ms;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(247, 37, 133, 0.45);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background-color: rgba(247, 37, 133, 0.4);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(247, 37, 133, 0.4);
 }
 
 /* Story Studio — legible native select menus in light and dark app themes */
