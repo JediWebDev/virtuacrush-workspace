@@ -165,7 +165,7 @@
   @apply bg-stone-100 transition-colors duration-300 dark:bg-surface-elevated;
 }
 ::-webkit-scrollbar-thumb {
-  @apply rounded-full bg-black/15 transition-colors hover:bg-accent/45 dark:bg-white/15 dark:hover:bg-accent/40;
+  @apply rounded-full bg-black/15 transition-colors hover:bg-accent/45 dark:bg-brand/50 dark:hover:bg-accent/40;
 }
 
 /* Story Studio — legible native select menus in light and dark app themes */
