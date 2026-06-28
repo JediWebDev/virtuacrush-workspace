@@ -162,10 +162,14 @@
   width: 6px;
 }
 ::-webkit-scrollbar-track {
-  @apply bg-stone-100 transition-colors duration-300 dark:bg-surface-elevated;
+  background: #0c1018;
 }
 ::-webkit-scrollbar-thumb {
-  @apply rounded-full bg-black/15 transition-colors hover:bg-accent/45 dark:bg-brand-indigo/50 dark:hover:bg-accent/40;
+  background: #7209b7;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4cc9f0;
 }
 
 /* Story Studio — legible native select menus in light and dark app themes */
