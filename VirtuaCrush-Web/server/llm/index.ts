@@ -1,5 +1,7 @@
 // Provider selector + the two convenience entry points the app uses everywhere.
-import { inworldProvider } from './inworld';
+// The app speaks the OpenAI-compatible wire format (OpenRouter, OpenAI, etc.).
+// The old Inworld vendor provider was removed; LLM_PROVIDER is still accepted for
+// backwards-compat but always resolves to the OpenAI-compatible provider.
 import { openAiProvider } from './openai';
 import type { LlmProvider, CompleteOpts } from './types';
 import {
@@ -10,16 +12,16 @@ import {
 
 export { isPromptLoggingEnabled, getRecentPrompts, type PromptLogEntry } from './prompt_log';
 
-export type ProviderName = 'inworld' | 'openai';
+export type ProviderName = 'openai';
 
-/** Pure: which provider LLM_PROVIDER selects (default 'inworld'). */
-export function selectProviderName(env: NodeJS.ProcessEnv = process.env): ProviderName {
-  const p = (env.LLM_PROVIDER || 'inworld').toLowerCase();
-  return p === 'openai' || p === 'openai-compatible' || p === 'openrouter' ? 'openai' : 'inworld';
+/** The app has a single OpenAI-compatible provider. Kept as a function so the
+ *  startup log and tests have a stable entry point. */
+export function selectProviderName(_env: NodeJS.ProcessEnv = process.env): ProviderName {
+  return 'openai';
 }
 
 export function getProvider(): LlmProvider {
-  return selectProviderName() === 'openai' ? openAiProvider : inworldProvider;
+  return openAiProvider;
 }
 
 /** When LLM_LOG_PROMPTS is truthy, logs the full prompt (Railway-safe chunks). */

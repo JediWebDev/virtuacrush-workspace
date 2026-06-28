@@ -3,19 +3,11 @@ import assert from 'node:assert/strict';
 import { selectProviderName } from './index';
 import { openAiConfig, buildChatBody, parseChatResponse } from './openai';
 
-test('selectProviderName: defaults to inworld when unset', () => {
-  assert.equal(selectProviderName({}), 'inworld');
-});
-
-test('selectProviderName: openai aliases all map to openai', () => {
-  for (const v of ['openai', 'openai-compatible', 'openrouter', 'OpenAI', 'OPENROUTER']) {
+test('selectProviderName: always resolves to the OpenAI-compatible provider', () => {
+  assert.equal(selectProviderName({}), 'openai');
+  for (const v of ['openai', 'openai-compatible', 'openrouter', 'OpenAI', 'OPENROUTER', 'inworld', 'banana']) {
     assert.equal(selectProviderName({ LLM_PROVIDER: v }), 'openai', `for ${v}`);
   }
-});
-
-test('selectProviderName: explicit inworld and unknown values stay inworld', () => {
-  assert.equal(selectProviderName({ LLM_PROVIDER: 'inworld' }), 'inworld');
-  assert.equal(selectProviderName({ LLM_PROVIDER: 'banana' }), 'inworld');
 });
 
 test('openAiConfig: sensible defaults', () => {

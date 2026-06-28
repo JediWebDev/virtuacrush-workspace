@@ -39,18 +39,18 @@ import devRouter from './server/routes/dev';
 import { syncCuratedPosts } from './server/jobs/curated_posts';
 import { summarizePendingDiaries } from './server/db/diary';
 
-// --- Startup config checks (provider-aware) ---------------------------------
+// --- Startup config checks --------------------------------------------------
+// Single OpenAI-compatible provider (OpenRouter, OpenAI, etc.). Chat AND
+// long-term memory (RAG embeddings) both use LLM_API_KEY; memory additionally
+// uses EMBED_MODEL (defaults to a small OpenAI embedding model).
 const LLM_PROVIDER = selectProviderName();
-if (LLM_PROVIDER === 'inworld' && !process.env.INWORLD_API_KEY?.trim()) {
-  console.error('[startup] LLM_PROVIDER=inworld but INWORLD_API_KEY is not set — chat will fail');
+if (!process.env.LLM_API_KEY?.trim()) {
+  console.error('[startup] LLM_API_KEY is not set — chat and long-term memory will fail');
+} else {
+  const embedModel = (process.env.EMBED_MODEL || 'openai/text-embedding-3-small').trim();
+  console.log(`[startup] long-term memory (embeddings) enabled via EMBED_MODEL=${embedModel}`);
 }
-if (LLM_PROVIDER === 'openai' && !process.env.LLM_API_KEY?.trim()) {
-  console.error('[startup] LLM_PROVIDER=openai but LLM_API_KEY is not set — chat will fail');
-}
-if (!process.env.INWORLD_API_KEY?.trim()) {
-  console.warn('[startup] INWORLD_API_KEY unset — long-term memory (embeddings) is disabled; it fails soft');
-}
-console.log(`[startup] LLM provider: ${LLM_PROVIDER}`);
+console.log(`[startup] LLM provider: ${LLM_PROVIDER} (OpenAI-compatible)`);
 if (isPromptLoggingEnabled()) {
   console.log(
     '[startup] LLM_LOG_PROMPTS enabled — prompts go to Railway logs (search llm:prompt) ' +
@@ -143,15 +143,9 @@ server.on('error', (err: NodeJS.ErrnoException) => {
   throw err;
 });
 
-// Graceful shutdown.
-//
-// The @inworld/runtime addon registers its OWN SIGINT/SIGTERM/exit listeners
-// that close its native thread pool but never call process.exit(). Because
-// registering any SIGINT listener suppresses Node's default "terminate on
-// Ctrl+C" behavior, the process would otherwise linger after Ctrl+C with a
-// closed thread pool — a zombie that keeps holding the port (EADDRINUSE on the
-// next start) and fails every chat request with "Thread pool is closed".
-// We register our own handlers that actually exit so the process really dies.
+// Graceful shutdown — register our own SIGINT/SIGTERM handlers that actually
+// call process.exit() so the process dies cleanly (and never lingers holding the
+// port → EADDRINUSE on the next start), draining open connections first.
 let shuttingDown = false;
 const shutdown = (signal: string) => {
   if (shuttingDown) return;
