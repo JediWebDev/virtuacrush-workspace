@@ -96,8 +96,8 @@ export function detectFirstContactExchange(turnText: string): boolean {
   if (
     /\b(swap(ped|ping)?|exchange(d|s|ing)?|share(d|s|ing)?|trade(d|s|ing)?|give(n|s|ing)?|got|here'?s?)\s+(numbers?|digits?|phones?|contacts?)\b/.test(t)
     || /\b(numbers?|digits?|phones?|contacts?)\s+(swap(ped|ping)?|exchange(d|s|ing)?|share(d|s|ing)?|trade(d|s|ing)?)\b/.test(t)
-    || /\b(my|your)\s+(cell|number|digits|phone|contact)\b/.test(t)
-    || /\bhere('s| is)\s+(my|the)\s+(cell|number|digits|phone|contact)\b/.test(t)
+    || /\b(my|your)\s+(?:(?:cell|phone)\s+)?(number|digits|contact)\b/.test(t)
+    || /\bhere('s| is)\s+(my|the)\s+(?:(?:cell|phone)\s+)?(number|digits|contact)\b/.test(t)
     || /\b(text|message|call|dm)\s+me\b/.test(t)
     || /\bhit\s+me\s+up\b/.test(t)
     || /\b(add|save)\s+(me|my\s+(number|contact))\b/.test(t)
