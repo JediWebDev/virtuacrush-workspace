@@ -11,14 +11,15 @@ import { enforceMessageQuota } from '../middleware/rateLimit';
 import { streamChat, completePrompt, streamPrompt, type ChatMessage } from '../inworld/chat';
 import { buildDirectorPrompt, buildDirectorPromptParts, parseDirectorOutput, parseDirectorTurns, companionTagFor, turnsToTranscript, type Actor, type ArcContext, type ReplyChoice } from '../inworld/director';
 import { selectArc, getArc, type SceneAnchor, type StoryArc } from '../inworld/arcs';
-import { getUserStory } from '../db/user_stories';
+import { getUserStory, createGeneratedArc } from '../db/user_stories';
 import { userStoryToArc } from '../inworld/user_arc';
+import { shouldAttemptEmergentArc, generateEmergentArc } from '../inworld/arc_generator';
 import { resolveMeetFirstStoryArc, arcOpeningLine } from '../inworld/active_arc';
 import { hasCompletedMeetArc, meetArcIdFor, MEET_AFFINITY_REWARD, meetArcReadyToComplete, resolveMeetCompletionBadge } from '../inworld/meet_arc';
 import { resolveFreeRoamWindow, freeRoamWindowClause, type FreeRoamWindow } from '../db/chat_window';
 import { sanitizeRoleplayTranscript } from '../inworld/transcript_sanitize';
 import { ensureUserCharacterLoaded } from '../db/user_characters';
-import { getArcState, setArcActive, clearArc as clearArcState, incrementAbandonmentStrikes, resetAbandonmentStrikes, saveCompletedArc, getCompletedArcIds } from '../db/arc_state';
+import { getArcState, setArcActive, clearArc as clearArcState, incrementAbandonmentStrikes, resetAbandonmentStrikes, saveCompletedArc, getCompletedArcIds, getLastEmergentArcAt, markEmergentArcAttempt } from '../db/arc_state';
 import { incrementUsage, FREE_TIER_DAILY_LIMIT } from '../db/usage';
 import { isSubscribed } from '../db/subscriptions';
 import { pool } from '../db/pool';
@@ -428,6 +429,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let arcSceneInit = false;
   let arcIntroNarrative: string | undefined;
   let earnedBadge: { title: string; description: string } | null = null;
+  let momentBadge: { title: string; description: string } | null = null;
   let completedArcIdForPost: string | null = null;
   let affinityAwarded = 0;
 
@@ -463,16 +465,64 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     activeArc = getArc(priorArcId);
   }
   if (!activeArc && !onUserArc) {
-    const candidate = selectArc(characterId, completedArcIds, null, {
-      affinity,
-      secretDiscovered: secretAlreadyDiscovered,
-    });
-    if (candidate) {
-      await setArcActive(req.user!.id, characterId, candidate.id);
-      activeArc = candidate;
-      arcJustStarted = true;
-      if (!candidate.isMeetArc && candidate.introNarrative?.trim()) {
-        arcIntroNarrative = candidate.introNarrative;
+    // Emergent arc generation: in free roam, on a steady cadence, when no arc is
+    // active, try to spin up a context-fit arc that deepens the relationship —
+    // filling the "free-roam vacuum" with structure. Gated + cooldowned so it
+    // stays cheap; authored arcs still fill the rest.
+    if (
+      shouldAttemptEmergentArc({
+        meetComplete,
+        hasActiveArc: false,
+        affinity,
+        historyLen: turns.length,
+        lastAttemptAt: await getLastEmergentArcAt(req.user!.id, characterId),
+      })
+    ) {
+      await markEmergentArcAttempt(req.user!.id, characterId);
+      try {
+        const gen = await generateEmergentArc({
+          characterId,
+          displayName,
+          affinity,
+          history: turns,
+          recentBeats: storyBeats.map((b) => b.summary),
+        });
+        if (gen) {
+          const story = await createGeneratedArc({
+            ownerUserId: req.user!.id,
+            characterId,
+            title: gen.title,
+            blurb: gen.blurb,
+            spec: gen.spec as unknown as Record<string, unknown>,
+          });
+          const genArc = userStoryToArc(story);
+          if (genArc) {
+            await setArcActive(req.user!.id, characterId, genArc.id);
+            activeArc = genArc;
+            onUserArc = true;
+            arcJustStarted = true;
+            if (genArc.introNarrative?.trim()) arcIntroNarrative = genArc.introNarrative;
+            if (genArc.sceneAnchor) arcSceneInit = true;
+            console.log(`[arc_gen] emergent arc started ${genArc.id} character=${characterId} user=${req.user!.id}`);
+          }
+        }
+      } catch (e) {
+        console.warn('[arc_gen] emergent arc activation failed:', e);
+      }
+    }
+
+    if (!activeArc) {
+      const candidate = selectArc(characterId, completedArcIds, null, {
+        affinity,
+        secretDiscovered: secretAlreadyDiscovered,
+      });
+      if (candidate) {
+        await setArcActive(req.user!.id, characterId, candidate.id);
+        activeArc = candidate;
+        arcJustStarted = true;
+        if (!candidate.isMeetArc && candidate.introNarrative?.trim()) {
+          arcIntroNarrative = candidate.introNarrative;
+        }
       }
     }
   }
@@ -1037,6 +1087,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       dturns = enforceCompanionSpeechConstraints(dturns, displayName, continuity.snapshot);
       const arcResult = arcContext ? dirOut.arc : null;
       replyChoices = dirOut.choices ?? [];
+      momentBadge = dirOut.momentBadge;
       if (dirOut.memorable) {
         recordStoryBeat(req.user!.id, characterId, { summary: dirOut.memorable, source: 'memorable' });
       }
@@ -1237,6 +1288,19 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
           key: 'beat:contact_swap',
           title: 'Numbers Exchanged',
           description: `You and ${displayName} swapped contact info.`,
+          tone: 'light',
+        });
+        if (a) newAchievements.push(a);
+      }
+      // Absurd/wild "Dwarf Fortress"-style moment the director flagged this turn.
+      if (momentBadge) {
+        const slug =
+          momentBadge.title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 48) || 'moment';
+        const a = await recordAchievement(req.user!.id, characterId, {
+          kind: 'beat',
+          key: `moment:${slug}`,
+          title: momentBadge.title,
+          description: momentBadge.description,
           tone: 'light',
         });
         if (a) newAchievements.push(a);

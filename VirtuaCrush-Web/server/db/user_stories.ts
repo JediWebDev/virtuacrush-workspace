@@ -17,6 +17,8 @@ export interface UserStory {
   creatorName: string | null;
   sourceId: string | null;
   copyCount: number;
+  /** 'user' = player-authored in Studio; 'generated' = emergent LLM arc. */
+  source: 'user' | 'generated';
   createdAt: string;
 }
 
@@ -24,7 +26,7 @@ interface Row {
   id: number; owner_user_id: string; character_id: string; title: string; blurb: string;
   format: string; spec: Record<string, unknown>; visibility: string; moderation_status: string;
   moderation_reason: string | null; creator_name: string | null; source_id: string | number | null;
-  copy_count: number | null; created_at: string;
+  copy_count: number | null; source: string | null; created_at: string;
 }
 
 function rowToStory(r: Row): UserStory {
@@ -42,6 +44,7 @@ function rowToStory(r: Row): UserStory {
     creatorName: r.creator_name ?? null,
     sourceId: r.source_id != null ? String(r.source_id) : null,
     copyCount: r.copy_count ?? 0,
+    source: (r.source as 'user' | 'generated') ?? 'user',
     createdAt: r.created_at,
   };
 }
@@ -63,15 +66,35 @@ export async function createUserStory(p: {
   return rowToStory(rows[0]!);
 }
 
-/** A user's own stories, optionally filtered to one character, newest first. */
+/** A user's own AUTHORED stories (Studio list), optionally filtered to one
+ *  character, newest first. Emergent generated arcs are excluded. */
 export async function listUserStories(ownerUserId: string, characterId?: string): Promise<UserStory[]> {
   const { rows } = await pool.query<Row>(
     `SELECT * FROM user_stories
-      WHERE owner_user_id = $1 ${characterId ? 'AND character_id = $2' : ''}
+      WHERE owner_user_id = $1 AND source = 'user' ${characterId ? 'AND character_id = $2' : ''}
       ORDER BY created_at DESC`,
     characterId ? [ownerUserId, characterId] : [ownerUserId],
   );
   return rows.map(rowToStory);
+}
+
+/** Persists a system-generated emergent arc (private, kept out of the Studio
+ *  list). Returns the stored story so it can be activated as `user:<id>`. */
+export async function createGeneratedArc(p: {
+  ownerUserId: string;
+  characterId: string;
+  title: string;
+  blurb: string;
+  spec: Record<string, unknown>;
+}): Promise<UserStory> {
+  const { rows } = await pool.query<Row>(
+    `INSERT INTO user_stories
+       (owner_user_id, character_id, title, blurb, format, spec, source, visibility, moderation_status)
+     VALUES ($1, $2, $3, $4, 'arc', $5::jsonb, 'generated', 'private', 'approved')
+     RETURNING *`,
+    [p.ownerUserId, p.characterId, p.title.slice(0, 120), p.blurb.slice(0, 400), JSON.stringify(p.spec)],
+  );
+  return rowToStory(rows[0]!);
 }
 
 export async function getUserStory(id: string): Promise<UserStory | null> {

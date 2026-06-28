@@ -137,3 +137,26 @@ export async function getCompletedArcIds(
   );
   return new Set(res.rows.map((r) => r.arc_id));
 }
+
+// ---------------------------------------------------------------------------
+// Emergent arc generation cooldown (per user/character)
+// ---------------------------------------------------------------------------
+
+/** When we last ATTEMPTED to generate an emergent arc, or null if never. */
+export async function getLastEmergentArcAt(userId: string, characterId: string): Promise<Date | null> {
+  const { rows } = await pool.query<{ last_emergent_arc_at: Date | null }>(
+    `SELECT last_emergent_arc_at FROM character_state WHERE user_id = $1 AND character_id = $2`,
+    [userId, characterId],
+  );
+  return rows[0]?.last_emergent_arc_at ?? null;
+}
+
+/** Records an emergent-arc generation attempt (success OR skip) for cooldown. */
+export async function markEmergentArcAttempt(userId: string, characterId: string): Promise<void> {
+  await ensureCharacterStateRow(userId, characterId);
+  await pool.query(
+    `UPDATE character_state SET last_emergent_arc_at = NOW(), updated_at = NOW()
+     WHERE user_id = $1 AND character_id = $2`,
+    [userId, characterId],
+  );
+}

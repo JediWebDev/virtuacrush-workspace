@@ -80,6 +80,9 @@ export interface DirectorOutput {
   sceneSnapshotPatch: SceneSnapshotPatch | null;
   /** A durable beat worth remembering across sessions, or null for most turns. */
   memorable: string | null;
+  /** A rare, shareable "wild moment" badge the director may coin for absurd/
+   *  hilarious beats — recorded as an achievement. Null on ordinary turns. */
+  momentBadge: { title: string; description: string } | null;
 }
 
 const MAX_HISTORY_TURNS = 14;
@@ -200,8 +203,8 @@ PACING: ${stage.arcContext.isMeetArc
   const intentField =
     `"intent": { "type": "<social|romance|transaction|movement|conflict|work|observation>", "subtype": "<short label>", "target": "<npc id, venue, or omit>", "magnitude": "<modest|big|lavish or omit>" }`;
   const outputSchema = stage.arcContext
-    ? `JSON: { ${intentField}, "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable", "arcStatus", "earnedBadge" }`
-    : `JSON: { ${intentField}, "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable" }`;
+    ? `JSON: { ${intentField}, "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable", "momentBadge", "arcStatus", "earnedBadge" }`
+    : `JSON: { ${intentField}, "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable", "momentBadge" }`;
 
   return (
 `${stage.companionSystem}${stage.directives}${arcBlock}${sceneSoFar}
@@ -213,6 +216,7 @@ Speakers: ${stage.companionName} (speech only), narrator (actions/scene), ${stag
 Include ≥1 "${stage.companionName}" line. Keep lines short. Output JSON only.
 Choices: 2–3 PLAYER tap-messages (first person / *actions*), never "${stage.companionName}" lines.${stage.playerName ? ` Player: "${stage.playerName}".` : ''}
 Return sceneSnapshot with current location, present, player mobility/voice, companion mobility/voice (persist until cleared).
+momentBadge (OPTIONAL, RARE): include { "title", "description" } ONLY if something genuinely absurd, hilarious, or wild just happened — the kind of moment a player would screenshot and share. Give it a punchy, funny achievement name. Omit it entirely on ordinary turns.
 
 ${turns ? turns + '\n' : ''}${stage.chaosDirective?.trim() ? `${stage.chaosDirective.trim()}\n` : ''}User: ${stage.userMessage}
 
@@ -334,6 +338,7 @@ export function parseDirectorOutput(raw: string, companionName: string): Directo
   let sceneState = '';
   let sceneSnapshotPatch: SceneSnapshotPatch | null = null;
   let memorable: string | null = null;
+  let momentBadge: { title: string; description: string } | null = null;
 
   const start = text.indexOf('{');
   if (start >= 0) {
@@ -351,6 +356,12 @@ export function parseDirectorOutput(raw: string, companionName: string): Directo
         if ('sceneState' in obj) sceneState = cleanField(obj.sceneState).slice(0, 1200);
         if ('sceneSnapshot' in obj) sceneSnapshotPatch = parseSceneSnapshotPatch(obj.sceneSnapshot);
         if ('memorable' in obj) { const m = cleanField(obj.memorable); memorable = m ? m.slice(0, 300) : null; }
+        if (obj.momentBadge && typeof obj.momentBadge === 'object') {
+          const mb = obj.momentBadge as { title?: unknown; description?: unknown };
+          if (typeof mb.title === 'string' && mb.title.trim() && typeof mb.description === 'string' && mb.description.trim()) {
+            momentBadge = { title: mb.title.trim().slice(0, 80), description: mb.description.trim().slice(0, 200) };
+          }
+        }
         const status = typeof obj.arcStatus === 'string' ? obj.arcStatus : null;
         if (status && VALID_ARC_STATUSES.has(status)) {
           const badge = obj.earnedBadge && typeof obj.earnedBadge === 'object'
@@ -374,7 +385,7 @@ export function parseDirectorOutput(raw: string, companionName: string): Directo
     .filter((t) => t.speaker.toLowerCase() === companionName.toLowerCase())
     .map((t) => t.text);
   choices = sanitizeReplyChoices(choices, companionName, companionLines);
-  return { intent, turns, arc, choices, sceneState, sceneSnapshotPatch, memorable };
+  return { intent, turns, arc, choices, sceneState, sceneSnapshotPatch, memorable, momentBadge };
 }
 
 /** Renders ordered turns into the canonical tagged transcript the UI reads. */
