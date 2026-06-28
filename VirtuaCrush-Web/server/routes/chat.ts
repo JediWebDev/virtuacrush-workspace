@@ -424,6 +424,10 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     (npcStateMap[characterId]?.knowledge as Record<string, unknown> | undefined)?.secretDiscovered,
   );
 
+  // Resolved early because emergent arc generation (below) needs it.
+  let displayName = characterId;
+  try { displayName = getCharacter(characterId).displayName; } catch { /* unknown id */ }
+
   let arcContext: ArcContext | undefined;
   let arcJustStarted = false;
   let arcSceneInit = false;
@@ -564,9 +568,6 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       }
     }
   }
-  let displayName = characterId;
-  try { displayName = getCharacter(characterId).displayName; } catch { /* unknown id */ }
-
   const scene = situation.scene;
 
   let directorPrompt: string | undefined;
