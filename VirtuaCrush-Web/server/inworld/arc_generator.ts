@@ -13,6 +13,9 @@ export interface EmergentArcInput {
   affinity: number;
   history: { role: 'user' | 'assistant'; content: string }[];
   recentBeats?: string[];
+  /** For custom (player-created) companions with no authored lore: their persona
+   *  text. When set, the generator infers fit from this instead of getLore(). */
+  personaCore?: string;
 }
 
 export interface GeneratedArc {
@@ -52,7 +55,6 @@ const NARRATIVE_TAGS =
   'romance, friendship, conflict, trust, jealousy, work, family, health, money, social, stress, growth, isolation, stability, chaos';
 
 function buildPrompt(input: EmergentArcInput): string {
-  const lore = getLore(input.characterId);
   const name = input.displayName;
   const transcript = input.history
     .slice(-12)
@@ -60,17 +62,32 @@ function buildPrompt(input: EmergentArcInput): string {
     .join('\n');
   const beats = (input.recentBeats ?? []).slice(-6).map((b) => `- ${b}`).join('\n');
 
-  return (
-`You are a story designer for a relationship sim. Propose a SHORT, in-character story arc ONLY if the recent conversation creates a natural opportunity that genuinely fits this companion.
-
-COMPANION: ${name}
+  // Built-in characters use authored lore; custom (player-created) companions
+  // have no lore, so we feed their persona text and let the model infer fit.
+  let companionBlock: string;
+  if (input.personaCore && input.personaCore.trim()) {
+    companionBlock =
+`COMPANION: ${name}
+${input.personaCore.trim()}
+Current closeness with the player: ${Math.round(input.affinity)}/100.
+(Infer this companion's goals, fears, desires, and which activities suit them from the description above when judging fit.)`;
+  } else {
+    const lore = getLore(input.characterId);
+    companionBlock =
+`COMPANION: ${name}
 Personality: ${lore.personality}
 Goal: ${lore.goal}
 Fears: ${lore.fears}
 Desires: ${lore.desires.join(', ')}
 Voice: ${lore.voice}
 Logistics: ${lore.hasCar ? 'has a car' : 'no car'}; ${lore.transport}. Ideal dates: ${lore.datePreference}.
-Current closeness with the player: ${Math.round(input.affinity)}/100.
+Current closeness with the player: ${Math.round(input.affinity)}/100.`;
+  }
+
+  return (
+`You are a story designer for a relationship sim. Propose a SHORT, in-character story arc ONLY if the recent conversation creates a natural opportunity that genuinely fits this companion.
+
+${companionBlock}
 
 RECENT CONVERSATION (newest last):
 ${transcript || '(not much yet)'}

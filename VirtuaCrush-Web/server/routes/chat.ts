@@ -480,12 +480,18 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     ) {
       await markEmergentArcAttempt(req.user!.id, characterId);
       try {
+        // Custom companions have no authored lore — feed their persona text so
+        // emergent arcs fit them too (strip the shared RULES + the secret block).
+        const personaCore = isUserCharacter(characterId)
+          ? getCharacter(characterId).systemPrompt.split('\n\nRULES:')[0].split('\n\nSECRET:')[0].trim()
+          : undefined;
         const gen = await generateEmergentArc({
           characterId,
           displayName,
           affinity,
           history: turns,
           recentBeats: storyBeats.map((b) => b.summary),
+          personaCore,
         });
         if (gen) {
           const story = await createGeneratedArc({
