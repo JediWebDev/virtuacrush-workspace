@@ -184,6 +184,7 @@ export const CHARACTER_STYLE: Record<string, StyleArchetype> = {
   lin: 'cozy_casual',
   iris: 'polished_chic',
   ash: 'rugged_casual',
+  reina: 'polished_chic',
 };
 
 export function styleFor(characterId: string): StyleArchetype {
@@ -276,6 +277,8 @@ export const MEET_HOOK_BY_CHARACTER: Record<string, string> = {
     "ECLIPSE's latest single is playing over the speakers of a busy mall clothing store. Half-hidden behind a rack of shirts with his cap pulled low, Seo-Jun glances up as you pass -- and doesn't look away.",
   bohdi:
     "On the dock before a sunset charter, Bohdi spots you hanging back from the group and ambles over, grin first, hand already out.",
+  reina:
+    "Past closing, you push into a small lantern-lit izakaya. Reina, the owner, looks up from wiping the counter, reads the skipped-dinner look on you in a second, and nods you toward a stool instead of the door.",
 };
 
 // --- Pronoun system -----------------------------------------------------------

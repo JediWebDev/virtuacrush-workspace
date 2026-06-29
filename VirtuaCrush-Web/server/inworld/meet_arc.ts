@@ -45,6 +45,7 @@ const MEET_BADGES: Record<string, { title: string; description: string }> = {
   ash: { title: 'Layover Connection', description: 'Ash helped you find your way — and you found each other.' },
   seojun: { title: 'Off the Record', description: 'You met Seo-Jun incognito between the racks — and he was the one who asked about you.' },
   bohdi: { title: 'First Mate', description: 'Bohdi pulled you out onto the water — and you said yes to the swell.' },
+  reina: { title: "Kitchen's Still Open", description: 'Reina fed you, read you, and you let her — rarer than she lets on.' },
 };
 
 export function defaultMeetBadge(arc: StoryArc): { title: string; description: string } {

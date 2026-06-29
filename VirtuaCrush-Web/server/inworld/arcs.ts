@@ -599,6 +599,51 @@ const ARCS: StoryArc[] = [
     ],
   },
 
+  // === REINA — late-night izakaya, kitchen technically closed ================
+  {
+    id: 'reina_meet',
+    characterId: 'reina',
+    isMeetArc: true,
+    sceneAnchor: {
+      setting: 'a snug, lantern-lit izakaya late in the evening, just past the posted closing time',
+      situation:
+        "You and the player are PHYSICALLY IN THE SAME SPACE — inside Reina's small izakaya. You own the place; the kitchen is technically closed, but you clocked the player wandering in looking worn out and hungry and waved them to a seat at the counter. Do NOT say you are at home or texting remotely. This is a real-space, in-person encounter.",
+      coPresent: true,
+    },
+    tone: 'romantic',
+    rarity: 'common',
+    repeatable: false,
+    arcTags: ['romance', 'trust', 'friendship'],
+    npcs: [
+      {
+        name: 'Last Regular',
+        stance: 'bystander',
+        roleId: 'shop_clerk',
+        description: 'A sleepy regular nursing the last of a drink at the far end of the bar, settling their tab and drifting out as the night winds down.',
+      },
+    ],
+    introNarrative:
+      "The lanterns outside are half-dimmed and the sign's been flipped, but the door gives when you push it. Inside it's warm and smells like grilled skewers and citrus. A woman behind the counter looks up from wiping it down — takes you in for exactly one second, the skipped-dinner look, the worn edges — and tips her head toward an empty stool instead of telling you they're closed.",
+    npcInstruction:
+      "ARC — FIRST MEETING (your izakaya, after closing): You run this place and you can read a person before they sit down. This one walked in looking worn out and hungry, and you are not about to turn them away. Take care of them first — a seat, something warm, a drink — and let the conversation come out sideways while they eat. Tease them gently, the way an older sister would; find out what actually brought them in this late. Complete the arc when: you have traded names and gotten one honest thing out of them about why they really wandered in tonight.",
+    phaseInstructions: meetPhaseInstructions({
+      beginning:
+        "Wave off that you're closed — sit them down, put something warm in front of them. Warm, unhurried, lightly teasing. Get their name while they settle.",
+      middle:
+        "Let them eat and let the real talk come out sideways. Tease gently, notice what they are not saying, draw it out without pushing.",
+      end:
+        "Land on the honest thing — why they really came in tonight. Let them see you caught it, and that the door is open to them again.",
+    }),
+    completionCriteria:
+      "Reina and the player have exchanged names and Reina has drawn out one genuine thing about why the player really wandered in this late — not 'I was hungry,' but the real reason underneath.",
+    completionExamples: [
+      "Player admits they just didn't want to go home to an empty place tonight",
+      "Player gives a breezy answer and Reina raises an eyebrow until they tell her the real one",
+      "Player asks about the izakaya and Reina shares a little — and they trade something real back",
+      "Player thanks her, gives their name, and asks if they can come back tomorrow",
+    ],
+  },
+
   // =========================================================================
   // REGULAR ARCS — unlocked after the meet arc completes
   // =========================================================================
