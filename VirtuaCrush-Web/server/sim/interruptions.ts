@@ -21,6 +21,9 @@ interface ChaosEventSpec {
   /** 'home' = remote/at-home scenes, 'any' = all scenes including venues. */
   phase: 'home' | 'any';
   requiresFriend?: boolean;
+  /** Only fire when the scene has a real, established enemy/rival NPC. Prevents a
+   *  "rival or ex" being conjured from nowhere with no actual character behind it. */
+  requiresRival?: boolean;
   tags: NarrativeTag[];
   directive: (name: string, friend: string, pro: Pronouns) => string;
   residue?: (name: string, friend: string, pro: Pronouns) => string;
@@ -62,6 +65,7 @@ const NPC_EVENTS: ChaosEventSpec[] = [
     poolId: 'rival_steps_in',
     kind: 'npc_event',
     phase: 'any',
+    requiresRival: true,
     tags: ['jealousy', 'conflict', 'chaos'],
     directive: (n, f, pro) =>
       `A rival or ex — someone with obvious romantic or competitive history — enters or calls in with hostile energy aimed at the player. ` +
@@ -173,12 +177,21 @@ export interface PlanOpts {
   phase: 'home' | 'any';
   hasFriend: boolean;
   firstMeeting: boolean;
+  /** True only when a genuine enemy/rival NPC is present in the scene. Defaults to
+   *  off, so rival confrontations never spawn without an actual rival behind them. */
+  hasRival?: boolean;
+}
+
+function specEligible(s: ChaosEventSpec, opts: Pick<PlanOpts, 'phase' | 'hasFriend' | 'hasRival'>): boolean {
+  return (
+    (s.phase === 'any' || s.phase === opts.phase) &&
+    (!s.requiresFriend || opts.hasFriend) &&
+    (!s.requiresRival || Boolean(opts.hasRival))
+  );
 }
 
 function pickSpec(pool: ChaosEventSpec[], opts: PlanOpts, r: () => number): ChaosEventSpec | null {
-  const ok = pool.filter(
-    (s) => (s.phase === 'any' || s.phase === opts.phase) && (!s.requiresFriend || opts.hasFriend),
-  );
+  const ok = pool.filter((s) => specEligible(s, opts));
   return ok.length ? pickFrom(ok, r) : null;
 }
 
@@ -245,16 +258,12 @@ export function rerollUnfiredDisruptions(
   disruptions: PlannedDisruption[],
   firedIds: Set<string>,
   arcTags: NarrativeTag[],
-  opts: Pick<PlanOpts, 'phase' | 'hasFriend'>,
+  opts: Pick<PlanOpts, 'phase' | 'hasFriend' | 'hasRival'>,
 ): PlannedDisruption[] {
   return disruptions.map((d) => {
     if (firedIds.has(d.id)) return d;
     const kind = d.kind;
-    const pool = (kind === 'disaster' ? DISASTERS : NPC_EVENTS).filter(
-      (s) =>
-        (s.phase === 'any' || s.phase === opts.phase) &&
-        (!s.requiresFriend || opts.hasFriend),
-    );
+    const pool = (kind === 'disaster' ? DISASTERS : NPC_EVENTS).filter((s) => specEligible(s, opts));
     if (pool.length === 0) return d;
     const totalWeight = pool.reduce((sum, s) => {
       const overlap = s.tags.filter((t) => arcTags.includes(t)).length;
@@ -288,9 +297,7 @@ export function pickEphemeralChaosEvent(
   opts: PlanOpts,
   allowDisasters = true,
 ): ChaosEventSpec | null {
-  const pool = (allowDisasters ? ALL_SPECS : NPC_EVENTS).filter(
-    (s) => (s.phase === 'any' || s.phase === opts.phase) && (!s.requiresFriend || opts.hasFriend),
-  );
+  const pool = (allowDisasters ? ALL_SPECS : NPC_EVENTS).filter((s) => specEligible(s, opts));
   if (!pool.length) return null;
   if (!allowDisasters) return pickFrom(pool, r);
   if (r() < 0.9) {

@@ -105,6 +105,24 @@ export async function markDisruptionFired(
   );
 }
 
+/** Stamps the scene turn on which chaos last fired, powering the cooldown. */
+export async function setLastChaosTurn(
+  userId: string,
+  characterId: string,
+  turn: number,
+): Promise<void> {
+  await pool.query(
+    `UPDATE character_state
+       SET scene_composition = jsonb_set(
+         COALESCE(scene_composition, '{}'::jsonb),
+         '{lastChaosTurn}',
+         to_jsonb($3::int)
+       )
+     WHERE user_id = $1 AND character_id = $2`,
+    [userId, characterId, turn],
+  );
+}
+
 /** Records schema-driven NPC chaos so the same disruptor does not fire twice per scene. */
 export async function markNpcChaosFired(
   userId: string,

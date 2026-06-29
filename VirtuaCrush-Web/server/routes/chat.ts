@@ -94,7 +94,7 @@ import {
 } from '../sim/emotions';
 import { getSituation, setMood } from '../db/state';
 import { moodShiftForIntent } from '../sim/vitals';
-import { getOrComposeScene, renderSceneHeader, renderSceneFactsBlock, markDisruptionFired, markNpcChaosFired } from '../db/scene_composition';
+import { getOrComposeScene, renderSceneHeader, renderSceneFactsBlock, markDisruptionFired, markNpcChaosFired, setLastChaosTurn } from '../db/scene_composition';
 import type { SceneCastMember } from '../sim/scene_composer';
 import {
   rerollUnfiredDisruptions,
@@ -585,6 +585,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
   let emotions: EmotionState | undefined;
   let firedDisruption: PlannedDisruption | null = null;
   let firedNpcChaosKey: string | null = null;
+  let chaosFiredTurn: number | null = null;
   let chaosResidues: string[] = [];
   let chaosHint: ChaosUiHint | null = null;
   let newPendingEvent: DriveEventCard | undefined;
@@ -633,7 +634,11 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
             sceneComp.disruptions ?? [],
             firedIds,
             activeArc.arcTags,
-            { phase: 'home', hasFriend: (sceneComp.cast ?? []).length > 0 },
+            {
+              phase: 'home',
+              hasFriend: (sceneComp.cast ?? []).length > 0,
+              hasRival: (activeArc.npcs ?? []).some((n) => n.stance === 'enemy'),
+            },
           );
           void pool.query(
             `UPDATE character_state
@@ -706,6 +711,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       coPresent: priorSceneSnapshot?.coPresent ?? !!situation.scene.location,
       suppressAmbientDisruptions: isCrisisScene(priorSceneSnapshot, turns, message),
       suppressEnvironmentalChaos: shouldSuppressEnvironmentalChaos(priorSceneSnapshot, turns, message),
+      lastChaosTurn: sceneComp?.lastChaosTurn,
     });
     const worldEvent = detectWorldEvent(message);
     const chaos = planChaosTurn(sceneCtx, { worldEvent });
@@ -713,6 +719,8 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
     firedDisruption = chaos.firedDisruption;
     firedNpcChaosKey = chaos.firedNpcChaosKey;
     chaosResidues = chaos.residues;
+    // Stamp the cooldown only when a real chaos beat actually landed this turn.
+    if (chaos.directiveBlock.trim() && !worldEvent) chaosFiredTurn = sceneTurn;
     for (const extra of chaosRequiredActors(chaos, characterId, resolvedSceneNpcs)) {
       if (!npcs.some((a) => a.tag === extra.tag)) {
         npcs.push({ tag: extra.tag, name: extra.name, kind: 'npc', brief: extra.brief });
@@ -1220,6 +1228,9 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       }
       if (firedNpcChaosKey) {
         void markNpcChaosFired(req.user!.id, characterId, firedNpcChaosKey).catch(() => {});
+      }
+      if (chaosFiredTurn != null) {
+        void setLastChaosTurn(req.user!.id, characterId, chaosFiredTurn).catch(() => {});
       }
       for (const residue of chaosResidues) {
         recordStoryBeat(req.user!.id, characterId, { summary: residue, source: 'disruption' });

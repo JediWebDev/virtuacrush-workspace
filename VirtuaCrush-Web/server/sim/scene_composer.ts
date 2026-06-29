@@ -61,6 +61,8 @@ export interface SceneComposition {
   firedDisruptions?: string[];
   /** NPC names (lowercase) that already fired schema-driven chaos this scene. */
   firedNpcChaos?: string[];
+  /** Scene turn on which chaos last fired — drives the cross-turn chaos cooldown. */
+  lastChaosTurn?: number;
 }
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];

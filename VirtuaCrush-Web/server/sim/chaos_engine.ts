@@ -47,7 +47,12 @@ export interface ChaosExtraActor {
 
 const NPC_CHAOS_MIN_TURN = 3;
 const EPHEMERAL_MIN_TURN = 4;
-const EPHEMERAL_CHANCE = 0.14;
+const EPHEMERAL_CHANCE = 0.08;
+
+/** Minimum turns between any two ambient/random chaos beats. Player-triggered
+ *  world events (crime/mischief) bypass this — they are direct reactions. The
+ *  cooldown only applies when the caller supplies ctx.lastChaosTurn. */
+const CHAOS_COOLDOWN_TURNS = 4;
 
 const CHAOS_MANDATORY =
   'MANDATORY: The companion MUST react on-screen this turn. Do not ignore, deflect, or continue as if nothing happened.';
@@ -172,15 +177,11 @@ export function chaosRequiredActors(
   }
 
   if (poolId === 'rival_steps_in') {
+    // Only register a real, named enemy NPC. Never force a generic "Rival"
+    // placeholder — rival_steps_in is gated on an actual rival existing, so if
+    // none is resolved we simply add no required speaker.
     const rival = resolvedNpcs.find((n) => n.stance === 'enemy');
     if (rival) pushNpc(rival);
-    else {
-      out.push({
-        tag: 'RIVAL',
-        name: 'Rival',
-        brief: '[enemy] A rival or ex with obvious hostility toward the player.',
-      });
-    }
   }
 
   if (poolId === 'bystander_callout') {
@@ -242,17 +243,19 @@ function pickSchemaNpcChaos(
   if (!pool.length) return null;
   const pick = weightedPick(pool, ctx.arcTags, r);
   if (!pick) return null;
-  const chance = Math.min(0.65, 0.3 + pick.chaosWeight * 0.4) * intensity;
+  const chance = Math.min(0.45, 0.18 + pick.chaosWeight * 0.35) * intensity;
   return r() < chance ? pick : null;
 }
 
-function chaosPlanOpts(ctx: SceneContext): { phase: 'home' | 'any'; hasFriend: boolean; firstMeeting: boolean } {
+function chaosPlanOpts(ctx: SceneContext): { phase: 'home' | 'any'; hasFriend: boolean; firstMeeting: boolean; hasRival: boolean } {
   const hasFriend = ctx.resolvedNpcs.some((n) => n.stance === 'friend')
     || Boolean(ctx.composition?.cast.length);
+  const hasRival = ctx.resolvedNpcs.some((n) => n.stance === 'enemy');
   return {
     phase: ctx.coPresent ? 'any' : 'home',
     hasFriend,
     firstMeeting: Boolean(ctx.composition?.firstMeeting),
+    hasRival,
   };
 }
 
@@ -295,6 +298,16 @@ export function planChaosTurn(ctx: SceneContext, opts: PlanChaosOpts = {}): Chao
         residues: [],
       };
     }
+  }
+
+  // Cooldown: suppress ambient/random chaos for a few turns after the last beat
+  // so derailments don't pile up turn-after-turn. Only active when the caller
+  // tracks lastChaosTurn; scheduled, NPC, and ephemeral chaos all respect it.
+  if (
+    ctx.lastChaosTurn != null &&
+    ctx.turn - ctx.lastChaosTurn < CHAOS_COOLDOWN_TURNS
+  ) {
+    return { directiveBlock: '', firedDisruption: null, firedNpcChaosKey: null, agencyActions: [], residues: [] };
   }
 
   let agencyActions: NpcAction[] = [];

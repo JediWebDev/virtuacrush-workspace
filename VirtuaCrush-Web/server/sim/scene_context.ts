@@ -25,6 +25,8 @@ export interface SceneContext {
   suppressEnvironmentalChaos: boolean;
   coPresent: boolean;
   firedNpcChaos: string[];
+  /** Scene turn on which chaos last fired — drives the chaos cooldown. */
+  lastChaosTurn?: number;
 }
 
 export interface BuildSceneContextInput {
@@ -44,6 +46,8 @@ export interface BuildSceneContextInput {
   suppressEnvironmentalChaos?: boolean;
   /** NPC chaos keys already fired this scene/session. */
   firedNpcChaos?: string[];
+  /** Scene turn on which chaos last fired (for the cooldown). */
+  lastChaosTurn?: number;
 }
 
 export function buildSceneContext(input: BuildSceneContextInput): SceneContext {
@@ -53,6 +57,7 @@ export function buildSceneContext(input: BuildSceneContextInput): SceneContext {
   const suppressAmbientDisruptions = input.suppressAmbientDisruptions ?? false;
   const suppressEnvironmentalChaos = input.suppressEnvironmentalChaos ?? suppressAmbientDisruptions;
   const firedNpcChaos = input.firedNpcChaos ?? input.composition?.firedNpcChaos ?? [];
+  const lastChaosTurn = input.lastChaosTurn ?? input.composition?.lastChaosTurn;
   return {
     mode: input.mode ?? (input.activeArc ? 'arc' : 'freeRoam'),
     world: input.world,
@@ -67,5 +72,6 @@ export function buildSceneContext(input: BuildSceneContextInput): SceneContext {
     suppressEnvironmentalChaos,
     coPresent,
     firedNpcChaos,
+    lastChaosTurn,
   };
 }
