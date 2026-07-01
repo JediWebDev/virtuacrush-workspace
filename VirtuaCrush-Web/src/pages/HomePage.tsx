@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Sparkles, Check } from "lucide-react";
+import { Sparkles, Check, MessageCircleHeart } from "lucide-react";
 import { CHARACTERS, Character } from "../types/character";
 import { matchesCharacterName, SPOTLIGHT_CHARS, type UserTier } from "../types/subscription";
 import CompanionCard from "../components/CompanionCard";
@@ -47,7 +47,6 @@ const PRICING_TIERS = [
     features: [
       "Limited chats",
       "Social feed previews",
-      "Censored chat",
       "Limited character selections",
     ],
   },
@@ -95,7 +94,7 @@ export default function HomePage({ onSelect, userTier }: HomePageProps) {
                 to="/characters"
                 className="flex items-center gap-2 rounded-2xl bg-accent px-8 py-4 font-semibold text-white shadow-lg shadow-accent/25 transition-all hover:bg-accent-deep active:scale-95"
               >
-                <Sparkles size={18} />
+                <MessageCircleHeart size={18} />
                 Try Now
               </Link>
               <a
