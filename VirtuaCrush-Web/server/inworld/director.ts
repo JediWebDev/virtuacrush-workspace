@@ -216,7 +216,7 @@ PACING: ${stage.arcContext.isMeetArc
     `"intent": { "type": "<social|romance|transaction|movement|conflict|work|observation>", "subtype": "<short label>", "target": "<npc id, venue, or omit>", "magnitude": "<modest|big|lavish or omit>" }`;
   const skillCheckField = resolutionMode
     ? ''
-    : `, "skillCheck": { "required": <true|false>, "action": "<the player's attempt, in their voice>", "difficulty": "<trivial|easy|medium|hard|formidable>", "reason": "<why a roll, ≤6 words>" }`;
+    : `, "skillCheck": { "required": <true|false>, "action": "<the player's attempt, in their voice>", "difficulty": "<trivial|easy|medium|hard|formidable>", "reason": "<why a roll, ≤6 words>", "prompt": "<the Dungeon Master speaking straight to the player: react to the attempt and call for the roll, naming the exact target number>" }`;
   const outputSchema = stage.arcContext
     ? `JSON: { ${intentField}, "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable", "momentBadge"${skillCheckField}, "arcStatus", "earnedBadge" }`
     : `JSON: { ${intentField}, "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable", "momentBadge"${skillCheckField} }`;
@@ -224,7 +224,7 @@ PACING: ${stage.arcContext.isMeetArc
   const skillCheckRules = resolutionMode
     ? ''
     : `
-DUNGEON MASTER — SKILL CHECKS: If the player's last action is genuinely uncertain, risky, physically improbable, absurd, or yanks the story in a wild new direction, act like a tabletop DM. Have ${stage.companionName}/narrator react and set the moment up, but DO NOT resolve whether it works — set "skillCheck" with a short "action" (their attempt) and a "difficulty" (trivial=almost certain … formidable=near-impossible). Leave the outcome hanging for the dice. For ordinary, safe, emotional, or purely conversational actions, OMIT skillCheck (or set required:false). Never demand a roll for normal dialogue or feelings.`;
+DUNGEON MASTER — SKILL CHECKS: If the player's last action is genuinely uncertain, risky, physically improbable, absurd, or yanks the story in a wild new direction, act like a tabletop DM. Have ${stage.companionName}/narrator react and set the moment up, but DO NOT resolve whether it works — set "skillCheck". Fill "action" (their attempt) and "difficulty", where each tier maps to a target number: trivial=5, easy=8, medium=12, hard=16, formidable=19. Also write "prompt": the Dungeon Master's own voice speaking DIRECTLY to the player (second person, punchy, a little theatrical) — react to the wild attempt and call for the roll, naming the exact target number, e.g. "So you can suddenly fly? Bold. Give me a d20 — beat a 16 or gravity wins." Leave the outcome hanging for the dice. For ordinary, safe, emotional, or purely conversational actions, OMIT skillCheck (or set required:false). Never demand a roll for normal dialogue or feelings.`;
 
   return (
 `${stage.companionSystem}${stage.directives}${arcBlock}${sceneSoFar}

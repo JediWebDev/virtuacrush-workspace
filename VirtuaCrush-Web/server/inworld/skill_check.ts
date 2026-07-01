@@ -33,6 +33,10 @@ export interface SkillCheck {
   dc: number;
   /** Optional one-line reason the DM called for a roll (flavor). */
   reason: string;
+  /** The DM's in-character line spoken directly TO the player, calling for the
+   *  roll (second person, theatrical). Empty if the model didn't provide one —
+   *  dmChallengeLine() falls back to a deterministic phrasing. */
+  prompt: string;
 }
 
 /** The resolved result of a d20 roll against a check. */
@@ -77,7 +81,24 @@ export function parseSkillCheck(raw: unknown): SkillCheck | null {
     difficulty,
     dc: DC_BY_DIFFICULTY[difficulty],
     reason: asStr(o.reason).slice(0, 200),
+    prompt: asStr(o.prompt).slice(0, 400),
   };
+}
+
+/**
+ * The Dungeon Master's spoken challenge, addressed straight at the player. Uses
+ * the model's flavor line when present; otherwise falls back to a deterministic
+ * phrasing that always states the correct target number. Guarantees the exact
+ * DC is mentioned so it can never drift from the dice card.
+ */
+export function dmChallengeLine(check: SkillCheck): string {
+  const flavor = check.prompt?.trim();
+  const mechanic = `Roll a d20 — you need a ${check.dc} or higher.`;
+  if (flavor) {
+    // Ensure the exact target appears even if the model omitted or fudged it.
+    return new RegExp(`\\b${check.dc}\\b`).test(flavor) ? flavor : `${flavor} ${mechanic}`;
+  }
+  return `So you're trying to ${check.action}? ${mechanic}`;
 }
 
 /** Clamps an arbitrary number to a valid d20 face (1–20); NaN -> 1. */

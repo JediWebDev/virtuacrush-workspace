@@ -6,6 +6,7 @@ import {
   resolveRoll,
   clampD20,
   formatRollResolutionDirective,
+  dmChallengeLine,
   DC_BY_DIFFICULTY,
 } from './skill_check';
 import { parseDirectorOutput, buildDirectorPrompt } from './director';
@@ -51,6 +52,19 @@ test('parseRollRequest validates payload and resolves engine-side', () => {
   assert.equal(parseRollRequest({ action: '', value: 10, dc: 12 }), null);
   assert.equal(parseRollRequest({ action: 'x', value: 'a', dc: 12 }), null);
   assert.equal(parseRollRequest(undefined), null);
+});
+
+test('dmChallengeLine uses model flavor but guarantees the target number', () => {
+  const base = parseSkillCheck({ action: 'fly like a superhero', difficulty: 'hard', prompt: 'So you can fly now? Bold.' })!;
+  // Flavor lacked the number, so the mechanic clause is appended with the real DC (16).
+  assert.match(dmChallengeLine(base), /So you can fly now\?/);
+  assert.match(dmChallengeLine(base), /\b16\b/);
+  // Flavor that already states the number is used verbatim.
+  const withNum = { ...base, prompt: 'Give me a d20 — beat a 16 or gravity wins.' };
+  assert.equal(dmChallengeLine(withNum), 'Give me a d20 — beat a 16 or gravity wins.');
+  // No flavor -> deterministic fallback that names the DC.
+  const noFlavor = { ...base, prompt: '' };
+  assert.match(dmChallengeLine(noFlavor), /Roll a d20 — you need a 16 or higher\./);
 });
 
 test('resolution directive names the verdict and forbids another roll', () => {

@@ -10,7 +10,7 @@ import { requireAuth } from '../middleware/auth';
 import { enforceMessageQuota } from '../middleware/rateLimit';
 import { streamChat, completePrompt, streamPrompt, type ChatMessage } from '../inworld/chat';
 import { buildDirectorPrompt, buildDirectorPromptParts, parseDirectorOutput, parseDirectorTurns, companionTagFor, turnsToTranscript, type Actor, type ArcContext, type ReplyChoice } from '../inworld/director';
-import { parseRollRequest, formatRollResolutionDirective, type RollOutcome, type SkillCheck } from '../inworld/skill_check';
+import { parseRollRequest, formatRollResolutionDirective, dmChallengeLine, type RollOutcome, type SkillCheck } from '../inworld/skill_check';
 import { selectArc, getArc, type SceneAnchor, type StoryArc } from '../inworld/arcs';
 import { getUserStory, createGeneratedArc } from '../db/user_stories';
 import { userStoryToArc } from '../inworld/user_arc';
@@ -1149,9 +1149,12 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       }
 
       // Prepend arc intro narrative as a narrator beat on the first turn of a new arc.
+      // When a skill check fires, the Dungeon Master speaks last — directly to the
+      // player, calling for the roll — as its own labeled voice before the dice card.
       const replyTurns = [
         ...(arcIntroNarrative ? [{ speaker: 'narrator', text: arcIntroNarrative }] : []),
         ...(dturns.length ? dturns : [{ speaker: displayName, text: 'Mm — say that again? You had me for a second there.' }]),
+        ...(pendingSkillCheck ? [{ speaker: 'DUNGEON MASTER', text: dmChallengeLine(pendingSkillCheck) }] : []),
       ];
       assistantFull = sanitizeRoleplayTranscript(turnsToTranscript(replyTurns));
 
