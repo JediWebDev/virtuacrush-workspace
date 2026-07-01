@@ -12,6 +12,7 @@
 //   - quotaExceeded: true if the server returned 402 (cap hit)
 //   - stop():        abort the in-flight stream
 import { useCallback, useRef, useState } from 'react';
+import { asSkillCheck, type SkillCheck } from '../lib/dice';
 
 export type Role = 'user' | 'assistant';
 export interface Message {
@@ -48,6 +49,15 @@ export interface ChatDoneInfo {
   chaos?: { title: string; detail: string; tone: 'subtle' | 'major' };
   /** Milestones newly earned this turn — toast each. */
   achievements?: DoneAchievement[];
+  /** DM skill check the player must roll to resolve, if the narrator called one. */
+  skillCheck?: SkillCheck | null;
+}
+
+/** A d20 roll the player submits to resolve a pending skill check. */
+export interface RollInput {
+  action: string;
+  value: number;
+  dc: number;
 }
 
 interface UseChatOptions {
@@ -115,6 +125,7 @@ export function useChat({
   const [quotaExceeded, setQuotaExceeded] = useState(false);
   const [affinityScore, setAffinityScore] = useState<number | null>(null);
   const [replyChoices, setReplyChoices] = useState<ReplyChoice[]>([]);
+  const [pendingCheck, setPendingCheck] = useState<SkillCheck | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const stop = useCallback(() => {
@@ -124,23 +135,29 @@ export function useChat({
   }, []);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, roll?: RollInput) => {
       const trimmed = text.trim();
-      if (!trimmed || streaming) return;
+      if ((!trimmed && !roll) || streaming) return;
 
       setError(null);
+      // On a roll turn there's no typed message — show the same italic action
+      // beat the server persists so live and reloaded history match.
+      const userContent = roll
+        ? `*(rolls ${roll.value} vs DC ${roll.dc} attempting to ${roll.action})*`
+        : trimmed;
       const userMsg: Message = {
         id: crypto.randomUUID(),
         role: 'user',
-        content: trimmed,
+        content: userContent,
       };
       const assistantId = crypto.randomUUID();
       const assistantStub: Message = { id: assistantId, role: 'assistant', content: '' };
 
       // Optimistically add both turns. We'll fill assistantStub as chunks arrive.
       setMessages((prev) => [...prev, userMsg, assistantStub]);
-      // Clear last turn's suggestions while the next reply is generated.
+      // Clear last turn's suggestions + any pending check while we generate.
       setReplyChoices([]);
+      setPendingCheck(null);
       setStreaming(true);
 
       const controller = new AbortController();
@@ -151,12 +168,16 @@ export function useChat({
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            characterId,
-            message: trimmed,
-            // We don't send history; server loads it from DB. Saves bandwidth
-            // and ensures cross-device consistency.
-          }),
+          body: JSON.stringify(
+            roll
+              ? { characterId, message: '', roll }
+              : {
+                  characterId,
+                  message: trimmed,
+                  // We don't send history; server loads it from DB. Saves
+                  // bandwidth and ensures cross-device consistency.
+                },
+          ),
           signal: controller.signal,
         });
 
@@ -187,6 +208,7 @@ export function useChat({
             );
           } else if (evt.event === 'done') {
             const d = evt.data ?? {};
+            const check = asSkillCheck(d.skillCheck);
             // The streamed chunks are a best-effort preview; `full` is the
             // authoritative final transcript. Replace the assistant message with
             // it so any preview/final drift can't leave duplicated or garbled
@@ -211,12 +233,19 @@ export function useChat({
                     }
                   : undefined,
               achievements: Array.isArray(d.achievements) ? (d.achievements as DoneAchievement[]) : undefined,
+              skillCheck: check,
             });
             if (typeof d.affinityScore === 'number') {
               setAffinityScore(d.affinityScore);
               onAffinityUpdate?.(d.affinityScore);
             }
-            if (Array.isArray(evt.data.choices)) setReplyChoices(evt.data.choices as ReplyChoice[]);
+            // A pending check takes over the input area, so suppress choices.
+            if (check) {
+              setPendingCheck(check);
+              setReplyChoices([]);
+            } else if (Array.isArray(evt.data.choices)) {
+              setReplyChoices(evt.data.choices as ReplyChoice[]);
+            }
             if (evt.data.posted) onCharacterPosted?.();
           } else if (evt.event === 'error') {
             setError(evt.data.message ?? 'stream_error');
@@ -237,6 +266,13 @@ export function useChat({
 
   const clearQuotaFlag = useCallback(() => setQuotaExceeded(false), []);
   const clearReplyChoices = useCallback(() => setReplyChoices([]), []);
+  const clearPendingCheck = useCallback(() => setPendingCheck(null), []);
 
-  return { messages, setMessages, send, stop, streaming, error, quotaExceeded, clearQuotaFlag, affinityScore, replyChoices, clearReplyChoices };
+  /** Resolve a pending skill check by submitting the rolled d20 face. */
+  const resolveRoll = useCallback(
+    (action: string, value: number, dc: number) => send('', { action, value, dc }),
+    [send],
+  );
+
+  return { messages, setMessages, send, stop, streaming, error, quotaExceeded, clearQuotaFlag, affinityScore, replyChoices, clearReplyChoices, pendingCheck, clearPendingCheck, resolveRoll };
 }

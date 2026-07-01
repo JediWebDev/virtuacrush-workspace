@@ -10,6 +10,7 @@ import { requireAuth } from '../middleware/auth';
 import { enforceMessageQuota } from '../middleware/rateLimit';
 import { streamChat, completePrompt, streamPrompt, type ChatMessage } from '../inworld/chat';
 import { buildDirectorPrompt, buildDirectorPromptParts, parseDirectorOutput, parseDirectorTurns, companionTagFor, turnsToTranscript, type Actor, type ArcContext, type ReplyChoice } from '../inworld/director';
+import { parseRollRequest, formatRollResolutionDirective, type RollOutcome, type SkillCheck } from '../inworld/skill_check';
 import { selectArc, getArc, type SceneAnchor, type StoryArc } from '../inworld/arcs';
 import { getUserStory, createGeneratedArc } from '../db/user_stories';
 import { userStoryToArc } from '../inworld/user_arc';
@@ -198,6 +199,10 @@ async function ensureMeetIntroPersisted(
 interface ChatRequestBody {
   characterId: CharacterId;
   message: string;
+  /** Present only on a turn that resolves a pending DM skill check. The engine
+   *  decides success from `value` vs `dc`; the client sends the d20 face it
+   *  animated. `action` echoes what the player was attempting. */
+  roll?: { action: string; value: number; dc: number };
 }
 
 router.post('/greet', requireAuth, async (req: Request, res: Response) => {
@@ -369,7 +374,18 @@ router.get('/history/:characterId/:day', requireAuth, async (req: Request, res: 
 });
 
 router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, res: Response) => {
-  const { characterId, message } = req.body as ChatRequestBody;
+  const body = req.body as ChatRequestBody;
+  const { characterId } = body;
+
+  // A roll-resolution turn carries no free-text message; the engine resolves the
+  // d20 and synthesizes an italic action beat so history + memory stay coherent.
+  const rollOutcome: RollOutcome | null = parseRollRequest(body.roll);
+  const message = rollOutcome
+    ? `*(rolls ${rollOutcome.roll} vs DC ${rollOutcome.dc} attempting to ${rollOutcome.action})*`
+    : (typeof body.message === 'string' ? body.message : '');
+  // On a resolution turn, this directive tells the director exactly how the roll
+  // landed and forbids requesting another check; undefined on normal turns.
+  const rollResolveDirective = rollOutcome ? formatRollResolutionDirective(rollOutcome) : undefined;
 
   // --- Validate ---
   if (!characterId || typeof message !== 'string' || message.trim().length === 0) {
@@ -940,6 +956,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       priorSceneState: priorSceneStateForValidation,
       arcContext,
       chaosDirective: chaosPromptBlock || undefined,
+      rollResolutionDirective: rollResolveDirective,
     });
   }
 
@@ -957,6 +974,9 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
 
   let assistantFull = '';
   let replyChoices: ReplyChoice[] = [];
+  // A DM skill check the player must roll to resolve (null unless the director
+  // called for one this turn). Never set on a roll-resolution turn.
+  let pendingSkillCheck: SkillCheck | null = null;
   const abortController = new AbortController();
   req.on('close', () => abortController.abort());
 
@@ -977,6 +997,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
         priorSceneState: priorSceneStateForValidation,
         arcContext,
         chaosDirective: chaosPromptBlock || undefined,
+        rollResolutionDirective: rollResolveDirective,
       });
       const dirOpts = {
         ...directorCompleteOpts(),
@@ -1103,6 +1124,13 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       const arcResult = arcContext ? dirOut.arc : null;
       replyChoices = dirOut.choices ?? [];
       momentBadge = dirOut.momentBadge;
+      // Surface a DM skill check only on a normal turn that produced usable
+      // narration (never while resolving a prior roll). When one is pending we
+      // suppress choice buttons so the player rolls first.
+      if (!rollOutcome && dturns.length > 0 && dirOut.skillCheck) {
+        pendingSkillCheck = dirOut.skillCheck;
+        replyChoices = [];
+      }
       if (dirOut.memorable) {
         recordStoryBeat(req.user!.id, characterId, { summary: dirOut.memorable, source: 'memorable' });
       }
@@ -1362,6 +1390,7 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       earnedBadge,
       meetArcComplete: earnedBadge && activeArc?.isMeetArc ? true : undefined,
       choices: replyChoices,
+      skillCheck: pendingSkillCheck ?? undefined,
       posted,
       chaos: chaosHint,
       achievements: newAchievements,

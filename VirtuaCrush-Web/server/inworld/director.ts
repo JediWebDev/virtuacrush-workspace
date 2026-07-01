@@ -9,6 +9,7 @@ import { NARRATOR_BRIEF } from './characters';
 import { formatStoryActDirective, type StoryAct } from './story_structure';
 import { formatMeetArcPacingBlock } from './meet_arc';
 import { parseSceneSnapshotPatch, type SceneSnapshotPatch } from './scene_snapshot';
+import { parseSkillCheck, type SkillCheck } from './skill_check';
 
 export type ActorKind = 'companion' | 'narrator' | 'npc';
 export interface Actor { tag: string; name: string; kind: ActorKind; brief?: string }
@@ -48,6 +49,9 @@ export interface DirectorStage {
   arcContext?: ArcContext;
   /** Chaos beat for this turn — injected immediately before the user message. */
   chaosDirective?: string;
+  /** Present only on the turn that resolves a dice roll. When set, the director
+   *  narrates the given outcome and must NOT request another skill check. */
+  rollResolutionDirective?: string;
 }
 
 export interface DirectorTurn { speaker: string; text: string }
@@ -83,6 +87,10 @@ export interface DirectorOutput {
   /** A rare, shareable "wild moment" badge the director may coin for absurd/
    *  hilarious beats — recorded as an achievement. Null on ordinary turns. */
   momentBadge: { title: string; description: string } | null;
+  /** Set when the DM calls for a d20 roll (absurd/risky/off-track action). The
+   *  player must roll to resolve before the story continues. Null on most turns
+   *  and always null on a roll-resolution turn. */
+  skillCheck: SkillCheck | null;
 }
 
 const MAX_HISTORY_TURNS = 14;
@@ -200,11 +208,23 @@ PACING: ${stage.arcContext.isMeetArc
     ? `\n\n=== SCENE CONTINUITY (engine-authoritative — honor this; persists beyond recent messages) ===\n${stage.priorSceneState}`
     : '';
 
+  // On a roll-resolution turn the outcome is already decided by the engine, so
+  // the director must NOT offer another skill check (that would loop forever).
+  const resolutionMode = Boolean(stage.rollResolutionDirective?.trim());
+
   const intentField =
     `"intent": { "type": "<social|romance|transaction|movement|conflict|work|observation>", "subtype": "<short label>", "target": "<npc id, venue, or omit>", "magnitude": "<modest|big|lavish or omit>" }`;
+  const skillCheckField = resolutionMode
+    ? ''
+    : `, "skillCheck": { "required": <true|false>, "action": "<the player's attempt, in their voice>", "difficulty": "<trivial|easy|medium|hard|formidable>", "reason": "<why a roll, ≤6 words>" }`;
   const outputSchema = stage.arcContext
-    ? `JSON: { ${intentField}, "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable", "momentBadge", "arcStatus", "earnedBadge" }`
-    : `JSON: { ${intentField}, "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable", "momentBadge" }`;
+    ? `JSON: { ${intentField}, "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable", "momentBadge"${skillCheckField}, "arcStatus", "earnedBadge" }`
+    : `JSON: { ${intentField}, "lines":[{"speaker","text"}], "choices":[{"label","userMessage"}], "sceneState", "sceneSnapshot", "memorable", "momentBadge"${skillCheckField} }`;
+
+  const skillCheckRules = resolutionMode
+    ? ''
+    : `
+DUNGEON MASTER — SKILL CHECKS: If the player's last action is genuinely uncertain, risky, physically improbable, absurd, or yanks the story in a wild new direction, act like a tabletop DM. Have ${stage.companionName}/narrator react and set the moment up, but DO NOT resolve whether it works — set "skillCheck" with a short "action" (their attempt) and a "difficulty" (trivial=almost certain … formidable=near-impossible). Leave the outcome hanging for the dice. For ordinary, safe, emotional, or purely conversational actions, OMIT skillCheck (or set required:false). Never demand a roll for normal dialogue or feelings.`;
 
   return (
 `${stage.companionSystem}${stage.directives}${arcBlock}${sceneSoFar}
@@ -216,9 +236,9 @@ Speakers: ${stage.companionName} (speech only), narrator (actions/scene), ${stag
 Include ≥1 "${stage.companionName}" line. Keep lines short. Output JSON only.
 Choices: 2–3 PLAYER tap-messages (first person / *actions*), never "${stage.companionName}" lines.${stage.playerName ? ` Player: "${stage.playerName}".` : ''}
 Return sceneSnapshot with current location, present, player mobility/voice, companion mobility/voice (persist until cleared).
-momentBadge (OPTIONAL, RARE): include { "title", "description" } ONLY if something genuinely absurd, hilarious, or wild just happened — the kind of moment a player would screenshot and share. Give it a punchy, funny achievement name. Omit it entirely on ordinary turns.
+momentBadge (OPTIONAL, RARE): include { "title", "description" } ONLY if something genuinely absurd, hilarious, or wild just happened — the kind of moment a player would screenshot and share. Give it a punchy, funny achievement name. Omit it entirely on ordinary turns.${skillCheckRules}
 
-${turns ? turns + '\n' : ''}${stage.chaosDirective?.trim() ? `${stage.chaosDirective.trim()}\n` : ''}User: ${stage.userMessage}
+${turns ? turns + '\n' : ''}${stage.chaosDirective?.trim() ? `${stage.chaosDirective.trim()}\n` : ''}${stage.rollResolutionDirective?.trim() ? `${stage.rollResolutionDirective.trim()}\n` : ''}User: ${stage.userMessage}
 
 JSON:`
   );
@@ -339,6 +359,7 @@ export function parseDirectorOutput(raw: string, companionName: string): Directo
   let sceneSnapshotPatch: SceneSnapshotPatch | null = null;
   let memorable: string | null = null;
   let momentBadge: { title: string; description: string } | null = null;
+  let skillCheck: SkillCheck | null = null;
 
   const start = text.indexOf('{');
   if (start >= 0) {
@@ -348,6 +369,7 @@ export function parseDirectorOutput(raw: string, companionName: string): Directo
       try {
         const obj = JSON.parse(json) as Record<string, unknown>;
         if ('intent' in obj) intent = validateIntent(obj.intent);
+        if ('skillCheck' in obj) skillCheck = parseSkillCheck(obj.skillCheck);
         if (Array.isArray(obj.lines)) {
           const t = mapLines(obj.lines as unknown[], companionName);
           if (t.length) turns = t;
@@ -385,7 +407,7 @@ export function parseDirectorOutput(raw: string, companionName: string): Directo
     .filter((t) => t.speaker.toLowerCase() === companionName.toLowerCase())
     .map((t) => t.text);
   choices = sanitizeReplyChoices(choices, companionName, companionLines);
-  return { intent, turns, arc, choices, sceneState, sceneSnapshotPatch, memorable, momentBadge };
+  return { intent, turns, arc, choices, sceneState, sceneSnapshotPatch, memorable, momentBadge, skillCheck };
 }
 
 /** Renders ordered turns into the canonical tagged transcript the UI reads. */

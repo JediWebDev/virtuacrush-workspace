@@ -19,6 +19,7 @@ import SecretCard from "./SecretCard";
 import DesireEventCard from "./DesireEventCard";
 import PackList from "./PackList";
 import ChoiceButtons from "./ChoiceButtons";
+import DiceRoll from "./DiceRoll";
 import { getActivePackSession, greetPackSession, abandonPackSession, fetchPackStories, fetchPackTranscript, type PackSession, type PackChoice, type PackStory } from "../lib/api";
 import NoticeToast from "./NoticeToast";
 import AchievementToast, { type AchievementToastData } from "./AchievementToast";
@@ -41,7 +42,7 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
   const [userAvatarSrc, setUserAvatarSrc] = useState(() => customAvatar("You"));
   const [quotaToast, setQuotaToast] = useState(false);
   const [quotaLimit, setQuotaLimit] = useState<number | null>(null);
-  const { messages, setMessages, send: sendMessage, streaming: isLoading, replyChoices, clearReplyChoices } = useChat({
+  const { messages, setMessages, send: sendMessage, streaming: isLoading, replyChoices, clearReplyChoices, pendingCheck, resolveRoll } = useChat({
     characterId: character.id,
     initialMessages: [],
     onAffinityUpdate: (score) => {
@@ -1343,7 +1344,17 @@ export default function ChatInterface({ character, onBack, onAffinityChange, use
           )}
         </div>
 
-        {activeThread === 'freeRoam' && !archiveDay && !isLoading && showReplyChoices && replyChoices.length > 0 && (
+        {activeThread === 'freeRoam' && !archiveDay && pendingCheck && (
+          <DiceRoll
+            check={pendingCheck}
+            disabled={isLoading}
+            onResolved={(result) => {
+              void resolveRoll(pendingCheck.action, result.value, pendingCheck.dc);
+            }}
+          />
+        )}
+
+        {activeThread === 'freeRoam' && !archiveDay && !isLoading && !pendingCheck && showReplyChoices && replyChoices.length > 0 && (
           <ChoiceButtons
             title="What do you say or do?"
             choices={replyChoices.map((c, i) => ({ id: `rc_${i}`, label: c.label, userMessage: c.userMessage, next: '' }))}
