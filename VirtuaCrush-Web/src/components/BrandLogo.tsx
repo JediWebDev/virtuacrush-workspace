@@ -1,4 +1,4 @@
-import { Sparkles } from 'lucide-react';
+import { MessageCircleHeart, Sparkles } from 'lucide-react';
 
 interface BrandLogoProps {
   size?: 'sm' | 'md' | 'lg';
@@ -19,7 +19,7 @@ export default function BrandLogo({ size = 'md', showWordmark = true, className 
       <div
         className={`${s.box} flex shrink-0 items-center justify-center rounded-xl bg-accent shadow-lg shadow-accent/30`}
       >
-        <Sparkles className="text-white" size={s.icon} />
+        <MessageCircleHeart className="text-white" size={s.icon} />
       </div>
       {showWordmark ? (
         <span className={`font-serif font-bold tracking-tight text-stone-900 dark:text-white ${s.text}`}>
