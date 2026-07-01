@@ -1126,10 +1126,12 @@ router.post('/stream', requireAuth, enforceMessageQuota, async (req: Request, re
       momentBadge = dirOut.momentBadge;
       // Surface a DM skill check only on a normal turn that produced usable
       // narration (never while resolving a prior roll). When one is pending we
-      // suppress choice buttons so the player rolls first.
+      // suppress choice buttons AND the "wild moment" achievement so the dice
+      // card is the sole response to the absurd action (no toast collision).
       if (!rollOutcome && dturns.length > 0 && dirOut.skillCheck) {
         pendingSkillCheck = dirOut.skillCheck;
         replyChoices = [];
+        momentBadge = null;
       }
       if (dirOut.memorable) {
         recordStoryBeat(req.user!.id, characterId, { summary: dirOut.memorable, source: 'memorable' });
